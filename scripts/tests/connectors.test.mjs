@@ -7,3 +7,17 @@ test('Park recurrence is a series, never an every-day event',()=>{const [e]=pars
 test('identical listings merge but different venues remain',()=>{const a={title:'One event',start:'2026-09-19',venue:'Venue A'};assert.equal(dedupe([a,{...a},{...a,venue:'Venue B'}]).length,2);});
 test('closed places are hidden and unsafe seasonal assumptions excluded',()=>{const [e]=parsePlaces('<div class="attraction"><img src="/a.jpg"><h3>Historic Rail Bridge</h3><div class="brief"><p>Currently closed for assessment.</p><a href="/bridge">Read more</a></div>');assert.equal(e.status,'hidden');assert.equal(e.price,null);});
 test('source layout failures yield no invented listings',()=>{assert.deepEqual(parseSource('park','<p>Maintenance</p>'),[]);assert.deepEqual(parseSource('manitoba','<p>Maintenance</p>'),[]);});
+import {normalizeSocial,normalizeHikingBatch} from '../../lib/social.mjs';
+const social={title:'River ride',url:'https://www.facebook.com/groups/810758152436911/posts/123456/?utm_source=test',category:'Cycling',type:'Event',start:'2026-09-20',distanceKm:'12.5',difficulty:'Moderate'};
+test('social outings retain original attribution and normalize confirmed details',()=>{const e=normalizeSocial(social);assert.equal(e.source,'facebook');assert.equal(e.distanceKm,12.5);assert.equal(e.end,'2026-09-20');assert.equal(e.url,'https://www.facebook.com/groups/810758152436911/posts/123456/');assert.equal(e.provenance,'manual');});
+test('social links reject non-platform URLs, insecure protocols and group homepages',()=>{for(const url of ['https://facebook.com.evil.example/posts/123/','javascript:alert(1)','http://instagram.com/p/abc/','https://www.facebook.com/groups/810758152436911/'])assert.throws(()=>normalizeSocial({...social,url}));});
+test('social listings do not invent dates, price or route difficulty',()=>{const e=normalizeSocial({...social,type:'Activity',url:'https://www.instagram.com/p/example/',distanceKm:'',difficulty:'Unknown'});assert.equal(e.start,undefined);assert.equal(e.price,null);assert.equal(e.distanceKm,null);assert.equal(e.difficulty,'Unknown');});
+test('social events reject impossible dates, backwards ranges and invalid distances',()=>{for(const patch of [{start:'2026-02-30'},{end:'2026-01-01'},{distanceKm:-1},{distanceKm:'hello'}])assert.throws(()=>normalizeSocial({...social,...patch}));});
+test('browser batches deduplicate tracked links and never retain personal fields',()=>{
+ const b=normalizeHikingBatch({status:'ok',items:[{...social,author:'Person',email:'private@example.com'},{...social,url:social.url.replace('www.','')}]});
+ assert.equal(b.items.length,1);assert.equal(b.items[0].sourceVisibility,'private');assert.equal(b.items[0].provenance,'browser');assert.equal(b.items[0].author,undefined);assert.equal(b.items[0].email,undefined);
+});
+test('browser batches reject invalid or misleading checks',()=>{
+ for(const b of [{status:'blocked',items:[social]},{status:'ok',items:Array(31).fill(social)},{status:'ok',items:[{...social,url:'https://instagram.com/p/abc/'}]},{status:'unknown',items:[]}])assert.throws(()=>normalizeHikingBatch(b));
+ assert.equal(normalizeHikingBatch({status:'ok',items:[{...social,cancelled:true}]}).items[0].status,'cancelled');
+});
