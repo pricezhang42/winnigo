@@ -1,0 +1,9 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {parseSource,parsePlaces,dedupe,localDay} from '../../lib/connectors.mjs';
+test('Winnipeg day stays correct around midnight and DST',()=>{assert.equal(localDay(new Date('2026-09-17T02:00:00Z')),'2026-09-16');assert.equal(localDay(new Date('2026-01-01T05:00:00Z')),'2025-12-31');});
+test('Forks date ranges cross the year boundary',()=>{const [e]=parseSource('forks','<div class="event-listing"><p class="dates">Thursday, Dec 31 to Friday, Jan 1</p><h3><a href="/events/calendar-of-events/event/1">New Year</a></h3><p class="hours">7 PM</p>','2026-12-15T18:00:00Z');assert.equal(e.start,'2026-12-31');assert.equal(e.end,'2027-01-01');assert.equal(e.price,null);});
+test('Park recurrence is a series, never an every-day event',()=>{const [e]=parseSource('park','<div class="event-item leaf"><a href="/events/event/1"><img src="/one.jpg"></a><h3><a href="/events/event/1">Gardener Chats</a></h3><time datetime="2026-09-17T00:00:00+00:00"></time><time datetime="2027-01-09T00:00:00+00:00"></time>');assert.equal(e.schedule,'series');assert.equal(e.end,'2027-01-09');});
+test('identical listings merge but different venues remain',()=>{const a={title:'One event',start:'2026-09-19',venue:'Venue A'};assert.equal(dedupe([a,{...a},{...a,venue:'Venue B'}]).length,2);});
+test('closed places are hidden and unsafe seasonal assumptions excluded',()=>{const [e]=parsePlaces('<div class="attraction"><img src="/a.jpg"><h3>Historic Rail Bridge</h3><div class="brief"><p>Currently closed for assessment.</p><a href="/bridge">Read more</a></div>');assert.equal(e.status,'hidden');assert.equal(e.price,null);});
+test('source layout failures yield no invented listings',()=>{assert.deepEqual(parseSource('park','<p>Maintenance</p>'),[]);assert.deepEqual(parseSource('manitoba','<p>Maintenance</p>'),[]);});

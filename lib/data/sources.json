@@ -1,0 +1,34 @@
+[
+  {
+    "id": "forks",
+    "name": "The Forks",
+    "url": "https://www.theforks.com/events/calendar-of-events",
+    "count": 7,
+    "checkedAt": "2026-09-17T03:34:50.681Z",
+    "status": "ok"
+  },
+  {
+    "id": "park",
+    "name": "Assiniboine Park",
+    "url": "https://www.assiniboinepark.ca/events",
+    "count": 10,
+    "checkedAt": "2026-09-17T03:34:50.697Z",
+    "status": "ok"
+  },
+  {
+    "id": "attractions",
+    "name": "The Forks · places",
+    "url": "https://www.theforks.com/attractions",
+    "count": 26,
+    "checkedAt": "2026-09-17T03:34:50.698Z",
+    "status": "ok"
+  },
+  {
+    "id": "manitoba",
+    "name": "Travel Manitoba",
+    "url": "https://www.travelmanitoba.com/events/",
+    "count": 32,
+    "checkedAt": "2026-09-17T03:34:50.699Z",
+    "status": "ok"
+  }
+]
