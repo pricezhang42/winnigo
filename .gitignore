@@ -46,3 +46,7 @@ next-env.d.ts
 /work/
 
 *.tsbuildinfo
+
+# Python collector runtime
+__pycache__/
+*.py[cod]
