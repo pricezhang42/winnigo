@@ -30,7 +30,7 @@ class CollectorTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(output.stat().st_mode),0o600)
             self.assertEqual(json.loads(output.read_text()),{'posts':[]})
 
-    def test_real_browser_excludes_comments_and_profiles(self):
+    def test_real_browser_separates_comments_photos_and_profiles(self):
         with tempfile.TemporaryDirectory() as temp:
             driver=collector.make_driver(Path(temp)/'profile',headless=True)
             try:
@@ -39,12 +39,15 @@ class CollectorTests(unittest.TestCase):
                     <h2>Do not collect this author's name</h2>
                     <a href="https://www.facebook.com/groups/810758152436911/posts/123/">Today</a>
                     <div data-ad-preview="message">Bear Lake route: 6 km.</div>
-                    <div role="article"><div data-ad-preview="message">Do not collect this comment.</div></div>
+                    <div role="article"><a href="https://www.facebook.com/groups/810758152436911/posts/123/?comment_id=456">Today</a><span lang="en">Useful route detail in a comment.</span><div data-ad-preview="message">Keep comments out of post text.</div></div>
+                    <a href="https://www.facebook.com/photo/?fbid=456"><img width="500" height="300" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jD1sAAAAASUVORK5CYII="/></a>
                   </div></div><aside data-ad-preview="message">Do not collect this sidebar.</aside>
                 '''))
                 candidates=collector.candidates_on_screen(driver)
                 self.assertEqual(len(candidates),1)
                 self.assertEqual(candidates[0]['text'],'Bear Lake route: 6 km.')
+                self.assertEqual(candidates[0]['comments'][0]['text'],'Useful route detail in a comment.')
+                self.assertEqual(len(candidates[0]['photos']),1)
                 self.assertEqual(collector.post_url(candidates[0]['links'][0]),'https://www.facebook.com/groups/810758152436911/posts/123/')
             finally:
                 driver.quit()

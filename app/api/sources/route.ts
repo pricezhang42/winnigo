@@ -5,7 +5,7 @@ import {initialize,refreshSources,getCollection,database} from '@/lib/store';
 export const dynamic='force-dynamic';
 async function authorized(request:Request){const user=await getChatGPTUser();if(!user)return false;const origin=request.headers.get('origin');return !origin||origin===new URL(request.url).origin;}
 export async function GET(request:Request){if(!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});try{await initialize();return Response.json(await getCollection(true));}catch{return Response.json({error:'Listing storage is temporarily unavailable.'},{status:503});}}
-export async function POST(request:Request){const key=(env as unknown as {WINNIGO_COLLECTOR_KEY?:string}).WINNIGO_COLLECTOR_KEY;const collector=!!key&&request.headers.get('x-winnigo-collector-key')===key;if(!collector&&!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});if(!request.headers.get('content-type')?.includes('application/json'))return Response.json({error:'JSON required'},{status:415});try{const raw=await request.text();if(raw.length>60000)return Response.json({error:'Batch too large'},{status:413});const input=JSON.parse(raw) as Record<string,unknown>;if(collector&&input.action!=='sync-hiking-manitoba')return Response.json({error:'Collector action only'},{status:403});await initialize();if(input.action==='sync-hiking-manitoba'){
+export async function POST(request:Request){const key=(env as unknown as {WINNIGO_COLLECTOR_KEY?:string}).WINNIGO_COLLECTOR_KEY;const collector=!!key&&request.headers.get('x-winnigo-collector-key')===key;if(!collector&&!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});if(!request.headers.get('content-type')?.includes('application/json'))return Response.json({error:'JSON required'},{status:415});try{const raw=await request.text();if(raw.length>250000)return Response.json({error:'Batch too large'},{status:413});const input=JSON.parse(raw) as Record<string,unknown>;if(collector&&input.action!=='sync-hiking-manitoba')return Response.json({error:'Collector action only'},{status:403});await initialize();if(input.action==='sync-hiking-manitoba'){
  let batch;try{batch=normalizeHikingBatch(input);}catch(e){return Response.json({error:e instanceof Error?e.message:'Invalid collection batch'},{status:400});}
  const db=database();const statements=[];let added=0,updated=0;
  for(const item of batch.items){
@@ -13,8 +13,11 @@ export async function POST(request:Request){const key=(env as unknown as {WINNIG
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(item.url)))).map(b=>b.toString(16).padStart(2,'0')).join('');
   const id=existing?.id||'facebook-'+hash;
   const previous=existing?JSON.parse(existing.payload):null;
-  if(!previous)added++;else if(['title','description','type','category','start','end','time','venue','neighbourhood','distanceKm','difficulty','status'].some(k=>previous[k]!==item[k]))updated++;
   if(previous?.addedAt)item.addedAt=previous.addedAt;
+  item.images=[...new Set([...(item.images??[]),...(previous?.images??[])])].slice(0,20);
+  item.commentNotes=item.commentNotes??previous?.commentNotes??[];
+  item.image=item.images[0]||previous?.image||'';
+  if(!previous)added++;else if(['title','description','type','category','start','end','time','venue','neighbourhood','distanceKm','difficulty','status','images','commentNotes'].some(k=>JSON.stringify(previous[k])!==JSON.stringify(item[k])))updated++;
   statements.push(db.prepare('INSERT INTO listings (id,source,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').bind(id,'facebook',JSON.stringify({...item,id})));
  }
  statements.push(db.prepare("INSERT INTO sources (id,checked_at,attempted_at,count,status,error) VALUES ('facebook',?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET checked_at=CASE WHEN excluded.status='ok' THEN excluded.checked_at ELSE sources.checked_at END,attempted_at=excluded.attempted_at,count=excluded.count,status=excluded.status,error=excluded.error").bind(batch.status==='ok'?batch.checkedAt:'',batch.checkedAt,batch.items.length,batch.status,batch.message||null));

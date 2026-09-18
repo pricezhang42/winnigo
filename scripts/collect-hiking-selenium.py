@@ -10,11 +10,12 @@ from pathlib import Path
 import re
 import tempfile
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs, urlencode
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,29 +110,45 @@ def candidates_on_screen(driver):
         // Current Facebook feed roots are plain divs; role=article is used for comments.
         const blocks=[...article.querySelectorAll(arguments[1])].filter(n=>n.getClientRects().length && (!n.closest('[role="article"]') || n.closest('[role="article"]')===article));
         const text=blocks.map(n=>n.innerText).filter(Boolean).join('\n');
-        if(!text) continue;
+
         const links=[...article.querySelectorAll('a[href]')].filter(a=>a.getClientRects().length).map(a=>a.href);
-        out.push({text:text.slice(0,8000),links});
+        const comments=[...article.querySelectorAll('[role="article"]')].slice(0,30).map(c=>({
+          text:[...c.querySelectorAll('[lang]')].filter(n=>n.closest('[role="article"]')===c&&!n.querySelector('[lang]')).map(n=>n.innerText).join(' ').slice(0,2000),
+          url:[...c.querySelectorAll('a[href]')].find(a=>a.href.includes('comment_id='))?.href||''
+        })).filter(c=>c.text&&c.url);
+        const photos=[...article.querySelectorAll('a[href*="/photo"]')].filter(a=>!a.closest('[role="article"]')).flatMap(a=>[...a.querySelectorAll('img')].filter(i=>i.width>100&&i.height>100).map(i=>({url:i.currentSrc,sourceUrl:a.href}))).slice(0,20);
+        if(!text&&!photos.length&&!comments.length)continue;
+        out.push({text:text.slice(0,8000),links,comments,photos});
       }
       return out;
     ''', POST_ROOT, MESSAGES)
 
 
-def expand_posts(driver):
-    for article in driver.find_elements(By.CSS_SELECTOR, POST_ROOT):
+def expand_posts(driver, expanded):
+    roots = driver.execute_script("return [...document.querySelectorAll(arguments[0])].filter(n=>{const r=n.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight*1.5})", POST_ROOT)
+    for root in roots:
         try:
-            # Expand only controls inside post messages, never comments or unrelated controls.
-            for block in article.find_elements(By.CSS_SELECTOR, MESSAGES):
-                if driver.execute_script('const a=arguments[0].closest(\'[role="article"]\');return a && a!==arguments[1]', block, article):
+            # Hovering Facebook's timestamp resolves its lazy permalink without opening a profile.
+            for link in root.find_elements(By.CSS_SELECTOR, 'a[href]'):
+                href=link.get_attribute('href') or ''
+                if urlsplit(href).path == f'/groups/{GROUP}/' and link.is_displayed() and driver.execute_script('const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',link):
+                    ActionChains(driver).move_to_element(link).perform()
+                    break
+            clicks=0
+            for button in root.find_elements(By.CSS_SELECTOR, '[role="button"],button'):
+                if not button.is_displayed() or button.id in expanded:
                     continue
-                for button in block.find_elements(By.CSS_SELECTOR, '[role="button"],button'):
-                    if button.is_displayed() and button.text.strip() == 'See more':
-                        button.click()
+                label=button.text.strip()
+                if label=='See more' and driver.execute_script('const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',button):
+                    expanded.add(button.id)
+                    button.click()
+                    clicks+=1
+                    if clicks>=4:break
         except WebDriverException:
-            continue  # A virtualized post may have been removed while reading.
+            continue
 
 
-def collect(driver, limit=30, scrolls=10):
+def collect(driver, limit=100, scrolls=80):
     driver.get(GROUP_URL)
     try:
         WebDriverWait(driver, 25).until(lambda d: group_ready(d) or access_problem(d))
@@ -143,28 +160,44 @@ def collect(driver, limit=30, scrolls=10):
     if not any('New posts' in e.text for e in driver.find_elements(By.CSS_SELECTOR, '[role="button"],h2')):
         return {'status':'blocked','message':'Could not verify New posts ordering. No posts collected.','posts':[]}
     posts = {}
+    expanded=set()
+    started=time.monotonic()
     unlinked = set()
     status, message = 'partial', 'Scroll limit reached; this is a partial check.'
     for turn in range(scrolls + 1):
         if problem := access_problem(driver):
             status, message = ('partial' if posts else 'blocked'), problem
             break
-        expand_posts(driver)
+        if time.monotonic()-started>300:
+            message='Five-minute collection limit reached; this is a partial check.'
+            break
+        expand_posts(driver, expanded)
         for item in candidates_on_screen(driver):
             links = list(dict.fromkeys(filter(None, (post_url(link) for link in item['links']))))
             if len(links) != 1:
                 unlinked.add(item['text'])
                 continue
-            posts[links[0]] = {'url':links[0], 'text':redact_contacts(item['text']), 'sourceVisibility':'private'}
+            comments=[]
+            for comment in item.get('comments',[]):
+                if post_url(comment['url'])!=links[0]:continue
+                query=parse_qs(urlsplit(comment['url']).query)
+                identity={k:query[k][0] for k in ['comment_id','reply_comment_id'] if k in query and query[k][0].isdigit()}
+                comments.append({'text':redact_contacts(comment['text']),'url':links[0]+'?'+urlencode(identity)})
+            photos=[p for p in item.get('photos',[]) if urlsplit(p['url']).scheme=='https' and (urlsplit(p['url']).hostname or '').endswith('.fbcdn.net')]
+            old=posts.get(links[0],{})
+            merged_comments={x['url']:x for x in old.get('comments',[])+comments}
+            merged_photos={x['sourceUrl']:x for x in old.get('photos',[])+photos}
+            posts[links[0]] = {'url':links[0], 'text':redact_contacts(item['text']), 'comments':list(merged_comments.values())[:30], 'photos':list(merged_photos.values())[:20], 'sourceVisibility':'private'}
             if len(posts) >= limit:
                 break
+        if turn%10==0:print(json.dumps({'scroll':turn,'linkedPosts':len(posts)}),flush=True)
         if len(posts) >= limit:
             status, message = 'ok', f'Collected the {limit} newest linked post candidates.'
             break
         # Stalled loading is never interpreted as proof that all group posts were read.
         if turn < scrolls:
             driver.execute_script('window.scrollBy(0, Math.max(600, window.innerHeight * 0.85))')
-            time.sleep(2)
+            time.sleep(1.5)
     if unlinked:
         status = 'partial'
         message += ' Some visible posts lacked an unambiguous permalink and were skipped.'
@@ -177,8 +210,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--login', action='store_true', help='Open a dedicated Chrome window for you to sign in manually.')
     parser.add_argument('--headless', action='store_true')
-    parser.add_argument('--limit', type=int, choices=range(1,31), default=30, metavar='1..30')
-    parser.add_argument('--max-scrolls', type=int, choices=range(0,11), default=10, metavar='0..10')
+    parser.add_argument('--limit', type=int, choices=range(1,101), default=100, metavar='1..100')
+    parser.add_argument('--max-scrolls', type=int, choices=range(0,81), default=80, metavar='0..80')
     parser.add_argument('--output', type=Path, default=RUNTIME/'hiking-candidates.json')
     args = parser.parse_args()
     if args.login and args.headless:
@@ -207,7 +240,7 @@ def main():
     result['checkedAt'] = datetime.now(timezone.utc).isoformat()
     result['groupUrl'] = GROUP_URL
     write_private(args.output, result)
-    print(json.dumps({'status':result['status'],'candidates':len(result['posts']),'message':result['message']}))
+    print(json.dumps({'status':result['status'],'candidates':len(result['posts']),'comments':sum(len(p.get('comments',[])) for p in result['posts']),'photos':sum(len(p.get('photos',[])) for p in result['posts']),'message':result['message']}))
     return 2 if result['status']=='blocked' else 0
 
 

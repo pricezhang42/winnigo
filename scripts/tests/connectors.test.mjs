@@ -18,6 +18,13 @@ test('browser batches deduplicate tracked links and never retain personal fields
  assert.equal(b.items.length,1);assert.equal(b.items[0].sourceVisibility,'private');assert.equal(b.items[0].provenance,'browser');assert.equal(b.items[0].author,undefined);assert.equal(b.items[0].email,undefined);
 });
 test('browser batches reject invalid or misleading checks',()=>{
- for(const b of [{status:'blocked',items:[social]},{status:'ok',items:Array(31).fill(social)},{status:'ok',items:[{...social,url:'https://instagram.com/p/abc/'}]},{status:'unknown',items:[]}])assert.throws(()=>normalizeHikingBatch(b));
+ for(const b of [{status:'blocked',items:[social]},{status:'ok',items:Array(101).fill(social)},{status:'ok',items:[{...social,url:'https://instagram.com/p/abc/'}]},{status:'unknown',items:[]}])assert.throws(()=>normalizeHikingBatch(b));
  assert.equal(normalizeHikingBatch({status:'ok',items:[{...social,cancelled:true}]}).items[0].status,'cancelled');
+});
+
+test('discussion notes retain their source and stored photos reject external URLs',()=>{
+ const url='https://www.facebook.com/groups/810758152436911/posts/123456/?comment_id=789&utm_source=tracking';
+ const item=normalizeHikingBatch({status:'ok',items:[{...social,images:['/api/photos/'+'a'.repeat(64)],commentNotes:[{text:'Trailhead signs reported unclear.',url}]}]}).items[0];
+ assert.equal(item.images.length,1);assert.equal(item.commentNotes[0].url,'https://www.facebook.com/groups/810758152436911/posts/123456/?comment_id=789');
+ for(const patch of [{images:['https://example.com/photo.jpg']},{commentNotes:[{text:'Test',url:'https://evil.example/comment/1'}]}])assert.throws(()=>normalizeHikingBatch({status:'ok',items:[{...social,...patch}]}));
 });
