@@ -37,3 +37,5 @@ Sign in directly in the Chrome window and open Hiking Manitoba. The script waits
 ```
 
 The tests cover canonical post links, contact redaction, private output-file permissions, and message extraction in real headless Chrome against a local fixture. Passing fixture tests does not establish live Facebook selector compatibility; confirm a live collection after login. A changed Facebook layout produces a blocked/partial result rather than a false empty success. Post bodies are the only extracted text; photo-only announcements and comments are outside this collector's coverage.
+
+Live validation after user sign-in on September 17, 2026 (Winnipeg): Selenium read six linked post candidates, and the importer confirmed one new Connecting the Shores trail entry in D1. The run was partial: the scroll bound was reached and ambiguous links were skipped. The reader uses direct feed children for posts because Facebook uses `role=article` for comments in the observed layout. The dedicated login persisted across browser restarts.

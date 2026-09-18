@@ -35,7 +35,7 @@ class CollectorTests(unittest.TestCase):
             driver=collector.make_driver(Path(temp)/'profile',headless=True)
             try:
                 driver.get('data:text/html;charset=utf-8,'+quote('''
-                  <h1>Hiking Manitoba</h1><div role="feed"><div role="article">
+                  <h1>Hiking Manitoba</h1><div role="feed"><div>
                     <h2>Do not collect this author's name</h2>
                     <a href="https://www.facebook.com/groups/810758152436911/posts/123/">Today</a>
                     <div data-ad-preview="message">Bear Lake route: 6 km.</div>

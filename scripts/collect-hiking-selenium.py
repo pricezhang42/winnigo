@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / '.sites-runtime'
 GROUP = '810758152436911'
 GROUP_URL = f'https://www.facebook.com/groups/{GROUP}/?sorting_setting=CHRONOLOGICAL'
-ARTICLE = '[role="feed"] [role="article"]'
+POST_ROOT = '[role="feed"] > *'
 MESSAGES = '[data-ad-preview="message"], [data-ad-comet-preview="message"]'
 
 
@@ -106,24 +106,24 @@ def candidates_on_screen(driver):
     return driver.execute_script(r'''
       const out=[];
       for (const article of document.querySelectorAll(arguments[0])) {
-        if (article.parentElement.closest('[role="article"]')) continue;
-        const blocks=[...article.querySelectorAll(arguments[1])].filter(n=>n.getClientRects().length && n.closest('[role="article"]')===article);
+        // Current Facebook feed roots are plain divs; role=article is used for comments.
+        const blocks=[...article.querySelectorAll(arguments[1])].filter(n=>n.getClientRects().length && (!n.closest('[role="article"]') || n.closest('[role="article"]')===article));
         const text=blocks.map(n=>n.innerText).filter(Boolean).join('\n');
         if(!text) continue;
         const links=[...article.querySelectorAll('a[href]')].filter(a=>a.getClientRects().length).map(a=>a.href);
         out.push({text:text.slice(0,8000),links});
       }
       return out;
-    ''', ARTICLE, MESSAGES)
+    ''', POST_ROOT, MESSAGES)
 
 
 def expand_posts(driver):
-    for article in driver.find_elements(By.CSS_SELECTOR, ARTICLE):
+    for article in driver.find_elements(By.CSS_SELECTOR, POST_ROOT):
         try:
-            if driver.execute_script('return !!arguments[0].parentElement.closest(\'[role="article"]\')', article):
-                continue
             # Expand only controls inside post messages, never comments or unrelated controls.
             for block in article.find_elements(By.CSS_SELECTOR, MESSAGES):
+                if driver.execute_script('const a=arguments[0].closest(\'[role="article"]\');return a && a!==arguments[1]', block, article):
+                    continue
                 for button in block.find_elements(By.CSS_SELECTOR, '[role="button"],button'):
                     if button.is_displayed() and button.text.strip() == 'See more':
                         button.click()
