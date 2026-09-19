@@ -48,8 +48,9 @@ def enrich(driver, post):
             url=target+'?'+urlencode(identity)
             comments[url]={'text':c.redact_contacts(note['text']),'url':url}
         post['comments']=list(comments.values())[:30]
-        photos={x['sourceUrl']:x for x in post.get('photos',[])}
-        for photo in row.get('photos',[]):photos[photo['sourceUrl']]=photo
+        def photo_key(photo):return parse_qs(urlsplit(photo['sourceUrl']).query).get('fbid',[photo['sourceUrl']])[0]
+        photos={photo_key(x):x for x in post.get('photos',[])}
+        for photo in row.get('photos',[]):photos[photo_key(photo)]=photo
         post['photos']=list(photos.values())[:20]
     for photo in post.get('photos',[])[:20]:
         source=urlsplit(photo['sourceUrl'])

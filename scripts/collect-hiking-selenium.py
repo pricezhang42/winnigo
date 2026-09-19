@@ -187,7 +187,7 @@ def collect(driver, limit=100, scrolls=80):
             old=posts.get(links[0],{})
             merged_comments={x['url']:x for x in old.get('comments',[])+comments}
             merged_photos={x['sourceUrl']:x for x in old.get('photos',[])+photos}
-            posts[links[0]] = {'url':links[0], 'text':redact_contacts(item['text']), 'comments':list(merged_comments.values())[:30], 'photos':list(merged_photos.values())[:20], 'sourceVisibility':'private'}
+            posts[links[0]] = {'url':links[0], 'text':redact_contacts(item['text']) or old.get('text',''), 'comments':list(merged_comments.values())[:30], 'photos':list(merged_photos.values())[:20], 'sourceVisibility':'private'}
             if len(posts) >= limit:
                 break
         if turn%10==0:print(json.dumps({'scroll':turn,'linkedPosts':len(posts)}),flush=True)

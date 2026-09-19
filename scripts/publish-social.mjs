@@ -16,7 +16,14 @@ for(const item of input.items){
  const saved=[];
  for(const url of [...new Set(item.photoUrls)]){
   try{
-   const response=await fetch(origin+'/api/photos/import',{method:'POST',redirect:'error',signal:AbortSignal.timeout(25000),headers,body:JSON.stringify({url})});
+   const source=new URL(url);
+   if(source.protocol!=='https:'||!source.hostname.endsWith('.fbcdn.net')||source.port||source.username||source.password)throw Error('Invalid photo source');
+   // Transfer the requested source photo from the collector host; CDN access can differ in Workers.
+   const original=await fetch(source,{redirect:'error',signal:AbortSignal.timeout(20000)});
+   if(!original.ok||!original.body)throw Error('Original photo unavailable');
+   const reader=original.body.getReader(),chunks=[];let size=0;
+   while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>8*1024*1024){await reader.cancel();throw Error('Photo too large');}chunks.push(value);}
+   const response=await fetch(origin+'/api/photos/import',{method:'POST',redirect:'error',signal:AbortSignal.timeout(25000),headers:{...headers,'Content-Type':'application/octet-stream','X-Winnigo-Photo-Source':url},body:Buffer.concat(chunks)});
    if(!response.ok)throw Error('Photo unavailable');
    const photo=await response.json();if(!/^\/api\/photos\/[a-f0-9]{64}$/.test(photo.url))throw Error('Invalid photo response');
    saved.push(photo.url);photosSaved++;
