@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
+/* Collection labels retain activity categories as an independent filter. */
+.collection-filters{display:flex;flex-wrap:wrap;gap:9px;margin:20px 0 10px}.collection-filters button{font-size:14px;background:white}.collection-filters button[aria-pressed=true]{background:#173c51;color:white;border-color:#173c51}.collection-label{display:inline-flex;font-size:12px;font-weight:650;line-height:1.4;padding:4px 8px;border-radius:5px;margin:0 0 10px;background:#e6eff5;color:#244e6a}.collection-label.community{background:#e4f2e8;color:#22613e}.collection-label.official{background:#e6eff5;color:#244e6a}.official-details{border:1px solid #d5e1e3;border-radius:9px;padding:18px}.official-details h3{font-size:18px;font-weight:650}.official-details p{font-size:14px;line-height:1.6;margin:8px 0}.official-details>div{padding:14px 0;border-top:1px solid #e1e9ec}.official-details a{display:inline-flex;gap:5px;align-items:center;text-decoration:underline;color:#087561;font-size:14px}.trail-pin.approximate span{background:#a96412;border-style:dashed}.area-swatch{width:12px;height:12px;border-radius:50%;background:#a96412}.map-group-popup{display:flex;flex-direction:column;gap:10px;max-height:240px;overflow:auto}.map-group-popup button{text-align:left;color:#173c51;font-size:14px;line-height:1.4;text-decoration:underline}.map-list-item .collection-label{margin:5px 0 0}
 
 @utility scrollbar-thin {
   scrollbar-width: thin;
