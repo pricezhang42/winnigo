@@ -30,5 +30,13 @@
     "count": 32,
     "checkedAt": "2026-09-17T03:34:50.699Z",
     "status": "ok"
+  },
+  {
+    "id": "winnipeg-free-swim",
+    "name": "City of Winnipeg · Free swim",
+    "url": "https://www.winnipeg.ca/recreation-leisure/pools/swimming/free-swim",
+    "count": 81,
+    "checkedAt": "2026-09-20T05:08:31.330Z",
+    "status": "ok"
   }
 ]

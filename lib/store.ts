@@ -5,12 +5,12 @@ import seeds from '@/lib/data/listings.json';
 import sourceSeeds from '@/lib/data/sources.json';
 import officialTrails from '@/lib/data/official-trails.json';
 import {collectionLabel,resolveMapLocation} from '@/lib/trail-locations';
-import {sources,parseSource,dedupe,localDay} from './connectors.mjs';
+import {sources,collectSource,dedupe,localDay} from './connectors.mjs';
 export function database():D1Database{if(!env.DB)throw new Error('Listing storage unavailable');return env.DB;}
 export async function initialize(){
  const db=database();
  await db.batch(socialSeeds.map(item=>db.prepare('INSERT OR IGNORE INTO listings (id,source,payload) VALUES (?,?,?)').bind(item.id,item.source,JSON.stringify(item))));
- const ready=await db.prepare("SELECT COUNT(*) AS total FROM sources WHERE id IN ('forks','park','attractions','manitoba')").first<{total:number}>();
+ const ready=await db.prepare('SELECT COUNT(*) AS total FROM sources WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(sources.map(s=>s.id))).first<{total:number}>();
  if(ready?.total!==sources.length)await db.batch([...seeds.map(item=>db.prepare('INSERT OR IGNORE INTO listings (id,source,payload) VALUES (?,?,?)').bind(item.id,item.source,JSON.stringify(item))),...sourceSeeds.map(s=>db.prepare('INSERT OR IGNORE INTO sources (id,checked_at,attempted_at,count,status) VALUES (?,?,?,?,?)').bind(s.id,s.checkedAt,s.checkedAt,s.count,s.status))]);
  const imported=await db.prepare("SELECT checked_at FROM sources WHERE id='trails-manitoba'").first<{checked_at:string}>();
  if(imported?.checked_at!==officialTrails.source.checkedAt){
@@ -25,9 +25,8 @@ export async function refreshSources(force=false){
  return await Promise.all(sources.map(async source=>{
  const lock=await db.prepare('UPDATE sources SET attempted_at=? WHERE id=? AND attempted_at<?').bind(now,source.id,threshold).run();if(!lock.meta.changes)return;
  try{
- const response=await fetch(source.url,{headers:{'User-Agent':'Winnigo/1.0 (Winnipeg discovery; source-attributed listings)'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw Error('Source returned HTTP '+response.status);
- const html=await response.text();if(html.length>2_000_000)throw Error('Unexpected source size');const items=parseSource(source.id,html,now);if(!items.length)throw Error('No listings found; calendar may have changed');
- await db.batch([...items.map((item:typeof seeds[number])=>db.prepare('INSERT INTO listings (id,source,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').bind(item.id,item.source,JSON.stringify(item))),db.prepare('UPDATE sources SET checked_at=?,count=?,status=?,error=NULL WHERE id=?').bind(now,items.length,'ok',source.id)]);
+ const items=await collectSource(source,now);if(!items.length)throw Error('No listings found; calendar may have changed');
+ await db.batch([...items.map((item:typeof seeds[number])=>db.prepare('INSERT INTO listings (id,source,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').bind(item.id,item.source,JSON.stringify(item))),...(source.id==='winnipeg-free-swim'?[db.prepare("UPDATE listings SET payload=json_set(payload,'$.status','cancelled') WHERE source=? AND id NOT IN (SELECT value FROM json_each(?))").bind(source.id,JSON.stringify(items.map((i:{id:string})=>i.id)))]:[]),db.prepare('UPDATE sources SET checked_at=?,count=?,status=?,error=NULL WHERE id=?').bind(now,items.length,'ok',source.id)]);
  }catch(error){console.error('Winnigo import',source.id,error);await db.prepare('UPDATE sources SET status=?,error=? WHERE id=?').bind('error',error instanceof Error?error.message:'Import unavailable',source.id).run();}
  }));
 }

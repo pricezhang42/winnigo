@@ -4,13 +4,15 @@ A private first release for discovering Winnipeg events, places and activities.
 
 ## Working features
 
-- Four source adapters across three organizations: The Forks event calendar, The Forks attractions, Assiniboine Park, and Travel Manitoba (Winnipeg only).
+- Source adapters include The Forks event calendar, The Forks attractions, Assiniboine Park, Travel Manitoba (Winnipeg only), and City of Winnipeg free swim schedules.
 - Date/category/neighbourhood filters, search, details, original-source links, directions, and device-local bookmarks.
 - D1 collection storage, import status, bounded source fetching, a six-hour refresh-on-visit interval and manual refresh.
 - A private collection desk at `/admin` for corrections and hiding duplicates/cancellations. Corrections survive imports.
 - Parser tests for local dates, year boundaries, recurrence, duplicate handling, closed places, and changed source layouts.
 
 ## Operation
+
+City free swims appear under Water activities as dated, free events, expanded only within the published schedule period. Youth ages and limited-pool restrictions are retained. The indoor pool directory is checked alongside the schedule; sessions during reported facility closures are cancelled. Both pages must parse successfully before the stored collection is refreshed. Removed swim sessions are cancelled on a successful refresh; this exception is safe for the complete free-swim page and does not change paginated calendar handling. Updates follow the existing six-hour refresh-on-visit interval. Each swim links to the source schedule and its facility page. Parser checks: `node --test scripts/tests/*.test.mjs`.
 
 `npm run dev` starts local development. The Sites build/publish workflow packages the Worker and Drizzle migrations. `node --test scripts/tests/connectors.test.mjs` tests data normalization. `npx tsc --noEmit` checks TypeScript.
 
