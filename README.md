@@ -26,6 +26,7 @@ All routes, including photo reads and static assets in production, require owner
 | `npm run dev` | Development server, loopback port 5173 |
 | `npm test` | Data parsing, authentication, and publishing configuration tests |
 | `npm run typecheck` | TypeScript validation |
+| `npm run check:assets` | Verify a running dev server serves CSS and browser modules correctly |
 | `npm run build` | Build standalone Worker and browser assets |
 | `npm start` | Run the built Worker locally (Wrangler prints its port) |
 | `npm run db:migrate` | Apply pending local migrations |
@@ -34,6 +35,8 @@ All routes, including photo reads and static assets in production, require owner
 | `npm run publish:hiking -- /path/batch.json` | Publish a reviewed, sanitized batch |
 
 `npm run dev -- --port 5174` selects a different port. Set `WINNIGO_POLLING=1` if filesystem notifications are unavailable. Local state is under `.wrangler/`; it is not production data.
+
+If the page appears unstyled, restart `npm run dev` after updating the checkout and run `npm run check:assets`. Development serves CSS and JavaScript through Vite, while the Worker protects app/API requests. Production retains the private gate for all assets. To check a built preview on another port, set `WINNIGO_CHECK_ORIGIN` to its loopback URL when running the asset check.
 
 ## Deploy with standard Cloudflare tools
 

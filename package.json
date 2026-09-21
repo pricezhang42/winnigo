@@ -17,6 +17,7 @@
     "db:migrate": "wrangler d1 migrations apply DB --local --config wrangler.json --persist-to .wrangler/state",
     "test": "node --test scripts/tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
+    "check:assets": "node --env-file=.dev.vars scripts/check-assets.mjs",
     "deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
     "collect:hiking": "python3 scripts/collect-hiking-selenium.py --headless",
     "publish:hiking": "node scripts/publish-social.mjs"

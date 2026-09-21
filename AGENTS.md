@@ -7,6 +7,7 @@ Use standard terminal tools. No Codex, MCP, Sites plugin, or external skill is r
 - Read README.md, then run `npm ci`, `npm run setup`, `npm run dev`.
 - Read local `.dev.vars` credentials only when needed; never print or commit secrets.
 - Run `npm test`, `npm run typecheck`, and `npm run build` after behavior changes.
+- With the dev server running, run `npm run check:assets`. A successful HTML response alone does not establish that styles or client JavaScript work. Check a real browser for grid layout and completed client loading after build/server changes.
 - Start the built app with `npm start` to check the Worker authentication boundary. An anonymous request must return 401; owner Basic authentication must work. Collector credentials must not grant reads or general administrative actions.
 - Do not deploy or change production audience just to test a local change. Remote deployment requires the owner's Cloudflare account configuration.
 
