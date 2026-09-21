@@ -38,7 +38,7 @@ content/licensing review, and broader source agreements.
 - Venue calendars **refresh on visit**, at most once every 6 hours per source (owner can force a
   manual refresh, throttled to once/minute). There is no unattended cron for venue calendars.
 - The Facebook group is collected by a **daily local Selenium browser run at 09:00
-  America/Winnipeg**, driven by a Codex automation, not by the Worker. See
+  America/Winnipeg**, driven by a scheduled agent/automation on a local host, not by the Worker. See
   [05 — Social & the Facebook collector](05-social-collector.md).
 - Instagram has **no** automatic feed; posts are added manually by link.
 

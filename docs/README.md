@@ -8,6 +8,13 @@ discovery UI with an interactive trail map.
 This folder documents the project so another engineer or AI agent can take it over. Read the
 docs in order if you are new; jump to a specific file if you know what you need.
 
+> **Standalone as of commit `8deb589`.** Winnigo used to deploy through ChatGPT Sites with Sign
+> in with ChatGPT (SIWC). It is now a **self-contained Cloudflare Workers app** you deploy to your
+> own account with `wrangler`, gated by **HTTP Basic auth** — no Codex, Sites plugin, or MCP
+> tooling required. See [`AGENTS.md`](../AGENTS.md). The old Sites path survives only as an opt-in
+> mode (`WINNIGO_AUTH_MODE=sites`, `npm run build:sites`). Where these docs describe the deploy or
+> auth flow, the standalone model is authoritative.
+
 ## Start here
 
 | Doc | What it covers |
@@ -18,7 +25,7 @@ docs in order if you are new; jump to a specific file if you know what you need.
 | [04 — Sources & connectors](04-sources-and-connectors.md) | Calendar scrapers, free-swim parser, refresh/dedupe logic, snapshot seeds. |
 | [05 — Social & the Facebook collector](05-social-collector.md) | Manual social outings, the Selenium Hiking Manitoba collector, photo import, publish flow. |
 | [06 — Frontend](06-frontend.md) | React components, discovery UI, admin desk, trail map. |
-| [07 — Development & operations](07-development.md) | Install, dev server, build, D1 migrations, tests, the Sites lifecycle, auth. |
+| [07 — Development & operations](07-development.md) | Install, setup, dev server, build, deploy (wrangler), D1 migrations, tests, Basic-auth model. |
 | [08 — Security & privacy](08-security-privacy.md) | Auth model, collector key, private-group constraints, content sanitization rules. |
 | [09 — File map](09-file-map.md) | Annotated map of every meaningful file and where logic lives. |
 | [10 — Handover notes](10-handover.md) | Conventions, gotchas, known open work, "if you change X, also change Y". |
@@ -26,12 +33,14 @@ docs in order if you are new; jump to a specific file if you know what you need.
 ## Fastest path to running it
 
 ```bash
-npm run install:ci   # one locked install
+npm ci               # install (or npm run install:ci)
+npm run setup        # generate local .dev.vars (owner + collector credentials) and migrate D1
 npm run dev          # vinext dev server on http://localhost:5173
 ```
 
-Sign in locally by visiting `/signin-with-chatgpt?return_to=/` (mock auth, portable profile only).
-See [07 — Development](07-development.md) for the full workflow.
+When the browser prompts for sign-in, use the owner credentials in the generated `.dev.vars`
+(`WINNIGO_ADMIN_USER` / `WINNIGO_ADMIN_PASSWORD`). See [07 — Development](07-development.md) for the
+full workflow, including `npm run deploy` to your own Cloudflare account.
 
 ## Original design conversation
 
@@ -42,7 +51,8 @@ docs are derived entirely from the code and the three root markdown files.)
 
 ## Root-level docs (authoritative, keep in sync)
 
-- [`README.md`](../README.md) — the vinext starter/Sites lifecycle reference this project is built on.
+- [`AGENTS.md`](../AGENTS.md) — the standalone working guide (start/verify, structure, data rules).
+- [`README.md`](../README.md) — the app's own setup/deploy reference.
 - [`WINNIGO.md`](../WINNIGO.md) — the product's own feature/scope/limitations statement.
 - [`HIKING-COLLECTOR.md`](../HIKING-COLLECTOR.md) — operating manual for the daily Facebook collector.
 

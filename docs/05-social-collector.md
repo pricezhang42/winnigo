@@ -28,14 +28,18 @@ The `/admin` page (and `/admin?add=social` deep link) shows a form → `POST /ap
 
 ## The daily collector — big picture
 
-**This runs on a local machine, not in the Worker.** A Codex thread automation fires at 09:00
-America/Winnipeg and:
+**This runs on a local machine, not in the Worker.** A scheduled automation fires at 09:00
+America/Winnipeg and (originally a Codex thread; now runnable by any terminal agent per
+[`AGENTS.md`](../AGENTS.md)):
 
-1. Verifies the Site is still owner-private (owner role, custom access, exactly one allowed user,
-   no group grants, zero external visitors). If not, it **stops** — never changes access.
+1. Confirms the destination is owner-private. **Legacy (Sites) mode:** verify via the Sites API
+   (owner role, custom access, one allowed user, no group grants, zero external visitors) and stop if
+   not. **Standalone mode:** privacy is enforced by the Worker's Basic-auth gate ([`worker.ts`](../worker.ts)),
+   so this reduces to publishing to a private, owner-gated `WINNIGO_ORIGIN` — no Sites API check.
 2. Runs Selenium to gather candidate posts.
 3. Extracts/paraphrases route facts (no personal data), builds a sanitized batch.
-4. Publishes the batch (and photos) to Winnigo using the owner's short-lived token + collector key.
+4. Publishes the batch (and photos) to Winnigo using the collector key (+ the legacy Sites token only
+   when publishing to a `.chatgpt.site` host).
 
 The collector is **bounded**: up to ~100 newest posts, ≤80 scrolls / 5 min, best-effort. It cannot
 guarantee complete coverage and only runs when the local host + signed-in Chrome are available.
@@ -75,7 +79,7 @@ Never clicks Like/Reply/Follow/Send.
 
 ## Step 2 — Batch normalization ([`lib/social.mjs:26`](../lib/social.mjs) `normalizeHikingBatch`)
 
-The Codex step writes `/tmp/winnigo-hiking-batch.json`. Shape:
+The extraction step writes `/tmp/winnigo-hiking-batch.json`. Shape:
 
 ```json
 { "status": "ok|partial|blocked", "message": "…", "items": [ /* per-post objects */ ] }
@@ -93,19 +97,26 @@ links (must be `…/groups/810758152436911/(posts|permalink)/<id>/`), and stamps
 
 ## Step 3 — Publish ([`scripts/publish-social.mjs`](../scripts/publish-social.mjs))
 
+Standalone (the current model — see [`scripts/publish-config.mjs`](../scripts/publish-config.mjs)):
+
 ```bash
-WINNIGO_AUTH_TOKEN=<owner short-lived Sites token> \
+WINNIGO_ORIGIN=https://<your-worker-host>       # or http://127.0.0.1:5173 for local
+WINNIGO_COLLECTOR_KEY=<destination collector secret> \
   node scripts/publish-social.mjs /tmp/winnigo-hiking-batch.json
+# or: npm run publish:hiking -- /tmp/winnigo-hiking-batch.json
 ```
 
-- Reads the collector key from `.sites-runtime/hiking-collector-key` (mode 600, git-ignored; never
-  print/commit). Sends `X-Winnigo-Collector-Key` + `OAI-Sites-Authorization: Bearer <token>`.
+- `publishingConfig(env)` resolves the destination: `WINNIGO_ORIGIN` (an origin with no path/creds;
+  HTTPS required unless localhost) + `WINNIGO_COLLECTOR_KEY` (sent as `X-Winnigo-Collector-Key`).
+  **Only** if `WINNIGO_ORIGIN` is a `.chatgpt.site` host does it additionally require the legacy
+  `WINNIGO_AUTH_TOKEN` (sent as `OAI-Sites-Authorization: Bearer …`).
+- The collector key is also mirrored in `.sites-runtime/hiking-collector-key` (mode 600, git-ignored;
+  never print/commit); `npm run setup` generates matching values into `.dev.vars`.
 - For each item, fetches the FB CDN photos **from the collector host** (Workers CDN access can
   differ), streams them (≤8 MB) to `POST /api/photos/import`, and replaces `photoUrls` with the
   returned stable `/api/photos/<hash>` paths. Failed photos → batch marked `partial`, existing photos
   retained.
-- Posts items to `POST /api/sources` `{action:'sync-hiking-manitoba'}` in chunks of 10, against the
-  **fixed** origin `https://winnigo.wasdpyzlp.chatgpt.site`.
+- Posts items to `POST /api/sources` `{action:'sync-hiking-manitoba'}` in chunks of 10.
 - Never claims "imported" until the server confirms `ok`.
 
 ## Step 4 — Server upsert ([`app/api/sources/route.ts:8`](../app/api/sources/route.ts))

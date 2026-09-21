@@ -49,8 +49,9 @@ to rules there. `components.json` configures shadcn.
 
 ## Admin desk ([`components/admin.tsx`](../components/admin.tsx))
 
-- Server page [`app/admin/page.tsx`](../app/admin/page.tsx) calls `requireChatGPTUser('/admin')` —
-  anonymous visitors are redirected to sign in.
+- Server page [`app/admin/page.tsx`](../app/admin/page.tsx) checks `getOwner()`
+  ([`lib/auth.ts`](../lib/auth.ts)) — non-owners get an "Owner sign-in required." message. (The Worker
+  gate already 401s anonymous requests site-wide before this renders.)
 - Client component loads `GET /api/sources` (owner-only, returns admin collection incl. hidden), then
   issues `POST /api/sources` for `refresh` / `update` / (via the form) `add-social`.
 - Shows source status cards (venue + `facebook`), a searchable listing list with per-item hide/show,

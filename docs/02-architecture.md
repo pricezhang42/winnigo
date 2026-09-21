@@ -12,24 +12,33 @@
 - **UI:** React client components, Tailwind CSS v4, shadcn/Radix UI primitives in
   [`components/ui/`](../components/ui), Leaflet for the trail map.
 - **Collector:** Python + Selenium (isolated venv), run locally, out-of-band from the Worker.
+- **Deploy:** standalone Cloudflare Worker via [`wrangler.json`](../wrangler.json) + [`worker.ts`](../worker.ts)
+  (`npm run deploy`). No ChatGPT Sites platform involved. See [07 — Development](07-development.md).
 
-## Bindings
+## Bindings & config
 
-Declared in [`.openai/hosting.json`](../.openai/hosting.json):
+Standalone bindings/vars are declared in [`wrangler.json`](../wrangler.json):
 
 ```json
-{ "d1": "DB", "r2": "BUCKET", "project_id": "appgprj_6aab5c23b4708191a0eae696e6fdad83" }
+{ "name": "winnigo", "main": "worker.ts",
+  "vars": { "WINNIGO_AUTH_MODE": "basic" },
+  "d1_databases": [{ "binding": "DB", ... }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "winnigo-photos" }] }
 ```
 
 - `DB` → D1 database (listings + sources). Read from `env.DB`.
 - `BUCKET` → R2 bucket for photos under the `photos/<sha256>` key space.
-- `WINNIGO_COLLECTOR_KEY` → a secret configured in Sites (not in the repo) that authorizes only the
-  Facebook group-sync action and photo import from the collector host.
+- `WINNIGO_AUTH_MODE` → `basic` (standalone, HTTP Basic owner auth) or `sites` (legacy SIWC).
+- `WINNIGO_ADMIN_USER` / `WINNIGO_ADMIN_PASSWORD` → owner Basic-auth credentials (secrets; local
+  values generated into `.dev.vars` by `npm run setup`).
+- `WINNIGO_COLLECTOR_KEY` → secret that authorizes only the Facebook group-sync action and photo
+  import (never reads or general admin). See [08 — Security & privacy](08-security-privacy.md).
 - Types for the optional bindings live in [`cloudflare-env.d.ts`](../cloudflare-env.d.ts); update it
   if binding names change.
 
-`vite.config.ts` simulates these bindings for local dev. Local D1/R2 state persists under
-`.wrangler/state` (git-ignored).
+[`.openai/hosting.json`](../.openai/hosting.json) (`{ d1, r2, project_id }`) is retained only for the
+legacy Sites target (`npm run build:sites`). `vite.config.ts` simulates the bindings for local dev;
+local D1/R2 state persists under `.wrangler/state` (git-ignored).
 
 ## Routes
 
@@ -38,17 +47,20 @@ App Router routes under [`app/`](../app):
 | Path | File | Purpose |
 | --- | --- | --- |
 | `/` | [`app/page.tsx`](../app/page.tsx) → [`components/winnigo.tsx`](../components/winnigo.tsx) | Public discovery UI. |
-| `/admin` | [`app/admin/page.tsx`](../app/admin/page.tsx) → [`components/admin.tsx`](../components/admin.tsx) | Owner-only collection desk. Requires ChatGPT sign-in. |
+| `/admin` | [`app/admin/page.tsx`](../app/admin/page.tsx) → [`components/admin.tsx`](../components/admin.tsx) | Owner-only collection desk. Requires owner sign-in (Basic auth). |
 | `GET /api/listings` | [`app/api/listings/route.ts`](../app/api/listings/route.ts) | Public collection read; triggers init + refresh-on-visit. |
 | `GET/POST /api/sources` | [`app/api/sources/route.ts`](../app/api/sources/route.ts) | Owner/collector read + all mutations (refresh, add-social, update, sync-hiking-manitoba). |
 | `POST /api/photos/import` | [`app/api/photos/import/route.ts`](../app/api/photos/import/route.ts) | Store a Facebook CDN photo into R2; returns `/api/photos/<hash>`. |
 | `GET /api/photos/[id]` | [`app/api/photos/[id]/route.ts`](../app/api/photos/[id]/route.ts) | Serve a stored photo (private cache) by 64-hex id. |
 
-Reserved dispatch-owned auth routes (`/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`)
-are **not** implemented in-app — the Sites platform owns them. See [07 — Development](07-development.md).
+The **whole site** sits behind an access gate in [`worker.ts`](../worker.ts): `mayEnter()`
+([`lib/auth-policy.mjs`](../lib/auth-policy.mjs)) returns 401 (`WWW-Authenticate: Basic`) to anyone
+who isn't the owner, except collector POSTs to `/api/sources` and `/api/photos/import`. In legacy
+`sites` mode this gate is a no-op (the Sites dispatch enforces the audience instead). See
+[08 — Security & privacy](08-security-privacy.md).
 
 All API routes set `export const dynamic = 'force-dynamic'` because they depend on per-request
-identity headers and live storage.
+identity/auth headers and live storage.
 
 ## Request lifecycle — public read
 
@@ -68,7 +80,7 @@ The heavy lifting lives in [`lib/store.ts`](../lib/store.ts). See
 
 ## Request lifecycle — mutations
 
-`POST /api/sources` handles four actions, gated by auth (owner ChatGPT session **or** the
+`POST /api/sources` handles four actions, gated by auth (owner Basic-auth session **or** the
 collector key for the sync action only):
 
 - `refresh` → force `refreshSources(true)`.
@@ -89,13 +101,18 @@ Trails Manitoba KML (offline script) ─┤
                                       ▼
                               D1: listings + sources ──getCollection──► GET /api/listings ──► Winnigo UI
                                       ▲
-Facebook (private group) ─Selenium─► candidates.json ─Codex extract─► batch.json
+Facebook (private group) ─Selenium─► candidates.json ─extract/paraphrase─► batch.json
                                       │                                   │
-                                      │                   publish-social.mjs (owner token + collector key)
+                                      │          publish-social.mjs (WINNIGO_ORIGIN + collector key)
                                       │                                   ▼
                                       └───────────── POST /api/sources (sync) + POST /api/photos/import ──► R2
 Owner via /admin ──add-social / update / refresh──────────────────────► POST /api/sources
 ```
+
+The extract/paraphrase step is done by whatever agent runs the collector (originally Codex; now any
+terminal agent — see [`AGENTS.md`](../AGENTS.md)). `publish-social.mjs` targets `WINNIGO_ORIGIN`
+(your deploy URL or localhost); the old Sites owner token is needed only when that origin is a
+`.chatgpt.site` host.
 
 ## Why the app dir is so terse
 
