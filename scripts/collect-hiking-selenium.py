@@ -19,7 +19,9 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = ROOT / '.sites-runtime'
+LEGACY_RUNTIME = ROOT / '.sites-runtime'
+DEFAULT_RUNTIME = LEGACY_RUNTIME if (LEGACY_RUNTIME / 'hiking-chrome-profile').is_dir() else ROOT / '.winnigo'
+RUNTIME = Path(os.environ.get('WINNIGO_RUNTIME_DIR', DEFAULT_RUNTIME))
 GROUP = '810758152436911'
 GROUP_URL = f'https://www.facebook.com/groups/{GROUP}/?sorting_setting=CHRONOLOGICAL'
 POST_ROOT = '[role="feed"] > *'

@@ -50,3 +50,6 @@ next-env.d.ts
 # Python collector runtime
 __pycache__/
 *.py[cod]
+
+.dev.vars*
+/.winnigo/

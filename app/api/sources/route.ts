@@ -1,9 +1,9 @@
 import {env} from 'cloudflare:workers';
 import {normalizeSocial,normalizeHikingBatch} from '@/lib/social.mjs';
-import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {getOwner} from '@/lib/auth';
 import {initialize,refreshSources,getCollection,database} from '@/lib/store';
 export const dynamic='force-dynamic';
-async function authorized(request:Request){const user=await getChatGPTUser();if(!user)return false;const origin=request.headers.get('origin');return !origin||origin===new URL(request.url).origin;}
+async function authorized(request:Request){const user=await getOwner();if(!user)return false;const origin=request.headers.get('origin');return !origin||origin===new URL(request.url).origin;}
 export async function GET(request:Request){if(!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});try{await initialize();return Response.json(await getCollection(true));}catch{return Response.json({error:'Listing storage is temporarily unavailable.'},{status:503});}}
 export async function POST(request:Request){const key=(env as unknown as {WINNIGO_COLLECTOR_KEY?:string}).WINNIGO_COLLECTOR_KEY;const collector=!!key&&request.headers.get('x-winnigo-collector-key')===key;if(!collector&&!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});if(!request.headers.get('content-type')?.includes('application/json'))return Response.json({error:'JSON required'},{status:415});try{const raw=await request.text();if(raw.length>250000)return Response.json({error:'Batch too large'},{status:413});const input=JSON.parse(raw) as Record<string,unknown>;if(collector&&input.action!=='sync-hiking-manitoba')return Response.json({error:'Collector action only'},{status:403});await initialize();if(input.action==='sync-hiking-manitoba'){
  let batch;try{batch=normalizeHikingBatch(input);}catch(e){return Response.json({error:e instanceof Error?e.message:'Invalid collection batch'},{status:400});}

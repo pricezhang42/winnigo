@@ -1,14 +1,10 @@
 import {readFile} from 'node:fs/promises';
 import {normalizeHikingBatch} from '../lib/social.mjs';
 
-// The short-lived token comes from the owner's Sites connection, never Facebook cookies.
-const origin='https://winnigo.wasdpyzlp.chatgpt.site';
-const token=process.env.WINNIGO_AUTH_TOKEN;
-if(!token)throw Error('Owner authentication is required.');
-const collectorKey=(await readFile(new URL('../.sites-runtime/hiking-collector-key',import.meta.url),'utf8')).trim();
+import {publishingConfig} from './publish-config.mjs';
+const {origin,headers}=publishingConfig(process.env);
 const input=JSON.parse(await readFile(process.argv[2],'utf8'));
 normalizeHikingBatch(input);
-const headers={'Content-Type':'application/json','Origin':origin,'OAI-Sites-Authorization':'Bearer '+token,'X-Winnigo-Collector-Key':collectorKey};
 let photosSaved=0,photosFailed=0;
 for(const item of input.items){
  if(!item.photoUrls)continue;

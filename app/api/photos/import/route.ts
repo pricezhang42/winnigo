@@ -1,10 +1,10 @@
 import {env} from 'cloudflare:workers';
-import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {getOwner} from '@/lib/auth';
 export const dynamic='force-dynamic';
 export async function POST(request:Request){
  const bindings=env as unknown as {BUCKET?:R2Bucket;WINNIGO_COLLECTOR_KEY?:string};
  const collector=!!bindings.WINNIGO_COLLECTOR_KEY&&request.headers.get('x-winnigo-collector-key')===bindings.WINNIGO_COLLECTOR_KEY;
- if(!collector&&!await getChatGPTUser())return Response.json({error:'Sign in required'},{status:401});
+ if(!collector&&!await getOwner())return Response.json({error:'Sign in required'},{status:401});
  if(request.headers.get('origin')&&request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Invalid origin'},{status:403});
  if(!bindings.BUCKET)return Response.json({error:'Photo storage unavailable'},{status:503});
  let stage='read';

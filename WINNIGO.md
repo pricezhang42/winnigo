@@ -2,6 +2,10 @@
 
 A private first release for discovering Winnipeg events, places and activities.
 
+## Agent-independent development
+
+Start with README.md and AGENTS.md. The default npm commands now use standalone Cloudflare configuration, local owner authentication, migrations and a configurable HTTP collector publisher. No agent-specific tools are required. The existing Sites deployment is an optional compatibility target (`npm run build:sites`); references below to platform identity and Sites publishing describe that original deployment only. Standalone deployments enforce the owner gate in `worker.ts` and use their own D1/R2 resources. The original production collection has not been migrated.
+
 ## Working features
 
 - Source adapters include The Forks event calendar, The Forks attractions, Assiniboine Park, Travel Manitoba (Winnipeg only), and City of Winnipeg free swim schedules.
