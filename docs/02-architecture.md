@@ -1,5 +1,7 @@
 # 02 — Architecture
 
+This describes the current implementation. For the planned replacement using Node.js, PostgreSQL and S3-compatible storage, see [11 — Target system design](11-target-system-design.md).
+
 ## Stack
 
 - **Framework:** [vinext](https://github.com/cloudflare/vinext) — Next.js App Router (Next 16,

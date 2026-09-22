@@ -1,5 +1,7 @@
 # 03 — Data model
 
+This describes the current D1 schema. The proposed PostgreSQL model, including user accounts, preferences and bookmarks, is in [11 — Target system design](11-target-system-design.md).
+
 ## D1 tables
 
 Defined in [`db/schema.ts`](../db/schema.ts); migration in

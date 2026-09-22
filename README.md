@@ -1,5 +1,9 @@
 # Winnigo
 
+**Planned next version:** see [the system design](docs/11-target-system-design.md) for the selected Node.js, PostgreSQL and S3-compatible architecture, user accounts and preferences. The migration has not been implemented; the setup instructions below describe the current application.
+
+The [implementation plan](docs/12-implementation-plan.md) breaks that migration into ordered, testable work packages.
+
 Private Winnipeg and Manitoba discovery app: events, places, official trails, community hiking/cycling posts, and free swims.
 
 **No Codex, ChatGPT account, MCP tools, or installed AI skills are needed for the standalone workflow.** Any agent or person with a terminal can use the commands below. React/TypeScript runs on Vinext/Vite, with Cloudflare Workers, D1 and R2. Local development emulates Cloudflare; it needs no Cloudflare account. Remote deployment needs your own Cloudflare account.

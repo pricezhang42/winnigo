@@ -17,6 +17,8 @@ docs in order if you are new; jump to a specific file if you know what you need.
 
 ## Start here
 
+**Next-version design:** [11 — Target system design](11-target-system-design.md) records the selected Node.js, PostgreSQL and S3-compatible architecture, accounts/preferences, collection pipeline, AI retrieval and migration plan. It is a design, not an implemented migration. Documents 01–10 below describe the current Cloudflare application.
+
 | Doc | What it covers |
 | --- | --- |
 | [01 — Product overview](01-overview.md) | What Winnigo is, who it's for, current scope and limitations. |
@@ -29,6 +31,8 @@ docs in order if you are new; jump to a specific file if you know what you need.
 | [08 — Security & privacy](08-security-privacy.md) | Auth model, collector key, private-group constraints, content sanitization rules. |
 | [09 — File map](09-file-map.md) | Annotated map of every meaningful file and where logic lives. |
 | [10 — Handover notes](10-handover.md) | Conventions, gotchas, known open work, "if you change X, also change Y". |
+| [11 — Target system design](11-target-system-design.md) | Planned Node.js/PostgreSQL/S3 architecture, cloud collectors and extraction, multi-user access, personalization, AI and phased migration. |
+| [12 — Implementation plan](12-implementation-plan.md) | Ordered work packages, dependencies, task checklists, acceptance gates and migration/cutover steps. |
 
 ## Fastest path to running it
 
