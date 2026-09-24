@@ -4,6 +4,15 @@ import {isOwner,mayEnter} from '../../lib/auth-policy.mjs';
 import {publishingConfig} from '../publish-config.mjs';
 const env={WINNIGO_ADMIN_USER:'owner',WINNIGO_ADMIN_PASSWORD:'test-password',WINNIGO_COLLECTOR_KEY:'collector-secret'};
 const owner={authorization:'Basic '+btoa('owner:test-password')};
+test('explicit local mode allows loopback access and admin identity only',()=>{
+ const local={...env,WINNIGO_AUTH_MODE:'local'};
+ for(const host of ['localhost:5173','127.0.0.1:5173','[::1]:5173']){
+  assert.equal(isOwner(new Headers({host}),local),true);
+  for(const path of ['/','/admin','/api/listings','/api/photos/example'])assert.equal(mayEnter(new Request('http://'+host+path),local),true);
+ }
+ for(const host of ['','example.com','localhost.evil.example','127.0.0.1.evil.example'])assert.equal(isOwner(new Headers({host}),local),false);
+ assert.equal(mayEnter(new Request('https://example.com',{headers:{host:'localhost'}}),local),false);
+});
 test('standalone access fails closed and rejects forged platform identity',()=>{
  for(const headers of [{},{authorization:'Basic !'},{authorization:'Basic '+btoa('owner:wrong')},{'oai-authenticated-user-id':'forged','oai-authenticated-user-email':'forged@example.com'}])assert.equal(isOwner(new Headers(headers),env),false);
  assert.equal(isOwner(new Headers(owner),{}),false);

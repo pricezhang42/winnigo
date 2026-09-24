@@ -1,0 +1,25 @@
+name: winnigo-p0
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: p0
+      POSTGRES_DB: winnigo_p0
+      POSTGRES_PASSWORD: ${P0_DB_PASSWORD:?Run node setup.mjs}
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p0 -d winnigo_p0"]
+      interval: 2s
+      retries: 30
+  storage:
+    image: chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    environment:
+      AWS_ACCESS_KEY_ID: ${P0_S3_KEY:?Run node setup.mjs}
+      AWS_SECRET_ACCESS_KEY: ${P0_S3_SECRET:?Run node setup.mjs}
+      S3_BUCKET: winnigo-p0
+    ports: ["127.0.0.1:58333:8333"]
+    volumes: ["storage:/data"]
+volumes:
+  postgres:
+  storage:

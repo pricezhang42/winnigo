@@ -17,6 +17,8 @@ docs in order if you are new; jump to a specific file if you know what you need.
 
 ## Start here
 
+**Implementation progress:** [12 — Implementation plan](12-implementation-plan.md) tracks delivery. [13 — P0 baseline](13-p0-baseline.md) records the completed compatibility checks, pinned stack and known map defect.
+
 **Next-version design:** [11 — Target system design](11-target-system-design.md) records the selected Node.js, PostgreSQL and S3-compatible architecture, accounts/preferences, collection pipeline, AI retrieval and migration plan. It is a design, not an implemented migration. Documents 01–10 below describe the current Cloudflare application.
 
 | Doc | What it covers |

@@ -1,0 +1,98 @@
+{
+  "notice": "Entirely synthetic examples; no copied private posts or author information.",
+  "calendarHtml": "<div class=\"event-listing\"><p class=\"dates\">Thursday, Dec 31 to Friday, Jan 1</p><h3><a href=\"/events/calendar-of-events/event/999999\">P0 calendar fixture</a></h3><p class=\"hours\">7 PM</p>",
+  "swimHtml": "<h2 class=\"card-title\"><a href=\"/recreation-leisure/pools/indoor-pools/fixture\">Fixture Pool</a></h2><div class=\"field--name-field-card-body\"><p>1 Example Street</p><p>September 20 \u2013 September 20, 2026</p><p>Sunday<br>1 \u2013 2 p.m.<br>3 \u2013 4 p.m. Youth swim (ages 9\u201319)</p></div>",
+  "community": {
+    "title": "P0 Betula Lake outing",
+    "description": "Synthetic fixture. Exact trail entrance is unknown.",
+    "url": "https://www.facebook.com/groups/810758152436911/posts/999999999999001/?utm_source=fixture",
+    "category": "Hiking",
+    "type": "Activity",
+    "venue": "Betula Lake",
+    "difficulty": "Unknown",
+    "distanceKm": null,
+    "images": [
+      "/api/photos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "/api/photos/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "commentNotes": [
+      {
+        "text": "Synthetic discussion note: parking details are unconfirmed.",
+        "url": "https://www.facebook.com/groups/810758152436911/posts/999999999999001/?comment_id=999999999999002&utm_source=fixture"
+      }
+    ]
+  },
+  "listing": {
+    "source": "trails-manitoba",
+    "sourceId": "p0-seasonal",
+    "sourceUrl": "https://example.com/fixtures/trail",
+    "visibility": "public",
+    "collection": "Official Trails",
+    "title": "P0 seasonal trail",
+    "description": "Synthetic trail with seasonal restrictions.",
+    "type": "Activity",
+    "category": "Hiking",
+    "status": "active",
+    "checkedAt": "2026-09-21T12:00:00Z",
+    "price": null,
+    "family": null,
+    "indoor": false,
+    "difficulty": null,
+    "distanceKm": null,
+    "occurrences": [],
+    "restrictions": [
+      "Winter use only; confirm current opening and closures."
+    ],
+    "location": {
+      "label": "Fixture park",
+      "kind": "park",
+      "latitude": 50,
+      "longitude": -96,
+      "approximate": true,
+      "sourceUrl": "https://example.com/fixtures/park",
+      "uncertainty": "Park centre only; trailhead unconfirmed."
+    },
+    "mediaIds": [],
+    "commentNotes": [],
+    "seasons": [
+      "Winter"
+    ],
+    "trailVariants": [
+      {
+        "season": "Winter",
+        "sourceUrl": "https://example.com/fixtures/winter-map",
+        "distanceKm": 4,
+        "difficulty": "Level 2 / 4",
+        "activities": [
+          "Hiking"
+        ],
+        "restrictions": [
+          "No cycling"
+        ],
+        "considerations": [
+          "Seasonal crossing; confirm opening."
+        ]
+      }
+    ]
+  },
+  "stored": {
+    "hidden": true,
+    "override": {
+      "title": "Owner corrected title",
+      "price": 5
+    }
+  },
+  "preferences": {
+    "interests": [
+      "Hiking"
+    ],
+    "neighbourhoods": [],
+    "travelRadiusKm": 50,
+    "budget": null,
+    "setting": "outdoor",
+    "familyFriendly": null,
+    "difficulties": [],
+    "maximumDistanceKm": null,
+    "accessibilityRequirements": []
+  }
+}

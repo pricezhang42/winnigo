@@ -21,5 +21,6 @@ let css='';
 for(const path of styles){const result=await read(path,'text/css,*/*;q=0.1');assert.match(result.response.headers.get('content-type')||'',/text\/css/,`${path}: stylesheet MIME type`);css+=result.text;}
 assert.ok(css.includes('.cards')&&css.includes('.topbar'),'Winnigo layout styles must be present');
 for(const path of modules){const result=await read(path,'*/*');assert.match(result.response.headers.get('content-type')||'',/(?:javascript|ecmascript)/,`${path}: module MIME type`);assert.ok(!result.text.startsWith('<!DOCTYPE'),'Module request returned HTML');}
-assert.equal((await fetch(new URL('/api/listings',url))).status,401,'Anonymous listing reads must remain private');
-console.log(`Verified ${styles.length} stylesheets, ${modules.length} browser modules, layout CSS, and private API access.`);
+const localAccess=process.env.WINNIGO_AUTH_MODE==='local';
+assert.equal((await fetch(new URL('/api/listings',url))).status,localAccess?200:401,'API access must match the configured authentication mode');
+console.log(`Verified ${styles.length} stylesheets, ${modules.length} browser modules, layout CSS, and ${localAccess?'password-free local':'private'} API access.`);

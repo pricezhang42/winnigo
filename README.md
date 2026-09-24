@@ -20,7 +20,9 @@ npm run dev
 
 Open http://127.0.0.1:5173. The browser asks for the owner username/password generated in the ignored `.dev.vars` file. Read that file locally; do not paste its values into commits, logs, or shared agent conversations. Setup preserves existing credentials and applies local database migrations. Listings seed themselves on first access. Photos collected on the original site are not bundled with the repository.
 
-All routes, including photo reads and static assets in production, require owner authentication. The collector secret only authorizes the import endpoints and cannot read the private collection or edit arbitrary listings. Basic authentication must use HTTPS outside loopback. Missing credentials fail closed. Never set `WINNIGO_AUTH_MODE=sites` on a standalone host: that compatibility mode relies on the original hosting platform's access gate.
+For temporary password-free local development, set `WINNIGO_AUTH_MODE="local"` in `.dev.vars` and restart the server. This enables browsing and owner/admin actions on localhost, 127.0.0.1 or [::1]. Remove that line (or set it to `basic`) and restart to restore password authentication. Keep this setting in the ignored local file; the checked-in deployment configuration continues to use Basic authentication.
+
+In the default Basic mode, all routes, including photo reads and static assets in production, require owner authentication. The collector secret only authorizes the import endpoints and cannot read the private collection or edit arbitrary listings. Basic authentication must use HTTPS outside loopback. Missing credentials fail closed. Never set `WINNIGO_AUTH_MODE=sites` on a standalone host: that compatibility mode relies on the original hosting platform's access gate.
 
 ## Commands
 

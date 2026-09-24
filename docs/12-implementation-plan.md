@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Status: **Planned; implementation has not started.** This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. Existing README commands still describe the current Cloudflare application.
+Status: **P0 complete (2026-09-22); P1–P8 planned.** See [P0 acceptance evidence and known baseline defect](13-p0-baseline.md). This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. Existing README commands still describe the current Cloudflare application.
 
 ## Delivery approach
 
@@ -30,16 +30,18 @@ P4 and P5 have separate implementation boundaries once P3 is complete; the defau
 
 ## P0 — Establish the baseline
 
-- [ ] Capture repository state and record current test/build results without discarding existing changes.
-- [ ] Exercise discovery, filters, maps, approximate markers, galleries, admin edits and source status in a real browser.
-- [ ] Save sanitized fixtures for calendar events, multiple swim sessions, seasonal trails, approximate locations, comments, duplicate imports, hidden items and editorial overrides. Keep private source text and credentials out of fixtures.
-- [ ] Define shared validation schemas for listing imports, API responses and preferences; remove reliance on duplicated implicit shapes as components are migrated.
-- [ ] Verify and pin compatible Node.js/Next.js, PostgreSQL driver/Drizzle and Better Auth versions. Confirm a maintained PostgreSQL-backed job library supports leases, retries and the scheduling requirements.
-- [ ] Choose an S3-compatible development service and test the subset of storage operations we need. Record the choice and configuration.
+- [x] Capture repository state and record current test/build results without discarding existing changes.
+- [x] Exercise discovery, filters, maps, approximate markers, galleries, admin edits and source status in a real browser.
+- [x] Save sanitized fixtures for calendar events, multiple swim sessions, seasonal trails, approximate locations, comments, duplicate imports, hidden items and editorial overrides. Keep private source text and credentials out of fixtures.
+- [x] Define shared validation schemas for listing imports, API responses and preferences; remove reliance on duplicated implicit shapes as components are migrated.
+- [x] Verify and pin compatible Node.js/Next.js, PostgreSQL driver/Drizzle and Better Auth versions. Confirm a maintained PostgreSQL-backed job library supports leases, retries and the scheduling requirements.
+- [x] Choose an S3-compatible development service and test the subset of storage operations we need. Record the choice and configuration.
 
 **Done when:** baseline browser behavior is recorded, fixture tests reproduce key data rules, and the selected libraries pass minimal Node/PostgreSQL/auth/storage compatibility checks. Do not upgrade unrelated dependencies during this step.
 
 ## P1 — Build the Node.js foundation
+
+Carry forward the P0 map lifecycle defect: changing collections or leaving the map during a Leaflet zoom can throw `_leaflet_pos`. Fix and test rapid filtering/navigation as part of preserving map behavior.
 
 - [ ] Replace the default Vinext/Worker runtime with standard Next.js on Node.js, preserving existing React components, Tailwind/shadcn styling and Leaflet behavior.
 - [ ] Separate application configuration from Cloudflare bindings; validate required environment values on startup without logging secrets.

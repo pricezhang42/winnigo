@@ -1,0 +1,23 @@
+{
+  "name": "winnigo-p0-compatibility",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "test": "node --env-file=.env probe.mjs",
+    "build": "next build --webpack",
+    "start": "next start --hostname 127.0.0.1 --port 5188"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "pg": "8.23.0",
+    "drizzle-orm": "0.45.3",
+    "better-auth": "1.7.5",
+    "@better-auth/drizzle-adapter": "1.7.5",
+    "pg-boss": "12.33.4",
+    "@aws-sdk/client-s3": "3.1137.0",
+    "@aws-sdk/s3-request-presigner": "3.1137.0"
+  }
+}
