@@ -22,7 +22,7 @@ function TrailCanvas({entries,onSelect,focusId}:{entries:Entry[];onSelect:(item:
   import('leaflet').then(L=>{
    if(disposed||!node.current)return;
    library.current=L;
-   const m=L.map(node.current,{scrollWheelZoom:false}).setView([49.9,-97.1],7);map.current=m;
+   const m=L.map(node.current,{scrollWheelZoom:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([49.9,-97.1],7);map.current=m;
    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'}).on('tileerror',()=>{if(!disposed)setError('Some map tiles could not load. Trail details and source maps are still available.');}).addTo(m);
    const groups=new Map<string,{entry:Entry;number:number}[]>();
    entries.forEach(({item,trail},n)=>{
@@ -41,7 +41,7 @@ function TrailCanvas({entries,onSelect,focusId}:{entries:Entry[];onSelect:(item:
    if(entries.length)m.fitBounds(entries.map(e=>e.trail.position as [number,number]),{padding:[40,40],maxZoom:12});
    observer=new ResizeObserver(()=>m.invalidateSize());observer.observe(node.current);setReady(true);
   }).catch(()=>{if(!disposed)setError('The interactive map could not load. Use the trail list or source maps below.');});
-  return()=>{disposed=true;observer?.disconnect();map.current?.remove();map.current=null;};
+  return()=>{disposed=true;observer?.disconnect();map.current?.stop();map.current?.remove();map.current=null;};
  },[entries,onSelect]);
  useEffect(()=>{
   const e=entries.find(e=>e.item.id===focusId);if(!e||!map.current||!library.current)return;
@@ -52,8 +52,9 @@ function TrailCanvas({entries,onSelect,focusId}:{entries:Entry[];onSelect:(item:
  return <div className="trail-canvas-wrap"><div className="trail-map-tools"><span>{ready?'Click a numbered marker to open an outing.':'Loading map…'}</span><Button size="sm" variant="outline" disabled={!ready||!entries.length} onClick={()=>map.current?.fitBounds(entries.map(e=>e.trail.position as [number,number]),{padding:[40,40],maxZoom:12})}><Maximize size={15}/> Fit trails</Button></div><div ref={node} className="trail-canvas" role="region" aria-label="Interactive Manitoba trail map"/>{error&&<p className="notice" role="status">{error}</p>}<p className="map-legend"><span className="route-swatch"/> Mapped trail sections <span className="pin-swatch"/> Trail or source location <span className="area-swatch"/> Approximate lake, park or landmark. Lines may cover only part of an outing.</p></div>;
 }
 
-export default function TrailMap({items,onSelect}:{items:Listing[];onSelect:(item:Listing)=>void}){
+export default function TrailMap({items,onSelect,onFilterChange}:{items:Listing[];onSelect:(item:Listing)=>void;onFilterChange?:(filters:{season:string;difficulty:string;distance:string})=>void}){
  const [distance,setDistance]=useState('Any'),[difficulty,setDifficulty]=useState('Any'),[focusId,setFocusId]=useState(''),[season,setSeason]=useState('summer'),[trailSeason,setTrailSeason]=useState('Any');
+ useEffect(()=>{onFilterChange?.({season:trailSeason,difficulty,distance});},[trailSeason,difficulty,distance,onFilterChange]);
  const filtered=useMemo(()=>items.filter(i=>(trailSeason==='Any'||i.seasons?.includes(trailSeason))&&(difficulty==='Any'||(i.difficulty||'Unknown')===difficulty)&&(distance==='Any'||(i.distanceKm!=null&&(distance==='short'?i.distanceKm<=5:distance==='medium'?i.distanceKm>5&&i.distanceKm<=15:i.distanceKm>15)))),[items,distance,difficulty,trailSeason]);
  const entries=useMemo(()=>filtered.flatMap(item=>{const trail=matchTrail(item);return trail?[{item,trail}]:[];}),[filtered]);
  const unmapped=filtered.filter(i=>!matchTrail(i));

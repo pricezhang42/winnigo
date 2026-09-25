@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env*
+.dev.vars*
+.winnigo
+.wrangler
+.sites-runtime
+.vinext
+.openai
+outputs
+work
+spikes
+legacy
+dist

@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Status: **P0 complete (2026-09-22); P1–P8 planned.** See [P0 acceptance evidence and known baseline defect](13-p0-baseline.md). This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. Existing README commands still describe the current Cloudflare application.
+Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP activation requires provider configuration.** See [P0 acceptance evidence and known baseline defect](13-p0-baseline.md). This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. README commands now run the Node application with PostgreSQL/S3. See [P1 evidence and limits](14-p1-foundation.md) and [P2 storage evidence](15-p2-storage.md).
 
 ## Delivery approach
 
@@ -41,15 +41,15 @@ P4 and P5 have separate implementation boundaries once P3 is complete; the defau
 
 ## P1 — Build the Node.js foundation
 
-Carry forward the P0 map lifecycle defect: changing collections or leaving the map during a Leaflet zoom can throw `_leaflet_pos`. Fix and test rapid filtering/navigation as part of preserving map behavior.
+Completed 2026-09-23. [Acceptance evidence](14-p1-foundation.md). The P0 `_leaflet_pos` defect is fixed and rapid map filtering/navigation passes in dev and built-browser checks. The owner’s explicitly requested password-free loopback mode is preserved; Basic mode protects container/staging runs.
 
-- [ ] Replace the default Vinext/Worker runtime with standard Next.js on Node.js, preserving existing React components, Tailwind/shadcn styling and Leaflet behavior.
-- [ ] Separate application configuration from Cloudflare bindings; validate required environment values on startup without logging secrets.
-- [ ] Add Dockerfile(s), an environment template, Compose services for PostgreSQL and development object storage, health checks and explicit migration/seed commands.
-- [ ] Retain an owner-only development/staging gate until P3 is complete. Do not expose private data while authentication is being replaced.
-- [ ] Introduce repository/storage interfaces and fixture implementations so UI/runtime work can proceed before production data migration.
-- [ ] Separate the background-worker entry point from the web process. Add standard scripts for both, documenting which processes each command starts.
-- [ ] Adapt `check:assets` to the Node build. Check actual CSS/JS responses, MIME types, grid layout and completed client loading in development and the built app.
+- [x] Replace the default Vinext/Worker runtime with standard Next.js on Node.js, preserving existing React components, Tailwind/shadcn styling and Leaflet behavior.
+- [x] Separate application configuration from Cloudflare bindings; validate required environment values on startup without logging secrets.
+- [x] Add Dockerfile(s), an environment template, Compose services for PostgreSQL and development object storage, health checks and explicit migration/seed commands.
+- [x] Retain an owner-only development/staging gate until P3 is complete. Do not expose private data while authentication is being replaced.
+- [x] Introduce repository/storage interfaces and fixture implementations so UI/runtime work can proceed before production data migration.
+- [x] Separate the background-worker entry point from the web process. Add standard scripts for both, documenting which processes each command starts.
+- [x] Adapt `check:assets` to the Node build. Check actual CSS/JS responses, MIME types, grid layout and completed client loading in development and the built app.
 
 **Primary files:** `package.json`, `app/`, `components/`, `next.config.ts`, new configuration/service modules, Docker/Compose files and setup scripts. Retire `worker.ts`/`vite.config.ts` from the default path only after equivalent behavior passes tests; preserve the legacy production release for rollback.
 
@@ -57,27 +57,29 @@ Carry forward the P0 map lifecycle defect: changing collections or leaving the m
 
 ## P2 — Implement PostgreSQL and S3 storage
 
-- [ ] Add reviewed SQL migrations for sources, listings, source identities, occurrences, locations, overrides, media associations, comment notes, run history and audit records. Reserve auth-managed schema ownership for P3.
-- [ ] Replace D1 statements in `lib/store.ts` with PostgreSQL repositories and transactional upserts. Preserve stable listing IDs, hidden state and field-level editorial overrides.
-- [ ] Port normalization for collection labels, trail variants, free-swim restrictions and approximate map locations. Keep unknown facts unknown.
-- [ ] Implement paginated server-side search, filters, detail lookup and counts. Preserve source diversity without loading the entire collection into the browser.
-- [ ] Add the S3 adapter for private object upload/read/delete, metadata, content hashes and ordered galleries. Keep stable media IDs separate from provider URLs.
-- [ ] Enforce owner-only media reads until the grant model is available. Test collisions/reuse across media associations without exposing restricted content.
-- [ ] Build repeatable legacy export-to-PostgreSQL and R2-to-S3 migration tools with dry-run mode, ID mappings, validation reports and restart checkpoints. Use fixtures for the first rehearsal.
-- [ ] Add orphan-upload cleanup with a grace period; only remove objects proven unreferenced, never objects from an unfinished import.
+- [x] Add reviewed SQL migrations for sources, listings, source identities, occurrences, locations, overrides, media associations, comment notes, run history and audit records. Reserve auth-managed schema ownership for P3.
+- [x] Replace the P1 fixture adapter with PostgreSQL repositories and transactional upserts, mapping the preserved legacy D1 records. Preserve stable listing IDs, hidden state and field-level editorial overrides.
+- [x] Port normalization for collection labels, trail variants, free-swim restrictions and approximate map locations. Keep unknown facts unknown.
+- [x] Implement paginated server-side search, filters, detail lookup and counts. Preserve source diversity without loading the entire collection into the browser.
+- [x] Add the S3 adapter for private object upload/read/delete, metadata, content hashes and ordered galleries. Keep stable media IDs separate from provider URLs.
+- [x] Enforce owner-only media reads until the grant model is available. Test collisions/reuse across media associations without exposing restricted content.
+- [x] Build repeatable legacy export-to-PostgreSQL and R2-to-S3 migration tools with dry-run mode, ID mappings, validation reports and restart checkpoints. Use fixtures for the first rehearsal.
+- [x] Add orphan-upload cleanup with a grace period; only remove objects proven unreferenced, never objects from an unfinished import.
 
 **Done when:** existing discovery and admin correction flows work on the new storage; repeating a batch produces no duplicate records; failed imports retain prior data; schema migrations and object-copy tools can resume safely. Search, maps and galleries match the baseline.
 
 ## P3 — Add individual accounts and permissions
 
-- [ ] Integrate Better Auth with PostgreSQL, reviewed migrations and secure session cookies. Implement Google login plus verified email/password, reset, logout and session revocation using configured providers.
-- [ ] Create a controlled owner-to-admin bootstrap. Never grant administration to the first public signup.
-- [ ] Add server-side role checks and source/listing grants. Existing private Facebook content defaults to the owner alone.
-- [ ] Derive identity from sessions and enforce access before pagination, counts, ranking, media access and AI retrieval. Isolate authorization-aware caches.
-- [ ] Replace the shared collector secret with revocable, source-scoped service credentials, stored as hashes where applicable. Collector credentials authorize ingestion only.
-- [ ] Add origin/CSRF protection, input limits, login/import rate limits and secret-safe audit logs.
-- [ ] Define account deletion and associated preference/bookmark/session cleanup. Document audit/backup retention separately.
-- [ ] Keep registration/public browsing disabled in production until the launch audience is explicitly chosen.
+Implementation and local acceptance: [P3 evidence and provider limits](16-p3-accounts.md). Google authorization setup is tested; real Google sign-in and external SMTP delivery await configuration. P4 owns server preferences/bookmarks; current browser saves are scoped per account.
+
+- [x] Integrate Better Auth with PostgreSQL, reviewed migrations and secure session cookies. Implement Google login plus verified email/password, reset, logout and session revocation using configured providers.
+- [x] Create a controlled owner-to-admin bootstrap. Never grant administration to the first public signup.
+- [x] Add server-side role checks and source/listing grants. Existing private Facebook content defaults to the owner alone.
+- [x] Derive identity from sessions and enforce access before pagination, counts, ranking, media access and AI retrieval. Isolate authorization-aware caches.
+- [x] Replace the shared collector secret with revocable, source-scoped service credentials, stored as hashes where applicable. Collector credentials authorize ingestion only.
+- [x] Add origin/CSRF protection, input limits, login/import rate limits and secret-safe audit logs.
+- [x] Define account deletion and associated preference/bookmark/session cleanup. Document audit/backup retention separately.
+- [x] Keep registration/public browsing disabled in production until the launch audience is explicitly chosen.
 
 **Done when:** browser tests cover login, verification/reset and logout; cross-user profile/bookmark access is denied; ordinary users cannot administer; collector credentials cannot read the collection or change arbitrary records; revoked grants/sessions lose access. Private records and photos do not appear in public responses, counts, seeds or caches.
 

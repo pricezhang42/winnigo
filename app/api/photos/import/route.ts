@@ -1,17 +1,21 @@
-import {env} from 'cloudflare:workers';
+import {photoStorage} from '@/lib/server/services';
+import {readConfig} from '@/lib/server/config.mjs';
+import {serviceCredential,rateLimit} from '@/lib/server/access.mjs';
 import {getOwner} from '@/lib/auth';
 export const dynamic='force-dynamic';
 export async function POST(request:Request){
- const bindings=env as unknown as {BUCKET?:R2Bucket;WINNIGO_COLLECTOR_KEY?:string};
- const collector=!!bindings.WINNIGO_COLLECTOR_KEY&&request.headers.get('x-winnigo-collector-key')===bindings.WINNIGO_COLLECTOR_KEY;
- if(!collector&&!await getOwner())return Response.json({error:'Sign in required'},{status:401});
- if(request.headers.get('origin')&&request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Invalid origin'},{status:403});
- if(!bindings.BUCKET)return Response.json({error:'Photo storage unavailable'},{status:503});
+ const storage=photoStorage();
+ const collector=readConfig().repository==='postgres'?await serviceCredential(request.headers):null;
+ const owner=collector?null:await getOwner();
+ if(!collector&&!owner)return Response.json({error:'Sign in required'},{status:401});
+ if(!collector&&request.headers.get('origin')!==readConfig().origin)return Response.json({error:'Invalid origin'},{status:403});
+ if(collector&&collector.source_id!=='facebook')return Response.json({error:'Wrong source scope'},{status:403});
+ if(readConfig().repository==='postgres'&&!await rateLimit('photo-import:'+(collector?.id||owner!.userId),120))return Response.json({error:'Try again later'},{status:429});
  let stage='read';
  try{
   const uploaded=request.headers.get('content-type')==='application/octet-stream';
   let url=request.headers.get('x-winnigo-photo-source');
-  if(!uploaded){const body=await request.text();if(body.length>8000)return Response.json({error:'Request too large'},{status:413});url=JSON.parse(body).url;}
+  if(!uploaded){const reader=request.body?.getReader();let body='',size=0;const decoder=new TextDecoder();if(reader)while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>8000){await reader.cancel();return Response.json({error:'Request too large'},{status:413});}body+=decoder.decode(value,{stream:true});}body+=decoder.decode();url=JSON.parse(body).url;}
   const source=new URL(url||'');
   if(source.protocol!=='https:'||!source.hostname.endsWith('.fbcdn.net')||source.port||source.username||source.password)return Response.json({error:'Use an original Facebook photo URL'},{status:400});
   stage='fetch';
@@ -25,7 +29,7 @@ export async function POST(request:Request){
   if(!mime)return Response.json({error:'Unsupported photo format'},{status:415});
   const id=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(b=>b.toString(16).padStart(2,'0')).join('');
   stage='store';
-  if(!await bindings.BUCKET.head('photos/'+id))await bindings.BUCKET.put('photos/'+id,bytes,{httpMetadata:{contentType:mime}});
+  if(!await storage.get(id))await storage.put(id,bytes,mime);
   return Response.json({url:'/api/photos/'+id});
- }catch(error){console.error('Photo import failed',stage,error instanceof Error?error.message:'Unknown error');return Response.json({error:'Photo could not be saved; retain the original source link.'},{status:502});}
+ }catch(error){console.error('Photo import failed at stage',stage);return Response.json({error:'Photo could not be saved; retain the original source link.'},{status:502});}
 }

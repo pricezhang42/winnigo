@@ -1,33 +1,34 @@
-import {env} from 'cloudflare:workers';
-import {normalizeSocial,normalizeHikingBatch} from '@/lib/social.mjs';
-import {getOwner} from '@/lib/auth';
-import {initialize,refreshSources,getCollection,database} from '@/lib/store';
+import {getAdmin} from '@/lib/auth';
+import {searchCollection} from '@/lib/server/paged-store';
+import {parseSearch} from '@/lib/server/search-query.mjs';
+import {repository} from '@/lib/server/services';
+import {readConfig} from '@/lib/server/config.mjs';
+import {serviceCredential,rateLimit} from '@/lib/server/access.mjs';
+import {applyAction,ActionError} from '@/lib/server/actions.mjs';
 export const dynamic='force-dynamic';
-async function authorized(request:Request){const user=await getOwner();if(!user)return false;const origin=request.headers.get('origin');return !origin||origin===new URL(request.url).origin;}
-export async function GET(request:Request){if(!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});try{await initialize();return Response.json(await getCollection(true));}catch{return Response.json({error:'Listing storage is temporarily unavailable.'},{status:503});}}
-export async function POST(request:Request){const key=(env as unknown as {WINNIGO_COLLECTOR_KEY?:string}).WINNIGO_COLLECTOR_KEY;const collector=!!key&&request.headers.get('x-winnigo-collector-key')===key;if(!collector&&!await authorized(request))return Response.json({error:'Sign in to manage listings.'},{status:401});if(!request.headers.get('content-type')?.includes('application/json'))return Response.json({error:'JSON required'},{status:415});try{const raw=await request.text();if(raw.length>250000)return Response.json({error:'Batch too large'},{status:413});const input=JSON.parse(raw) as Record<string,unknown>;if(collector&&input.action!=='sync-hiking-manitoba')return Response.json({error:'Collector action only'},{status:403});await initialize();if(input.action==='sync-hiking-manitoba'){
- let batch;try{batch=normalizeHikingBatch(input);}catch(e){return Response.json({error:e instanceof Error?e.message:'Invalid collection batch'},{status:400});}
- const db=database();const statements=[];let added=0,updated=0;
- for(const item of batch.items){
-  const existing=await db.prepare("SELECT id,payload FROM listings WHERE replace(json_extract(payload,'$.url'),'https://www.facebook.com/','https://facebook.com/')=? AND source='facebook' LIMIT 1").bind(item.url).first<{id:string;payload:string}>();
-  const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(item.url)))).map(b=>b.toString(16).padStart(2,'0')).join('');
-  const id=existing?.id||'facebook-'+hash;
-  const previous=existing?JSON.parse(existing.payload):null;
-  if(previous?.addedAt)item.addedAt=previous.addedAt;
-  item.images=[...new Set([...(item.images??[]),...(previous?.images??[])])].slice(0,20);
-  item.commentNotes=item.commentNotes??previous?.commentNotes??[];
-  item.image=item.images[0]||previous?.image||'';
-  if(!previous)added++;else if(['title','description','type','category','start','end','time','venue','neighbourhood','distanceKm','difficulty','status','images','commentNotes'].some(k=>JSON.stringify(previous[k])!==JSON.stringify(item[k])))updated++;
-  statements.push(db.prepare('INSERT INTO listings (id,source,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').bind(id,'facebook',JSON.stringify({...item,id})));
- }
- statements.push(db.prepare("INSERT INTO sources (id,checked_at,attempted_at,count,status,error) VALUES ('facebook',?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET checked_at=CASE WHEN excluded.status='ok' THEN excluded.checked_at ELSE sources.checked_at END,attempted_at=excluded.attempted_at,count=excluded.count,status=excluded.status,error=excluded.error").bind(batch.status==='ok'?batch.checkedAt:'',batch.checkedAt,batch.items.length,batch.status,batch.message||null));
- await db.batch(statements);
- return Response.json({ok:true,processed:batch.items.length,added,updated,status:batch.status});
- }else if(input.action==='refresh'){await refreshSources(true);}else if(input.action==='add-social'){
- let item;try{item=normalizeSocial(input);}catch(e){return Response.json({error:e instanceof Error?e.message:'Check the outing details.'},{status:400});}
- const db=database();const existing=await db.prepare("SELECT id FROM listings WHERE json_extract(payload,'$.url')=? AND json_extract(payload,'$.source')=? LIMIT 1").bind(item.url,item.source).first();if(existing)return Response.json({error:'This post is already in the collection. Search for it to edit its details.'},{status:409});
- const id='social-'+crypto.randomUUID();await db.prepare('INSERT INTO listings (id,source,payload) VALUES (?,?,?)').bind(id,item.source,JSON.stringify({...item,id})).run();
- }else if(input.action==='update'&&typeof input.id==='string'){
- const patch:Record<string,unknown>={};if(typeof input.title==='string'&&input.title.trim())patch.title=input.title.trim().slice(0,200);if(typeof input.description==='string')patch.description=input.description.slice(0,1200);if(input.price===null||(typeof input.price==='number'&&input.price>=0))patch.price=input.price;if(input.hidden!==undefined&&typeof input.hidden!=='boolean')return Response.json({error:'Invalid visibility'},{status:400});
- const db=database();const existing=await db.prepare('SELECT override FROM listings WHERE id=?').bind(input.id).first<{override:string|null}>();if(!existing)return Response.json({error:'Listing not found'},{status:404});const merged={...(existing.override?JSON.parse(existing.override):{}),...patch};await db.prepare('UPDATE listings SET override=?,hidden=COALESCE(?,hidden) WHERE id=?').bind(JSON.stringify(merged),input.hidden===undefined?null:Number(input.hidden),input.id).run();
- }else return Response.json({error:'Invalid action'},{status:400});return Response.json(await getCollection(true));}catch(error){console.error(error);return Response.json({error:'Changes could not be saved. Please try again.'},{status:503});}}
+export async function GET(request:Request){
+ const principal=await getAdmin();if(!principal)return Response.json({error:'Sign in to manage listings.'},{status:401});
+ let query;try{query=parseSearch(new URL(request.url).searchParams);}catch{return Response.json({error:'Invalid query'},{status:400});}
+ try{return Response.json(await searchCollection(query,true,principal),{headers:{'Cache-Control':'no-store'}});}catch{return Response.json({error:'Listing storage is temporarily unavailable.'},{status:503});}
+}
+export async function POST(request:Request){
+ const collector=readConfig().repository==='postgres'?await serviceCredential(request.headers):null;
+ const principal=collector?null:await getAdmin();
+ if(!collector&&!principal)return Response.json({error:'Sign in to manage listings.'},{status:401});
+ if(!collector&&request.headers.get('origin')!==readConfig().origin)return Response.json({error:'Invalid origin'},{status:403});
+ if(readConfig().repository==='postgres'&&!await rateLimit('import:'+(collector?.id||principal!.userId),60))return Response.json({error:'Try again later'},{status:429});
+ if(!request.headers.get('content-type')?.includes('application/json'))return Response.json({error:'JSON required'},{status:415});
+ try{
+  // Bound the body while reading, including chunked requests without Content-Length.
+  const reader=request.body?.getReader();let raw='';const decoder=new TextDecoder();let length=0;
+  if(reader)while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>250000){await reader.cancel();return Response.json({error:'Batch too large'},{status:413});}raw+=decoder.decode(value,{stream:true});}
+  raw+=decoder.decode();
+  let input;try{input=JSON.parse(raw);}catch{return Response.json({error:'Invalid JSON'},{status:400});}
+  if(!input||typeof input!=='object'||Array.isArray(input))return Response.json({error:'Invalid action'},{status:400});
+  if(collector&&input.action!=='sync-hiking-manitoba')return Response.json({error:'Collector action only'},{status:403});
+  if(collector&&collector.source_id!=='facebook')return Response.json({error:'Wrong source scope'},{status:403});
+  if(!collector&&principal?.role!=='owner'&&input.action!=='update')return Response.json({error:'Owner access required'},{status:403});
+  const result=await applyAction(input,repository(),principal||undefined);
+  return Response.json(result??{ok:true},{headers:{'Cache-Control':'no-store'}});
+ }catch(error){return Response.json({error:error instanceof ActionError?error.message:'Changes could not be saved.'},{status:error instanceof ActionError?error.status:503});}
+}

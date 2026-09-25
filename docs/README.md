@@ -1,25 +1,14 @@
 # Winnigo — Documentation Index
 
-Winnigo is a private, single-owner web app for **discovering Winnipeg events, places, and
-outdoor activities**. It collects listings from public Winnipeg calendars and a private
-Facebook hiking group, stores them in Cloudflare D1, and presents them through a filterable
-discovery UI with an interactive trail map.
+Winnigo now runs on standard Next.js/Node.js. P2 provides PostgreSQL/S3 storage; P3 provides invitation-only accounts and content permissions. The original Cloudflare site and data remain unchanged.
 
-This folder documents the project so another engineer or AI agent can take it over. Read the
-docs in order if you are new; jump to a specific file if you know what you need.
-
-> **Standalone as of commit `8deb589`.** Winnigo used to deploy through ChatGPT Sites with Sign
-> in with ChatGPT (SIWC). It is now a **self-contained Cloudflare Workers app** you deploy to your
-> own account with `wrangler`, gated by **HTTP Basic auth** — no Codex, Sites plugin, or MCP
-> tooling required. See [`AGENTS.md`](../AGENTS.md). The old Sites path survives only as an opt-in
-> mode (`WINNIGO_AUTH_MODE=sites`, `npm run build:sites`). Where these docs describe the deploy or
-> auth flow, the standalone model is authoritative.
+Start with the root [README](../README.md), [implementation plan](12-implementation-plan.md), and [P1 acceptance record](14-p1-foundation.md). **Documents 01–10 describe the legacy release**, not the current default startup workflow. Use [legacy checkout instructions](../legacy/cloudflare/README.md) when working on that release.
 
 ## Start here
 
-**Implementation progress:** [12 — Implementation plan](12-implementation-plan.md) tracks delivery. [13 — P0 baseline](13-p0-baseline.md) records the completed compatibility checks, pinned stack and known map defect.
+**Implementation progress:** [12 — Implementation plan](12-implementation-plan.md) tracks delivery. [13 — P0 baseline](13-p0-baseline.md) records the completed compatibility checks and pinned stack. [14 — P1 foundation](14-p1-foundation.md) records the runtime migration and map fix.
 
-**Next-version design:** [11 — Target system design](11-target-system-design.md) records the selected Node.js, PostgreSQL and S3-compatible architecture, accounts/preferences, collection pipeline, AI retrieval and migration plan. It is a design, not an implemented migration. Documents 01–10 below describe the current Cloudflare application.
+**Next-version design:** [11 — Target system design](11-target-system-design.md) records the selected Node.js, PostgreSQL and S3-compatible architecture, accounts/preferences, collection pipeline, AI retrieval and migration plan. P0–P3 are implemented locally; P4–P8 remain planned. Documents 01–10 below describe the legacy Cloudflare application.
 
 | Doc | What it covers |
 | --- | --- |
@@ -40,13 +29,14 @@ docs in order if you are new; jump to a specific file if you know what you need.
 
 ```bash
 npm ci               # install (or npm run install:ci)
-npm run setup        # generate local .dev.vars (owner + collector credentials) and migrate D1
-npm run dev          # vinext dev server on http://localhost:5173
+npm run setup        # create .env.local
+npm run services:up  # PostgreSQL and private S3
+npm run db:migrate
+npm run db:seed
+npm run dev          # Next.js dev server on http://127.0.0.1:5173
 ```
 
-When the browser prompts for sign-in, use the owner credentials in the generated `.dev.vars`
-(`WINNIGO_ADMIN_USER` / `WINNIGO_ADMIN_PASSWORD`). See [07 — Development](07-development.md) for the
-full workflow, including `npm run deploy` to your own Cloudflare account.
+Fresh checkouts use invitation-only accounts; see P3 owner bootstrap instructions. The owner's explicit local mode disables the prompt on loopback. See the root README for current commands, Docker services and the P3 account setup.
 
 ## Original design conversation
 
@@ -64,3 +54,7 @@ docs are derived entirely from the code and the three root markdown files.)
 
 These three files are the source of truth for intent. The `docs/` folder explains the code that
 implements them.
+
+- [15 — P2 PostgreSQL/S3 implementation and migration rehearsal](15-p2-storage.md)
+
+- [16 — P3 accounts, permissions and provider setup](16-p3-accounts.md)

@@ -1,0 +1,75 @@
+name: winnigo-node
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: winnigo
+      POSTGRES_DB: winnigo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup}
+    ports: ["127.0.0.1:55433:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U winnigo -d winnigo"]
+      interval: 3s
+      retries: 30
+  storage:
+    image: chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?Run npm run setup}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?Run npm run setup}
+      S3_BUCKET: ${S3_BUCKET:-winnigo-dev}
+    ports: ["127.0.0.1:58334:8333"]
+    volumes: ["storage:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9333/cluster/status"]
+      interval: 3s
+      retries: 30
+  web:
+    profiles: ["app"]
+    build: .
+    image: winnigo-node:p3
+    env_file: .env.local
+    environment:
+      WINNIGO_REPOSITORY: postgres
+      WINNIGO_STORAGE: s3
+      DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
+      S3_ENDPOINT: http://storage:8333
+      WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
+      WINNIGO_HOST: 0.0.0.0
+      WINNIGO_ORIGIN: http://127.0.0.1:5180
+      WINNIGO_DATA_DIR: /data
+      HOSTNAME: 0.0.0.0
+      PORT: 5173
+    command: ["sh", "-c", "node scripts/migrate-postgres.mjs && node scripts/seed-node.mjs && exec node server.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    ports: ["127.0.0.1:5180:5173"]
+    volumes: ["fixtures:/data"]
+  worker:
+    profiles: ["app"]
+    image: winnigo-node:p3
+    env_file: .env.local
+    environment:
+      WINNIGO_REPOSITORY: postgres
+      WINNIGO_STORAGE: s3
+      DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
+      S3_ENDPOINT: http://storage:8333
+      WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
+      WINNIGO_HOST: 0.0.0.0
+      WINNIGO_DATA_DIR: /data
+    command: ["node", "scripts/worker.mjs"]
+    depends_on:
+      web:
+        condition: service_healthy
+    volumes: ["fixtures:/data"]
+    healthcheck:
+      test: ["CMD", "node", "scripts/check-worker.mjs"]
+      interval: 15s
+      retries: 3
+volumes:
+  postgres:
+  storage:
+  fixtures:
