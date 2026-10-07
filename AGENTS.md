@@ -15,7 +15,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 ## Structure and phase boundaries
 
 - `app/`, `proxy.ts`, `next.config.ts`: Next.js Node runtime and access gate.
-- `components/winnigo.tsx`, `components/trail-map.tsx`: discovery and maps.
+- `components/winnigo.tsx`, `components/discovery/`, `components/trail-map.tsx`: discovery and maps.
 - `lib/server/config.mjs`: validated server configuration.
 - `lib/server/accounts.mjs`, `access.mjs`, `principal.mjs`: accounts, grants and scoped service credentials. Run `npm run check:p3`; see docs/16-p3-accounts.md for isolated browser QA.
 - `lib/server/postgres-repository.mjs`, `s3-storage.mjs`: P2 domain repository and private media. Run `npm run check:p2` with services available; it uses a temporary schema and object prefix.

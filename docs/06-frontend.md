@@ -4,7 +4,8 @@
 
 | File | Role |
 | --- | --- |
-| [`components/winnigo.tsx`](../components/winnigo.tsx) | The whole public discovery UI (client component). ~850 lines. |
+| [`components/winnigo.tsx`](../components/winnigo.tsx) | Discovery page: filter state, tabs, search, results layout. |
+| [`components/discovery/`](../components/discovery) | Pieces of the discovery page: `listing-card`, `listing-detail-dialog`, `feature-grid`, `discovery-dialogs` (area filter, sources), the `use-discovery-results` / `use-saved-listings` hooks and `listing-format` display rules. |
 | [`components/admin.tsx`](../components/admin.tsx) | Owner collection desk: source status, search, edit dialog, hide/show. |
 | [`components/social-outing-form.tsx`](../components/social-outing-form.tsx) | "Add social outing" form used inside the admin page. |
 | [`components/trail-map.tsx`](../components/trail-map.tsx) | Leaflet map + Trails Manitoba embed + filters + list. |
@@ -17,19 +18,22 @@ to rules there. `components.json` configures shadcn.
 
 ## Discovery UI ([`components/winnigo.tsx`](../components/winnigo.tsx))
 
-- Client component. On mount it reads bookmarks from `localStorage` (`winnigo-saved`), starts a
-  1-minute `today` ticker, and fetches `GET /api/listings`. On fetch failure it keeps the imported
-  seed (`lib/data/listings.json`) and shows a "last collected" notice.
-- **State:** `tab` (Explore/Events/Places/Activities/Trail map/Saved), `query`, `quick` filter,
-  `category`, `area` (neighbourhood), `collection` (All/Community Highlights/Official Trails),
-  `selected` (detail dialog), `saved`, `limit` (paged "show more"), plus source reports.
-- `visible` (a `useMemo`) applies every filter, including the Today / This weekend date math (weekend
-  computed in UTC around the Winnipeg `today`). Series listings are excluded from Today/weekend.
-- **Detail dialog** shows gallery or a category placeholder, facts, series/approximate-location
+- Client component holding the filter state: `tab` (Explore/Events/Places/Activities/Trail
+  map/Saved), `query`, `quick` filter, `category`, `area`, `collection` (All/Community
+  Highlights/Official Trails), trail-map filters and `offset` (paged "Show more").
+- [`use-discovery-results`](../components/discovery/use-discovery-results.ts) fetches one page of
+  `GET /api/listings` whenever a filter changes (debounced, superseded requests aborted). Filtering,
+  access control and paging happen on the server; a non-zero offset appends the next page. A
+  1-minute `today` ticker refetches when the Winnipeg date changes.
+- [`use-saved-listings`](../components/discovery/use-saved-listings.ts) keeps bookmarks in
+  `localStorage` per signed-in account (`winnigo-saved-<userId>`; legacy owner modes use
+  `winnigo-saved`). Server-side bookmarks are P4.
+- **Detail dialog** ([`listing-detail-dialog`](../components/discovery/listing-detail-dialog.tsx))
+  shows gallery or a category placeholder, facts, series/approximate-location
   notices, discussion notes (`commentNotes`), official trail variants, "Visit original listing",
   Save, and Directions (Google Maps) — Directions is suppressed when the meeting point is
   unconfirmed.
-- Provenance drives presentation: `manual`/`browser`/`official`/`municipal` listings without an
+- Provenance drives presentation ([`listing-format`](../components/discovery/listing-format.ts)): `manual`/`browser`/`official`/`municipal` listings without an
   image show a Compass placeholder; community/official listings get a "collection label" chip.
 
 ## Trail map ([`components/trail-map.tsx`](../components/trail-map.tsx))

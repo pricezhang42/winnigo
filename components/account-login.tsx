@@ -1,67 +1,84 @@
 'use client';
 import { useState } from 'react';
+
+type Mode = 'login' | 'signup' | 'reset';
+
+// Better Auth endpoint and wording for each form mode.
+const MODES: Record<Mode, { endpoint: string; heading: string; submit: string; done?: string }> = {
+  login: { endpoint: 'sign-in/email', heading: 'Welcome back', submit: 'Sign in' },
+  signup: {
+    endpoint: 'sign-up/email',
+    heading: 'Accept your invitation',
+    submit: 'Create account',
+    done: 'Check your email to verify your account before signing in.',
+  },
+  reset: {
+    endpoint: 'request-password-reset',
+    heading: 'Reset your password',
+    submit: 'Send reset link',
+    done: 'If that account exists, a password reset link has been sent.',
+  },
+};
+
+/**
+ * Sign-in, invited sign-up and password-reset request. Sign-up and reset need email delivery
+ * (`mail`); Google sign-in appears only when it is configured.
+ */
 export default function AccountLogin({ google, mail }: { google: boolean; mail: boolean }) {
-  const [mode, setMode] = useState('login'),
-    [message, setMessage] = useState(''),
-    [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<Mode>('login');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const copy = MODES[mode];
+
+  /** POSTs to a Better Auth endpoint; shows the error and returns null on failure. */
   async function request(path: string, body: Record<string, unknown>) {
     setBusy(true);
     setMessage('');
     try {
-      const r = await fetch('/api/auth/' + path, {
+      const response = await fetch('/api/auth/' + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw Error(d.message || 'The request could not be completed. Please try again.');
-      return d;
-    } catch (e) {
-      setMessage((e as Error).message);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw Error(result.message || 'The request could not be completed. Please try again.');
+      return result;
+    } catch (failure) {
+      setMessage((failure as Error).message);
       return null;
     } finally {
       setBusy(false);
     }
   }
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget),
-      email = String(f.get('email')),
-      password = String(f.get('password') || '');
-    const d = await request(
-      mode === 'signup'
-        ? 'sign-up/email'
-        : mode === 'reset'
-          ? 'request-password-reset'
-          : 'sign-in/email',
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get('email'));
+    const password = String(form.get('password') || '');
+    const body =
       mode === 'reset'
         ? { email, redirectTo: '/account/reset' }
         : mode === 'signup'
-          ? { email, password, name: f.get('name'), callbackURL: '/login?verified=1' }
-          : { email, password },
-    );
-    if (d) {
-      if (mode === 'login') window.location.assign('/');
-      else
-        setMessage(
-          mode === 'signup'
-            ? 'Check your email to verify your account before signing in.'
-            : 'If that account exists, a password reset link has been sent.',
-        );
-    }
+          ? { email, password, name: form.get('name'), callbackURL: '/login?verified=1' }
+          : { email, password };
+    const result = await request(copy.endpoint, body);
+    if (!result) return;
+    if (mode === 'login') window.location.assign('/');
+    else setMessage(copy.done!);
+  }
+
+  /** Switches to `target`, or back to sign-in if already there. */
+  function toggleMode(target: Mode) {
+    setMode(mode === target ? 'login' : target);
+    setMessage('');
   }
   return (
     <main className="account-shell">
       <a className="brand" href="/">
         winnigo.
       </a>
-      <h1>
-        {mode === 'signup'
-          ? 'Accept your invitation'
-          : mode === 'reset'
-            ? 'Reset your password'
-            : 'Welcome back'}
-      </h1>
+      <h1>{copy.heading}</h1>
       <p>Sign in to discover your Winnipeg. New accounts require an invitation.</p>
       <form onSubmit={submit}>
         {mode === 'signup' && (
@@ -88,41 +105,28 @@ export default function AccountLogin({ google, mail }: { google: boolean; mail: 
           </label>
         )}
         <button disabled={busy || (!mail && mode !== 'login')} type="submit">
-          {busy
-            ? 'Please wait…'
-            : mode === 'signup'
-              ? 'Create account'
-              : mode === 'reset'
-                ? 'Send reset link'
-                : 'Sign in'}
+          {busy ? 'Please wait…' : copy.submit}
         </button>
       </form>
       {google && mode === 'login' && (
         <button
           disabled={busy}
           onClick={async () => {
-            const d = await request('sign-in/social', { provider: 'google', callbackURL: '/' });
-            if (d?.url) window.location.assign(d.url);
+            const result = await request('sign-in/social', {
+              provider: 'google',
+              callbackURL: '/',
+            });
+            if (result?.url) window.location.assign(result.url);
           }}
         >
           Continue with Google
         </button>
       )}
       <div className="account-links">
-        <button
-          onClick={() => {
-            setMode(mode === 'signup' ? 'login' : 'signup');
-            setMessage('');
-          }}
-        >
+        <button onClick={() => toggleMode('signup')}>
           {mode === 'signup' ? 'Back to sign in' : 'I have an invitation'}
         </button>
-        <button
-          onClick={() => {
-            setMode(mode === 'reset' ? 'login' : 'reset');
-            setMessage('');
-          }}
-        >
+        <button onClick={() => toggleMode('reset')}>
           {mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}
         </button>
       </div>

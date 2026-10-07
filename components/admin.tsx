@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+
 type Item = {
   id: string;
   title: string;
@@ -31,50 +32,66 @@ type Data = {
   communitySources?: Report[];
   error?: string;
 };
+
+const PAGE_SIZE = 50;
+
+/** Collection desk: source status, the social-outing form, and listing corrections. */
 export default function Admin() {
-  const [data, setData] = useState<Data>({ items: [], sources: [] }),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [query, setQuery] = useState(''),
-    [edit, setEdit] = useState<Item | null>(null),
-    [offset, setOffset] = useState(0);
+  const [data, setData] = useState<Data>({ items: [], sources: [] });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<Item | null>(null);
+  const [offset, setOffset] = useState(0);
+  // Ignores responses from loads that a newer load has superseded.
   const loadVersion = useRef(0);
+
   async function load() {
     const version = ++loadVersion.current;
     try {
-      const r = await fetch(
-        '/api/sources?' + new URLSearchParams({ query, offset: String(offset), limit: '50' }),
+      const response = await fetch(
+        '/api/sources?' +
+          new URLSearchParams({ query, offset: String(offset), limit: String(PAGE_SIZE) }),
       );
-      const d = (await r.json()) as Data;
-      if (!r.ok) throw Error(d.error);
-      if (version === loadVersion.current) setData(d);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load listings.');
+      const page = (await response.json()) as Data;
+      if (!response.ok) throw Error(page.error);
+      if (version === loadVersion.current) setData(page);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not load listings.');
     }
   }
+
   useEffect(() => {
     const timer = setTimeout(load, 100);
     return () => clearTimeout(timer);
   }, [query, offset]);
+
+  /** Sends an admin action, then reloads the list and closes the editor on success. */
   async function action(payload: Record<string, unknown>) {
     setBusy(true);
     setError('');
     try {
-      const r = await fetch('/api/sources', {
+      const response = await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = (await r.json()) as Data;
-      if (!r.ok) throw Error(d.error);
+      const result = (await response.json()) as Data;
+      if (!response.ok) throw Error(result.error);
       await load();
-      setEdit(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save.');
+      setEditing(null);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not save.');
     } finally {
       setBusy(false);
     }
   }
+
+  const reports = [
+    ...data.sources,
+    ...(data.communitySources || []).filter((source) => source.id === 'facebook'),
+  ];
+
   return (
     <main className="admin-page">
       <a href="/" className="back-link">
@@ -105,28 +122,9 @@ export default function Admin() {
       )}
       <SocialOutingForm onAdded={load} />
       <div className="admin-sources">
-        {[...data.sources, ...(data.communitySources || []).filter((s) => s.id === 'facebook')].map(
-          (s) => (
-            <div key={s.id}>
-              <span className="eyebrow">
-                {s.status === 'ok'
-                  ? 'COLLECTED'
-                  : s.status === 'pending'
-                    ? 'AWAITING FIRST CHECK'
-                    : 'NEEDS ATTENTION'}
-              </span>
-              <h3>{s.name}</h3>
-              <p>{s.count} listings</p>
-              <small>
-                {s.checkedAt
-                  ? 'Checked ' +
-                    new Date(s.checkedAt).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' })
-                  : 'No successful check yet'}
-              </small>
-              {s.error && <p className="notice">{s.error}</p>}
-            </div>
-          ),
-        )}
+        {reports.map((report) => (
+          <SourceStatus key={report.id} report={report} />
+        ))}
       </div>
       <div className="search-row">
         <Search size={18} />
@@ -134,44 +132,30 @@ export default function Admin() {
           aria-label="Search collection"
           placeholder="Search collection…"
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
+          onChange={(event) => {
+            setQuery(event.target.value);
             setOffset(0);
           }}
         />
       </div>
       <div className="admin-list">
-        {data.items.map((i) => (
-          <div key={i.id}>
-            <div>
-              <strong>{i.title}</strong>
-              <p>
-                {i.sourceName} · {i.start || 'Year-round'} ·{' '}
-                {i.status === 'hidden' ? 'Hidden' : 'Visible'}
-              </p>
-            </div>
-            <a href={i.url} target="_blank" rel="noreferrer" aria-label={'Source for ' + i.title}>
-              <ExternalLink size={17} />
-            </a>
-            <Button variant="outline" onClick={() => setEdit({ ...i })}>
-              Edit
-            </Button>
-            <Button
-              disabled={busy}
-              variant="ghost"
-              aria-label={(i.status === 'hidden' ? 'Show ' : 'Hide ') + i.title}
-              onClick={() => action({ action: 'update', id: i.id, hidden: i.status !== 'hidden' })}
-            >
-              {i.status === 'hidden' ? <Eye /> : <EyeOff />}
-            </Button>
-          </div>
+        {data.items.map((item) => (
+          <ListingRow
+            key={item.id}
+            item={item}
+            busy={busy}
+            onEdit={() => setEditing({ ...item })}
+            onToggleHidden={() =>
+              action({ action: 'update', id: item.id, hidden: item.status !== 'hidden' })
+            }
+          />
         ))}
       </div>
       <div>
         <Button
           variant="outline"
           disabled={offset === 0}
-          onClick={() => setOffset((n) => Math.max(0, n - 50))}
+          onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
         >
           Previous
         </Button>
@@ -179,56 +163,140 @@ export default function Admin() {
         <Button
           variant="outline"
           disabled={offset + data.items.length >= (data.total || 0)}
-          onClick={() => setOffset((n) => n + 50)}
+          onClick={() => setOffset((current) => current + PAGE_SIZE)}
         >
           Next
         </Button>
       </div>
-      <Dialog
-        open={!!edit}
-        onOpenChange={(v) => {
-          if (!v) setEdit(null);
-        }}
-      >
-        <DialogContent>
-          <DialogTitle>Correct listing details</DialogTitle>
-          <DialogDescription>
-            Corrections stay in place when the source refreshes.
-          </DialogDescription>
-          {edit && (
-            <>
-              <label htmlFor="edit-title">Title</label>
-              <Input
-                id="edit-title"
-                value={edit.title}
-                onChange={(e) => setEdit({ ...edit, title: e.target.value })}
-              />
-              <label htmlFor="edit-description">Description</label>
-              <Textarea
-                id="edit-description"
-                value={edit.description}
-                onChange={(e) => setEdit({ ...edit, description: e.target.value })}
-              />
-              <label htmlFor="edit-price">Admission in CAD (leave blank if unknown)</label>
-              <Input
-                id="edit-price"
-                type="number"
-                min="0"
-                value={edit.price ?? ''}
-                onChange={(e) =>
-                  setEdit({ ...edit, price: e.target.value === '' ? null : Number(e.target.value) })
-                }
-              />
-              <Button
-                disabled={busy || !edit.title.trim()}
-                onClick={() => action({ action: 'update', ...edit })}
-              >
-                {busy ? 'Saving…' : 'Save corrections'}
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <EditListingDialog
+        item={editing}
+        busy={busy}
+        onChange={setEditing}
+        onSave={(item) => action({ action: 'update', ...item })}
+      />
     </main>
+  );
+}
+
+function SourceStatus({ report }: { report: Report }) {
+  return (
+    <div>
+      <span className="eyebrow">
+        {report.status === 'ok'
+          ? 'COLLECTED'
+          : report.status === 'pending'
+            ? 'AWAITING FIRST CHECK'
+            : 'NEEDS ATTENTION'}
+      </span>
+      <h3>{report.name}</h3>
+      <p>{report.count} listings</p>
+      <small>
+        {report.checkedAt
+          ? 'Checked ' +
+            new Date(report.checkedAt).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' })
+          : 'No successful check yet'}
+      </small>
+      {report.error && <p className="notice">{report.error}</p>}
+    </div>
+  );
+}
+
+function ListingRow({
+  item,
+  busy,
+  onEdit,
+  onToggleHidden,
+}: {
+  item: Item;
+  busy: boolean;
+  onEdit: () => void;
+  onToggleHidden: () => void;
+}) {
+  const hidden = item.status === 'hidden';
+  return (
+    <div>
+      <div>
+        <strong>{item.title}</strong>
+        <p>
+          {item.sourceName} · {item.start || 'Year-round'} · {hidden ? 'Hidden' : 'Visible'}
+        </p>
+      </div>
+      <a href={item.url} target="_blank" rel="noreferrer" aria-label={'Source for ' + item.title}>
+        <ExternalLink size={17} />
+      </a>
+      <Button variant="outline" onClick={onEdit}>
+        Edit
+      </Button>
+      <Button
+        disabled={busy}
+        variant="ghost"
+        aria-label={(hidden ? 'Show ' : 'Hide ') + item.title}
+        onClick={onToggleHidden}
+      >
+        {hidden ? <Eye /> : <EyeOff />}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Editorial corrections. They are saved as owner overrides, separate from the source data,
+ * so later imports never overwrite them.
+ */
+function EditListingDialog({
+  item,
+  busy,
+  onChange,
+  onSave,
+}: {
+  item: Item | null;
+  busy: boolean;
+  onChange: (item: Item | null) => void;
+  onSave: (item: Item) => void;
+}) {
+  return (
+    <Dialog
+      open={!!item}
+      onOpenChange={(open) => {
+        if (!open) onChange(null);
+      }}
+    >
+      <DialogContent>
+        <DialogTitle>Correct listing details</DialogTitle>
+        <DialogDescription>Corrections stay in place when the source refreshes.</DialogDescription>
+        {item && (
+          <>
+            <label htmlFor="edit-title">Title</label>
+            <Input
+              id="edit-title"
+              value={item.title}
+              onChange={(event) => onChange({ ...item, title: event.target.value })}
+            />
+            <label htmlFor="edit-description">Description</label>
+            <Textarea
+              id="edit-description"
+              value={item.description}
+              onChange={(event) => onChange({ ...item, description: event.target.value })}
+            />
+            <label htmlFor="edit-price">Admission in CAD (leave blank if unknown)</label>
+            <Input
+              id="edit-price"
+              type="number"
+              min="0"
+              value={item.price ?? ''}
+              onChange={(event) =>
+                onChange({
+                  ...item,
+                  price: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
+            />
+            <Button disabled={busy || !item.title.trim()} onClick={() => onSave(item)}>
+              {busy ? 'Saving…' : 'Save corrections'}
+            </Button>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

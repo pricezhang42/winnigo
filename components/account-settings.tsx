@@ -1,6 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 type Session = { token: string; createdAt: string; userAgent?: string };
+
+/**
+ * The signed-in account: role, signed-in devices, sign-out and deletion. The legacy local/Basic
+ * owner has no Better Auth session, so device management is hidden for it.
+ */
 export default function AccountSettings({
   name,
   email,
@@ -12,28 +17,30 @@ export default function AccountSettings({
   role: string;
   legacy: boolean;
 }) {
-  const [sessions, setSessions] = useState<Session[]>([]),
-    [message, setMessage] = useState(''),
-    [busy, setBusy] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
   async function load() {
-    const r = await fetch('/api/auth/list-sessions');
-    if (r.ok) setSessions(await r.json());
+    const response = await fetch('/api/auth/list-sessions');
+    if (response.ok) setSessions(await response.json());
   }
   useEffect(() => {
     if (!legacy) void load();
   }, [legacy]);
+  /** POSTs to a Better Auth endpoint, then follows up: sign-out leaves, others refresh. */
   async function action(path: string, body: Record<string, unknown> = {}) {
     setBusy(true);
     setMessage('');
     try {
-      const r = await fetch('/api/auth/' + path, {
+      const response = await fetch('/api/auth/' + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        throw Error(d.message || 'The request could not be completed.');
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw Error(result.message || 'The request could not be completed.');
       }
       if (path === 'sign-out') {
         window.location.assign('/login');
@@ -41,8 +48,8 @@ export default function AccountSettings({
       }
       if (path === 'delete-user') setMessage('Check your email to confirm account deletion.');
       else await load();
-    } catch (e) {
-      setMessage((e as Error).message);
+    } catch (failure) {
+      setMessage((failure as Error).message);
     } finally {
       setBusy(false);
     }
@@ -69,12 +76,12 @@ export default function AccountSettings({
             Sign out other devices
           </button>
           <ul>
-            {sessions.map((s) => (
-              <li key={s.token}>
-                {new Date(s.createdAt).toLocaleString()}
+            {sessions.map((session) => (
+              <li key={session.token}>
+                {new Date(session.createdAt).toLocaleString()}
                 <button
                   disabled={busy}
-                  onClick={() => action('revoke-session', { token: s.token })}
+                  onClick={() => action('revoke-session', { token: session.token })}
                 >
                   Revoke session
                 </button>

@@ -9,10 +9,109 @@ import type { Listing } from '@/components/winnigo';
 import data from '@/lib/data/trail-map.json';
 import { resolveMapLocation, collectionLabel, type MapLocation } from '@/lib/trail-locations';
 
-type Trail = MapLocation;
-type Entry = { item: Listing; trail: Trail };
-const matchTrail = resolveMapLocation;
+type Entry = { item: Listing; trail: MapLocation };
+type MarkerGroup = { entry: Entry; number: number }[];
+type LatLng = [number, number];
 
+const MANITOBA_VIEW: { center: LatLng; zoom: number } = { center: [49.9, -97.1], zoom: 7 };
+const OVERVIEW_FIT = { padding: [40, 40] as LatLng, maxZoom: 12 };
+const ROUTE_STYLE = { color: '#087b69', weight: 4, opacity: 0.85 };
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>';
+const DIFFICULTIES = [
+  'Any',
+  'Easy',
+  'Moderate',
+  'Challenging',
+  'Level 1 / 4',
+  'Level 2 / 4',
+  'Level 3 / 4',
+  'Level 4 / 4',
+  'Unknown',
+];
+const TRAILS_MANITOBA_MAPS =
+  'https://www.trailsmanitoba.ca/trail-info/hiking-trails-manitoba-maps/';
+// Google My Maps IDs for Trails Manitoba's seasonal maps.
+const OFFICIAL_MAP_IDS: Record<string, string> = {
+  summer: '19DNqGXcQFtHyzbrP7YwLKv8_Wf-Gtkgy',
+  winter: '1HftjxykHeG_JOTFXC2vQIMpUBMeOLY1h',
+};
+
+const markerPositions = (entries: Entry[]) =>
+  entries.map((entry) => entry.trail.position as LatLng);
+
+/** Route length buckets: short ≤ 5 km, medium 5–15 km, anything else > 15 km. */
+function matchesDistance(km: number | null | undefined, bucket: string) {
+  if (bucket === 'Any') return true;
+  if (km == null) return false;
+  if (bucket === 'short') return km <= 5;
+  if (bucket === 'medium') return km > 5 && km <= 15;
+  return km > 15;
+}
+
+/**
+ * Draws route lines and numbered markers. Outings at the same point share one marker whose
+ * popup lists them; a single outing opens directly.
+ */
+function addTrailLayers(
+  L: typeof Leaflet,
+  map: Leaflet.Map,
+  entries: Entry[],
+  onSelect: (item: Listing) => void,
+) {
+  const groups = new Map<string, MarkerGroup>();
+  entries.forEach(({ item, trail }, index) => {
+    if (trail.lines.length)
+      L.polyline(trail.lines as Leaflet.LatLngExpression[][], ROUTE_STYLE)
+        .on('click', () => onSelect(item))
+        .addTo(map);
+    const key = trail.position.map((coordinate) => coordinate.toFixed(5)).join(',');
+    groups.set(key, [...(groups.get(key) || []), { entry: { item, trail }, number: index + 1 }]);
+  });
+
+  groups.forEach((group) => {
+    const {
+      entry: { item, trail },
+      number,
+    } = group[0];
+    const label = document.createElement('span');
+    label.textContent = group.length > 1 ? `${group.length} outings at ${trail.title}` : item.title;
+    const marker = L.marker(trail.position as LatLng, {
+      title: label.textContent,
+      alt: label.textContent,
+      icon: L.divIcon({
+        className: 'trail-pin' + (trail.approximate ? ' approximate' : ''),
+        html: `<span>${group.length > 1 ? group.length + '+' : number}</span>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      }),
+    })
+      .bindTooltip(label)
+      .addTo(map);
+    if (group.length === 1) marker.on('click', () => onSelect(item));
+    else marker.bindPopup(groupPopup(group, onSelect));
+  });
+}
+
+/** Popup listing every outing at a shared marker. Built from DOM nodes, never HTML strings. */
+function groupPopup(group: MarkerGroup, onSelect: (item: Listing) => void) {
+  const list = document.createElement('div');
+  list.className = 'map-group-popup';
+  for (const { entry, number } of group) {
+    const button = document.createElement('button');
+    button.textContent = `${number}. ${entry.item.title}`;
+    button.addEventListener('click', () => onSelect(entry.item));
+    list.appendChild(button);
+  }
+  return list;
+}
+
+/**
+ * The Leaflet map. Leaflet is loaded on the client only, and the map is rebuilt whenever the
+ * entries change. Animations are disabled so filtering or leaving the tab mid-zoom can't touch
+ * a removed map.
+ */
 function TrailCanvas({
   entries,
   onSelect,
@@ -22,11 +121,12 @@ function TrailCanvas({
   onSelect: (item: Listing) => void;
   focusId: string;
 }) {
-  const node = useRef<HTMLDivElement>(null),
-    map = useRef<Leaflet.Map | null>(null),
-    library = useRef<typeof Leaflet | null>(null);
-  const [error, setError] = useState(''),
-    [ready, setReady] = useState(false);
+  const node = useRef<HTMLDivElement>(null);
+  const map = useRef<Leaflet.Map | null>(null);
+  const library = useRef<typeof Leaflet | null>(null);
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
     let disposed = false;
     let observer: ResizeObserver | undefined;
@@ -36,78 +136,24 @@ function TrailCanvas({
       .then((L) => {
         if (disposed || !node.current) return;
         library.current = L;
-        const m = L.map(node.current, {
+        const leafletMap = L.map(node.current, {
           scrollWheelZoom: false,
           zoomAnimation: false,
           fadeAnimation: false,
           markerZoomAnimation: false,
-        }).setView([49.9, -97.1], 7);
-        map.current = m;
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>',
-        })
+        }).setView(MANITOBA_VIEW.center, MANITOBA_VIEW.zoom);
+        map.current = leafletMap;
+        L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION })
           .on('tileerror', () => {
             if (!disposed)
               setError(
                 'Some map tiles could not load. Trail details and source maps are still available.',
               );
           })
-          .addTo(m);
-        const groups = new Map<string, { entry: Entry; number: number }[]>();
-        entries.forEach(({ item, trail }, n) => {
-          const open = () => onSelect(item);
-          if (trail.lines.length)
-            L.polyline(trail.lines as Leaflet.LatLngExpression[][], {
-              color: '#087b69',
-              weight: 4,
-              opacity: 0.85,
-            })
-              .on('click', open)
-              .addTo(m);
-          const key = trail.position.map((x) => x.toFixed(5)).join(',');
-          groups.set(key, [...(groups.get(key) || []), { entry: { item, trail }, number: n + 1 }]);
-        });
-        groups.forEach((group) => {
-          const {
-            entry: { item, trail },
-            number,
-          } = group[0];
-          const label = document.createElement('span');
-          label.textContent =
-            group.length > 1 ? `${group.length} outings at ${trail.title}` : item.title;
-          const marker = L.marker(trail.position as [number, number], {
-            title: label.textContent,
-            alt: label.textContent,
-            icon: L.divIcon({
-              className: 'trail-pin' + (trail.approximate ? ' approximate' : ''),
-              html: `<span>${group.length > 1 ? group.length + '+' : number}</span>`,
-              iconSize: [32, 32],
-              iconAnchor: [16, 16],
-            }),
-          })
-            .bindTooltip(label)
-            .addTo(m);
-          if (group.length === 1) marker.on('click', () => onSelect(item));
-          else {
-            const list = document.createElement('div');
-            list.className = 'map-group-popup';
-            for (const { entry, number } of group) {
-              const b = document.createElement('button');
-              b.textContent = `${number}. ${entry.item.title}`;
-              b.addEventListener('click', () => onSelect(entry.item));
-              list.appendChild(b);
-            }
-            marker.bindPopup(list);
-          }
-        });
-        if (entries.length)
-          m.fitBounds(
-            entries.map((e) => e.trail.position as [number, number]),
-            { padding: [40, 40], maxZoom: 12 },
-          );
-        observer = new ResizeObserver(() => m.invalidateSize());
+          .addTo(leafletMap);
+        addTrailLayers(L, leafletMap, entries, onSelect);
+        if (entries.length) leafletMap.fitBounds(markerPositions(entries), OVERVIEW_FIT);
+        observer = new ResizeObserver(() => leafletMap.invalidateSize());
         observer.observe(node.current);
         setReady(true);
       })
@@ -123,14 +169,17 @@ function TrailCanvas({
       map.current = null;
     };
   }, [entries, onSelect]);
+
+  // "Show on map": zoom to the outing's mapped sections, or to its marker.
   useEffect(() => {
-    const e = entries.find((e) => e.item.id === focusId);
-    if (!e || !map.current || !library.current) return;
-    const points = e.trail.lines.flat();
+    const focused = entries.find((entry) => entry.item.id === focusId);
+    if (!focused || !map.current || !library.current) return;
+    const points = focused.trail.lines.flat();
     if (points.length)
-      map.current.fitBounds(points as [number, number][], { padding: [35, 35], maxZoom: 15 });
-    else map.current.setView(e.trail.position as [number, number], 13);
+      map.current.fitBounds(points as LatLng[], { padding: [35, 35], maxZoom: 15 });
+    else map.current.setView(focused.trail.position as LatLng, 13);
   }, [focusId, entries, ready]);
+
   return (
     <div className="trail-canvas-wrap">
       <div className="trail-map-tools">
@@ -139,12 +188,7 @@ function TrailCanvas({
           size="sm"
           variant="outline"
           disabled={!ready || !entries.length}
-          onClick={() =>
-            map.current?.fitBounds(
-              entries.map((e) => e.trail.position as [number, number]),
-              { padding: [40, 40], maxZoom: 12 },
-            )
-          }
+          onClick={() => map.current?.fitBounds(markerPositions(entries), OVERVIEW_FIT)}
         >
           <Maximize size={15} /> Fit trails
         </Button>
@@ -169,6 +213,11 @@ function TrailCanvas({
   );
 }
 
+/**
+ * Trail map tab: Winnigo's own map of hiking/cycling listings with distance, difficulty and
+ * season filters, plus the embedded official Trails Manitoba maps. Filter changes are reported
+ * through `onFilterChange` so the server query matches what the map shows.
+ */
 export default function TrailMap({
   items,
   onSelect,
@@ -178,42 +227,43 @@ export default function TrailMap({
   onSelect: (item: Listing) => void;
   onFilterChange?: (filters: { season: string; difficulty: string; distance: string }) => void;
 }) {
-  const [distance, setDistance] = useState('Any'),
-    [difficulty, setDifficulty] = useState('Any'),
-    [focusId, setFocusId] = useState(''),
-    [season, setSeason] = useState('summer'),
-    [trailSeason, setTrailSeason] = useState('Any');
+  const [distance, setDistance] = useState('Any');
+  const [difficulty, setDifficulty] = useState('Any');
+  const [trailSeason, setTrailSeason] = useState('Any');
+  const [focusId, setFocusId] = useState('');
+  // Lives here, not in OfficialMaps, so it survives switching between the two tabs.
+  const [officialSeason, setOfficialSeason] = useState('summer');
+
   useEffect(() => {
     onFilterChange?.({ season: trailSeason, difficulty, distance });
   }, [trailSeason, difficulty, distance, onFilterChange]);
+
   const filtered = useMemo(
     () =>
       items.filter(
-        (i) =>
-          (trailSeason === 'Any' || i.seasons?.includes(trailSeason)) &&
-          (difficulty === 'Any' || (i.difficulty || 'Unknown') === difficulty) &&
-          (distance === 'Any' ||
-            (i.distanceKm != null &&
-              (distance === 'short'
-                ? i.distanceKm <= 5
-                : distance === 'medium'
-                  ? i.distanceKm > 5 && i.distanceKm <= 15
-                  : i.distanceKm > 15))),
+        (item) =>
+          (trailSeason === 'Any' || item.seasons?.includes(trailSeason)) &&
+          (difficulty === 'Any' || (item.difficulty || 'Unknown') === difficulty) &&
+          matchesDistance(item.distanceKm, distance),
       ),
     [items, distance, difficulty, trailSeason],
   );
   const entries = useMemo(
     () =>
       filtered.flatMap((item) => {
-        const trail = matchTrail(item);
+        const trail = resolveMapLocation(item);
         return trail ? [{ item, trail }] : [];
       }),
     [filtered],
   );
-  const unmapped = filtered.filter((i) => !matchTrail(i));
-  const official = 'https://www.trailsmanitoba.ca/trail-info/hiking-trails-manitoba-maps/';
-  const googleId =
-    season === 'summer' ? '19DNqGXcQFtHyzbrP7YwLKv8_Wf-Gtkgy' : '1HftjxykHeG_JOTFXC2vQIMpUBMeOLY1h';
+  const unmapped = filtered.filter((item) => !resolveMapLocation(item));
+
+  // Re-setting the same ID would not re-run the zoom effect, so clear it first.
+  function showOnMap(id: string) {
+    setFocusId('');
+    requestAnimationFrame(() => setFocusId(id));
+  }
+
   return (
     <div className="trail-workspace">
       <Tabs defaultValue="winnigo">
@@ -225,7 +275,7 @@ export default function TrailMap({
           <div className="map-filters">
             <label>
               Distance
-              <select value={distance} onChange={(e) => setDistance(e.target.value)}>
+              <select value={distance} onChange={(event) => setDistance(event.target.value)}>
                 <option value="Any">Any distance</option>
                 <option value="short">Up to 5 km</option>
                 <option value="medium">Over 5–15 km</option>
@@ -234,27 +284,17 @@ export default function TrailMap({
             </label>
             <label>
               Difficulty
-              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-                {[
-                  'Any',
-                  'Easy',
-                  'Moderate',
-                  'Challenging',
-                  'Level 1 / 4',
-                  'Level 2 / 4',
-                  'Level 3 / 4',
-                  'Level 4 / 4',
-                  'Unknown',
-                ].map((d) => (
-                  <option key={d}>{d}</option>
+              <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
+                {DIFFICULTIES.map((level) => (
+                  <option key={level}>{level}</option>
                 ))}
               </select>
             </label>
             <label>
               Season
-              <select value={trailSeason} onChange={(e) => setTrailSeason(e.target.value)}>
-                {['Any', 'Summer', 'Winter'].map((s) => (
-                  <option key={s}>{s}</option>
+              <select value={trailSeason} onChange={(event) => setTrailSeason(event.target.value)}>
+                {['Any', 'Summer', 'Winter'].map((name) => (
+                  <option key={name}>{name}</option>
                 ))}
               </select>
             </label>
@@ -271,52 +311,15 @@ export default function TrailMap({
                   difficulty.
                 </p>
               )}
-              {entries.map(({ item, trail }, n) => (
-                <article
-                  key={item.id}
-                  className={focusId === item.id ? 'map-list-item focused' : 'map-list-item'}
-                >
-                  <span className="map-list-number">{n + 1}</span>
-                  <div>
-                    <button className="map-item-title" onClick={() => onSelect(item)}>
-                      {item.title}
-                    </button>
-                    <p>
-                      {item.distanceKm ? `${item.distanceKm} km` : 'Distance unknown'} ·{' '}
-                      {item.difficulty || 'Difficulty unknown'}
-                    </p>
-                    <span
-                      className={
-                        'collection-label ' +
-                        (item.source === 'facebook' ? 'community' : 'official')
-                      }
-                    >
-                      {collectionLabel(item)}
-                    </span>
-                    <p>
-                      {trail.approximate
-                        ? trail.locationKind + ' · ' + trail.title + ' (approximate)'
-                        : trail.locationKind}
-                      {trail.lines.length ? ' · Mapped sections' : trail.approximate ? '' : ' only'}
-                    </p>
-                    <div className="map-item-actions">
-                      <button
-                        onClick={() => {
-                          setFocusId('');
-                          requestAnimationFrame(() => setFocusId(item.id));
-                        }}
-                      >
-                        Show on map
-                      </button>
-                      <button onClick={() => onSelect(item)}>
-                        {item.source === 'trails-manitoba' ? 'Trail details' : 'Photos & details'}
-                      </button>
-                      <a href={trail.sources[0]} target="_blank" rel="noreferrer">
-                        Map source <ExternalLink size={12} />
-                      </a>
-                    </div>
-                  </div>
-                </article>
+              {entries.map((entry, index) => (
+                <MappedOuting
+                  key={entry.item.id}
+                  entry={entry}
+                  number={index + 1}
+                  focused={focusId === entry.item.id}
+                  onSelect={onSelect}
+                  onShowOnMap={showOnMap}
+                />
               ))}
             </div>
           </div>
@@ -327,9 +330,9 @@ export default function TrailMap({
                 These remain available in Winnigo. Neither a trail location nor a reliable lake or
                 park match is available yet.
               </p>
-              {unmapped.map((i) => (
-                <button key={i.id} onClick={() => onSelect(i)}>
-                  {i.title} <ExternalLink size={14} />
+              {unmapped.map((item) => (
+                <button key={item.id} onClick={() => onSelect(item)}>
+                  {item.title} <ExternalLink size={14} />
                 </button>
               ))}
             </details>
@@ -349,38 +352,7 @@ export default function TrailMap({
           </p>
         </TabsContent>
         <TabsContent value="manitoba">
-          <div className="official-map-heading">
-            <label>
-              Season
-              <select value={season} onChange={(e) => setSeason(e.target.value)}>
-                <option value="summer">Summer</option>
-                <option value="winter">Winter</option>
-              </select>
-            </label>
-            <a href={official} target="_blank" rel="noreferrer">
-              Open Trails Manitoba <ExternalLink size={15} />
-            </a>
-          </div>
-          <p className="map-source-description">
-            Explore Trails Manitoba’s wider trail network. Use the filters inside their map;
-            Winnigo’s listing filters apply only to the Winnigo trails tab.
-          </p>
-          <iframe
-            key={season}
-            className="official-trail-map"
-            title={`Trails Manitoba ${season} trail map`}
-            src={`https://www.google.com/maps/d/embed?mid=${googleId}`}
-            loading="lazy"
-            allowFullScreen
-          />
-          <p className="map-credit">
-            Map maintained by Trails Manitoba and hosted by Google. If the embedded map is
-            unavailable,{' '}
-            <a href={official} target="_blank" rel="noreferrer">
-              open the original page
-            </a>
-            .
-          </p>
+          <OfficialMaps season={officialSeason} onSeasonChange={setOfficialSeason} />
         </TabsContent>
       </Tabs>
       <div className="map-resources">
@@ -397,5 +369,102 @@ export default function TrailMap({
         </a>
       </div>
     </div>
+  );
+}
+
+/** One row in the list beside the map; its number matches the marker. */
+function MappedOuting({
+  entry: { item, trail },
+  number,
+  focused,
+  onSelect,
+  onShowOnMap,
+}: {
+  entry: Entry;
+  number: number;
+  focused: boolean;
+  onSelect: (item: Listing) => void;
+  onShowOnMap: (id: string) => void;
+}) {
+  const location = trail.approximate
+    ? trail.locationKind + ' · ' + trail.title + ' (approximate)'
+    : trail.locationKind;
+  const coverage = trail.lines.length ? ' · Mapped sections' : trail.approximate ? '' : ' only';
+  return (
+    <article className={focused ? 'map-list-item focused' : 'map-list-item'}>
+      <span className="map-list-number">{number}</span>
+      <div>
+        <button className="map-item-title" onClick={() => onSelect(item)}>
+          {item.title}
+        </button>
+        <p>
+          {item.distanceKm ? `${item.distanceKm} km` : 'Distance unknown'} ·{' '}
+          {item.difficulty || 'Difficulty unknown'}
+        </p>
+        <span
+          className={'collection-label ' + (item.source === 'facebook' ? 'community' : 'official')}
+        >
+          {collectionLabel(item)}
+        </span>
+        <p>
+          {location}
+          {coverage}
+        </p>
+        <div className="map-item-actions">
+          <button onClick={() => onShowOnMap(item.id)}>Show on map</button>
+          <button onClick={() => onSelect(item)}>
+            {item.source === 'trails-manitoba' ? 'Trail details' : 'Photos & details'}
+          </button>
+          <a href={trail.sources[0]} target="_blank" rel="noreferrer">
+            Map source <ExternalLink size={12} />
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** Trails Manitoba's own seasonal maps, embedded from Google My Maps. */
+function OfficialMaps({
+  season,
+  onSeasonChange,
+}: {
+  season: string;
+  onSeasonChange: (season: string) => void;
+}) {
+  return (
+    <>
+      <div className="official-map-heading">
+        <label>
+          Season
+          <select value={season} onChange={(event) => onSeasonChange(event.target.value)}>
+            <option value="summer">Summer</option>
+            <option value="winter">Winter</option>
+          </select>
+        </label>
+        <a href={TRAILS_MANITOBA_MAPS} target="_blank" rel="noreferrer">
+          Open Trails Manitoba <ExternalLink size={15} />
+        </a>
+      </div>
+      <p className="map-source-description">
+        Explore Trails Manitoba’s wider trail network. Use the filters inside their map; Winnigo’s
+        listing filters apply only to the Winnigo trails tab.
+      </p>
+      <iframe
+        key={season}
+        className="official-trail-map"
+        title={`Trails Manitoba ${season} trail map`}
+        src={`https://www.google.com/maps/d/embed?mid=${OFFICIAL_MAP_IDS[season]}`}
+        loading="lazy"
+        allowFullScreen
+      />
+      <p className="map-credit">
+        Map maintained by Trails Manitoba and hosted by Google. If the embedded map is unavailable,{' '}
+        <a href={TRAILS_MANITOBA_MAPS} target="_blank" rel="noreferrer">
+          open the original page
+        </a>
+        .
+      </p>
+    </>
   );
 }

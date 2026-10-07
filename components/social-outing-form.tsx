@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { communitySources } from '@/lib/social.mjs';
-const blank = {
+const BLANK_FORM = {
   title: '',
   url: '',
   category: 'Hiking',
@@ -20,41 +20,48 @@ const blank = {
   distanceKm: '',
   difficulty: 'Unknown',
 };
+/**
+ * Owner form for adding a Facebook or Instagram outing by post link. The server validates and
+ * normalises it (lib/social.mjs). Opens automatically from `/admin?add=social`.
+ */
 export default function SocialOutingForm({ onAdded }: { onAdded: () => void }) {
-  const [open, setOpen] = useState(false),
-    [form, setForm] = useState(blank),
-    [error, setError] = useState(''),
-    [saving, setSaving] = useState(false),
-    [success, setSuccess] = useState('');
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(BLANK_FORM);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('add') === 'social') setOpen(true);
   }, []);
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
     setSaving(true);
     setError('');
     try {
-      const r = await fetch('/api/sources', {
+      const response = await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'add-social', ...form }),
       });
-      const result = (await r.json()) as { error?: string };
-      if (!r.ok) throw Error(result.error || 'Could not add this outing.');
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw Error(result.error || 'Could not add this outing.');
       setSuccess('Outing added to Winnigo.');
       setOpen(false);
-      setForm(blank);
+      setForm(BLANK_FORM);
       onAdded();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add this outing.');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not add this outing.');
     } finally {
       setSaving(false);
     }
   }
-  const field = (key: keyof typeof blank) => ({
+  /** `value` and `onChange` props binding an input to one form field. */
+  const field = (key: keyof typeof BLANK_FORM) => ({
     value: form[key],
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm({ ...form, [key]: e.target.value }),
+    onChange: (
+      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+    ) => setForm({ ...form, [key]: event.target.value }),
   });
   return (
     <>
@@ -86,8 +93,8 @@ export default function SocialOutingForm({ onAdded }: { onAdded: () => void }) {
       )}
       <Dialog
         open={open}
-        onOpenChange={(v) => {
-          if (!saving) setOpen(v);
+        onOpenChange={(next) => {
+          if (!saving) setOpen(next);
         }}
       >
         <DialogContent className="social-dialog">

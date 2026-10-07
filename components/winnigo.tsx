@@ -16,159 +16,146 @@ import {
   Ticket,
   Check,
   ExternalLink,
-  RefreshCw,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import ListingGallery from '@/components/listing-gallery';
 import TrailMap from '@/components/trail-map';
-import { collectionLabel, resolveMapLocation, type MapLocation } from '@/lib/trail-locations';
+import { ListingCard } from '@/components/discovery/listing-card';
+import { ListingDetailDialog } from '@/components/discovery/listing-detail-dialog';
+import { FeatureGrid } from '@/components/discovery/feature-grid';
+import { AreaFilterDialog, SourcesDialog } from '@/components/discovery/discovery-dialogs';
+import { useSavedListings } from '@/components/discovery/use-saved-listings';
+import { useDiscoveryResults, type MapFilters } from '@/components/discovery/use-discovery-results';
 import { communitySources } from '@/lib/social.mjs';
 import { localDay } from '@/lib/connectors.mjs';
 import type { Listing } from '@/lib/domain';
 export type { Listing } from '@/lib/domain';
-const forksImage =
-  'https://www.travelmanitoba.com/imager/assets_simpleviewinc_com/simpleview/image/upload/crm/manitoba/2014-Aerial_web_9b9f470e-5056-a36f-23871ced5d43ef8f_ae9217944f0738f696c093bccdcb3e55.jpg';
-const leafImage =
-  'https://www.assiniboinepark.ca/uploads/public/images/programs-tours/Leaf_Exterior.jpg';
-function dateLabel(item: Listing) {
-  if (!item.start && item.seasons?.length) return item.seasons.join(' & ') + ' · Check access';
-  if (!item.start)
-    return item.schedule === 'unscheduled' ? 'Check dates with organizer' : 'Explore year-round';
-  const f = (s: string) =>
-    new Date(s + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-  return (
-    f(item.start) +
-    (item.end && item.end !== item.start ? ' – ' + f(item.end) : '') +
-    (item.schedule === 'series' ? ' · Select dates' : '')
-  );
-}
+
+const TABS = ['Explore', 'Events', 'Places', 'Activities', 'Trail map', 'Saved'];
+const QUICK_FILTERS = ['Anytime', 'Today', 'This weekend', 'Free', 'Family-friendly', 'Indoors'];
+const QUICK_FILTER_ICONS: Record<string, LucideIcon> = {
+  'This weekend': CalendarDays,
+  Free: Ticket,
+  'Family-friendly': Users,
+  Indoors: Leaf,
+};
+const COLLECTIONS = ['All discoveries', 'Community Highlights', 'Official Trails'];
+const TRAIL_CATEGORIES = [
+  'All',
+  'Hiking',
+  'Cycling',
+  'Winter sports',
+  'Water activities',
+  'Outdoors',
+];
+const CATEGORIES = [
+  'All',
+  'Hiking',
+  'Cycling',
+  'Arts & culture',
+  'Outdoors',
+  'Family',
+  'Food & drink',
+  'Music',
+  'Experiences',
+  'Winter sports',
+  'Water activities',
+];
+const RESULT_HEADINGS: Record<string, string> = {
+  'Trail map': 'Hiking & cycling map',
+  Saved: 'Saved for later',
+  Places: 'Places worth a visit',
+  Activities: 'Get out and try something',
+  Events: 'On around town',
+};
+const DEFAULT_FILTERS = {
+  query: '',
+  quick: 'Anytime',
+  category: 'All',
+  area: 'All neighbourhoods',
+  collection: 'All discoveries',
+};
+
+/** The discovery page: tabs, search and filters, results or trail map, and source details. */
 export default function Winnigo() {
-  const [items, setItems] = useState<Listing[]>([]),
-    [tab, setTab] = useState('Explore'),
-    [query, setQuery] = useState(''),
-    [quick, setQuick] = useState('Anytime'),
-    [category, setCategory] = useState('All'),
-    [area, setArea] = useState('All neighbourhoods'),
-    [selected, setSelected] = useState<Listing | null>(null),
-    [saved, setSaved] = useState<string[]>([]),
-    [filters, setFilters] = useState(false),
-    [sourceOpen, setSourceOpen] = useState(false),
-    [reports, setReports] = useState<
-      { id: string; name: string; url: string; count: number; status: string; checkedAt: string }[]
-    >([]),
-    [notice, setNotice] = useState(''),
-    [loading, setLoading] = useState(true),
-    [today, setToday] = useState(localDay()),
-    [offset, setOffset] = useState(0),
-    [total, setTotal] = useState(0),
-    [areas, setAreas] = useState<string[]>([]),
-    [mapFilters, setMapFilters] = useState({ season: 'Any', difficulty: 'Any', distance: 'Any' }),
-    [collection, setCollection] = useState('All discoveries');
-  const [canImport, setCanImport] = useState(false),
-    [savedKey, setSavedKey] = useState<string | null>(null);
-  useEffect(() => {
-    let active = true;
-    fetch('/api/me')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((p) => {
-        if (!active || !p) return;
-        setCanImport(p.role === 'owner');
-        const key = p.legacy ? 'winnigo-saved' : 'winnigo-saved-' + p.userId;
-        setSavedKey(key);
-        try {
-          const stored = JSON.parse(localStorage.getItem(key) || '[]');
-          setSaved(Array.isArray(stored) ? stored.filter((x) => typeof x === 'string') : []);
-        } catch {}
-      })
-      .catch(() => {});
-    const timer = setInterval(() => setToday(localDay()), 60000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
-  const changeMapFilters = useCallback(
-    (value: { season: string; difficulty: string; distance: string }) => {
-      setMapFilters((old) => (JSON.stringify(old) === JSON.stringify(value) ? old : value));
-      setOffset(0);
-    },
-    [],
+  const [tab, setTab] = useState('Explore');
+  const [query, setQuery] = useState(DEFAULT_FILTERS.query);
+  const [quick, setQuick] = useState(DEFAULT_FILTERS.quick);
+  const [category, setCategory] = useState(DEFAULT_FILTERS.category);
+  const [area, setArea] = useState(DEFAULT_FILTERS.area);
+  const [collection, setCollection] = useState(DEFAULT_FILTERS.collection);
+  const [mapFilters, setMapFilters] = useState<MapFilters>({
+    season: 'Any',
+    difficulty: 'Any',
+    distance: 'Any',
+  });
+  // Number of results already shown; a non-zero offset appends the next page.
+  const [offset, setOffset] = useState(0);
+  const [today, setToday] = useState(localDay());
+  const [selected, setSelected] = useState<Listing | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const { saved, canSave, canImport, toggleSaved } = useSavedListings(() =>
+    setNotice('Your browser could not save this list.'),
   );
+
   useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    const params = new URLSearchParams({
+    const timer = setInterval(() => setToday(localDay()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { items, total, areas, reports, loading } = useDiscoveryResults(
+    {
       query,
       tab,
       quick,
       category,
       area,
       collection,
-      offset: String(offset),
-      limit: '24',
-      ...(tab === 'Saved' ? { ids: saved.join(',') } : {}),
-      ...(tab === 'Trail map' ? mapFilters : {}),
-    });
-    const timer = setTimeout(
-      () =>
-        fetch('/api/listings?' + params, { signal: controller.signal })
-          .then((r) => {
-            if (!r.ok) throw Error();
-            return r.json();
-          })
-          .then((d) => {
-            setItems((old) =>
-              offset
-                ? [...old, ...d.items.filter((i: Listing) => !old.some((o) => o.id === i.id))]
-                : d.items,
-            );
-            setTotal(d.total);
-            setAreas(d.areas);
-            setReports(d.sources);
-            setNotice(d.notice || '');
-          })
-          .catch((e) => {
-            if (e.name !== 'AbortError') {
-              setItems([]);
-              setTotal(0);
-              setNotice('Listings could not be loaded. Please reload to try again.');
-            }
-          })
-          .finally(() => {
-            if (!controller.signal.aborted) setLoading(false);
-          }),
-      100,
-    );
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, tab, quick, category, area, collection, offset, saved, today, mapFilters]);
+      offset,
+      saved,
+      today,
+      mapFilters,
+    },
+    setNotice,
+  );
+
+  const changeMapFilters = useCallback((value: MapFilters) => {
+    setMapFilters((old) => (JSON.stringify(old) === JSON.stringify(value) ? old : value));
+    setOffset(0);
+  }, []);
+
+  /** Applies a filter change and restarts from the first page. */
+  function update<T>(setter: (value: T) => void, value: T) {
+    setter(value);
+    setOffset(0);
+  }
 
   function save(id: string) {
-    if (!savedKey) return;
+    if (!canSave) return;
     if (tab === 'Saved') setOffset(0);
-    setSaved((old) => {
-      const next = old.includes(id) ? old.filter((x) => x !== id) : [...old, id];
-      try {
-        localStorage.setItem(savedKey, JSON.stringify(next));
-      } catch {
-        setNotice('Your browser could not save this list.');
-      }
-      return next;
-    });
+    toggleSaved(id);
   }
-  const visible = items;
+
   function reset() {
     setOffset(0);
-    setQuery('');
-    setQuick('Anytime');
-    setCategory('All');
-    setArea('All neighbourhoods');
-    setCollection('All discoveries');
+    setQuery(DEFAULT_FILTERS.query);
+    setQuick(DEFAULT_FILTERS.quick);
+    setCategory(DEFAULT_FILTERS.category);
+    setArea(DEFAULT_FILTERS.area);
+    setCollection(DEFAULT_FILTERS.collection);
   }
+
+  const showFeatures =
+    tab === 'Explore' &&
+    !query &&
+    quick === DEFAULT_FILTERS.quick &&
+    category === DEFAULT_FILTERS.category &&
+    collection === DEFAULT_FILTERS.collection;
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -179,18 +166,20 @@ export default function Winnigo() {
           winnigo<span className="brand-dot">.</span>
         </a>
         <nav aria-label="Main navigation">
-          {['Explore', 'Events', 'Places', 'Activities', 'Trail map', 'Saved'].map((t) => (
+          {TABS.map((name) => (
             <Button
-              key={t}
+              key={name}
               variant="ghost"
-              className={'nav-button ' + (tab === t ? 'active' : '')}
+              className={'nav-button ' + (tab === name ? 'active' : '')}
               onClick={() => {
-                setTab(t);
+                setTab(name);
                 reset();
               }}
             >
-              {t === 'Saved' && <Bookmark size={16} />} {t}
-              {t === 'Saved' && saved.length > 0 && <span className="count">{saved.length}</span>}
+              {name === 'Saved' && <Bookmark size={16} />} {name}
+              {name === 'Saved' && saved.length > 0 && (
+                <span className="count">{saved.length}</span>
+              )}
             </Button>
           ))}
         </nav>
@@ -202,32 +191,7 @@ export default function Winnigo() {
         </span>
       </header>
       <main>
-        <section className="intro">
-          <div>
-            <div className="eyebrow">YOUR CITY. YOUR NEXT ADVENTURE.</div>
-            <h1>
-              {tab === 'Trail map' ? (
-                'Find your next trail.'
-              ) : tab === 'Saved' ? (
-                'Good plans, kept close.'
-              ) : (
-                <>
-                  A little more <span>Winnipeg.</span>
-                </>
-              )}
-            </h1>
-            <p>
-              {tab === 'Trail map'
-                ? 'Explore Manitoba trails, community reports, and the places they connect.'
-                : tab === 'Saved'
-                  ? 'Your shortlist, saved on this device.'
-                  : 'Find your next good time. Events, local places, and everything in between.'}
-            </p>
-          </div>
-          <span className="season">
-            <Sun size={19} /> Make room for getting out
-          </span>
-        </section>
+        <Intro tab={tab} />
         <section className="discovery" aria-label="Search and filters">
           <div className="search-row">
             <Search size={21} />
@@ -235,20 +199,14 @@ export default function Winnigo() {
               aria-label="Search events, places, or activities"
               placeholder="What are you in the mood for?"
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setOffset(0);
-              }}
+              onChange={(event) => update(setQuery, event.target.value)}
             />
             {query && (
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label="Clear search"
-                onClick={() => {
-                  setQuery('');
-                  setOffset(0);
-                }}
+                onClick={() => update(setQuery, '')}
               >
                 <X />
               </Button>
@@ -256,91 +214,41 @@ export default function Winnigo() {
             <div className="search-location">
               <MapPin size={17} /> Winnipeg
             </div>
-            <Button className="filter-button" variant="outline" onClick={() => setFilters(true)}>
-              <SlidersHorizontal size={16} /> Filters{area !== 'All neighbourhoods' ? ' •' : ''}
+            <Button
+              className="filter-button"
+              variant="outline"
+              onClick={() => setFiltersOpen(true)}
+            >
+              <SlidersHorizontal size={16} /> Filters
+              {area !== DEFAULT_FILTERS.area ? ' •' : ''}
             </Button>
           </div>
           <div className="quick-filters">
-            {['Anytime', 'Today', 'This weekend', 'Free', 'Family-friendly', 'Indoors'].map((q) => (
-              <Button
-                key={q}
-                variant="ghost"
-                className={'chip ' + (quick === q ? 'chosen' : '')}
-                onClick={() => {
-                  setQuick(q);
-                  setOffset(0);
-                }}
-              >
-                {q === 'This weekend' ? (
-                  <CalendarDays />
-                ) : q === 'Free' ? (
-                  <Ticket />
-                ) : q === 'Family-friendly' ? (
-                  <Users />
-                ) : q === 'Indoors' ? (
-                  <Leaf />
-                ) : null}
-                {q}
-              </Button>
-            ))}
+            {QUICK_FILTERS.map((name) => {
+              const Icon = QUICK_FILTER_ICONS[name];
+              return (
+                <Button
+                  key={name}
+                  variant="ghost"
+                  className={'chip ' + (quick === name ? 'chosen' : '')}
+                  onClick={() => update(setQuick, name)}
+                >
+                  {Icon ? <Icon /> : null}
+                  {name}
+                </Button>
+              );
+            })}
           </div>
         </section>
-        {tab === 'Explore' &&
-          !query &&
-          quick === 'Anytime' &&
-          category === 'All' &&
-          collection === 'All discoveries' && (
-            <section className="feature-grid">
-              <button
-                className="feature-main"
-                onClick={() => {
-                  setTab('Places');
-                  setArea('The Forks');
-                }}
-              >
-                <img src={forksImage} alt="The Forks at the meeting of Winnipeg’s rivers" />
-                <div className="image-shade" />
-                <div className="feature-copy">
-                  <span className="photo-label">THE LOCAL FAVOURITE</span>
-                  <h2>
-                    Meet you at
-                    <br />
-                    The Forks.
-                  </h2>
-                  <p>A meeting place. A market. A whole afternoon.</p>
-                  <span className="feature-link">
-                    Find your way there <ArrowUpRight size={20} />
-                  </span>
-                </div>
-                <span className="photo-credit">Photo: Travel Manitoba</span>
-              </button>
-              <button
-                className="feature-side"
-                onClick={() => {
-                  setCategory('Outdoors');
-                }}
-              >
-                <div className="side-image">
-                  <img
-                    src={leafImage}
-                    alt="The Leaf conservatory and gardens at Assiniboine Park"
-                  />
-                  <span className="photo-label">A BREATH OF FRESH AIR</span>
-                </div>
-                <span className="side-photo-credit">Photo: Assiniboine Park Conservancy</span>
-                <div className="side-copy">
-                  <div>
-                    <span className="eyebrow">A LITTLE NATURE GOES A LONG WAY</span>
-                    <h2>Take the scenic route.</h2>
-                    <p>Gardens, green spaces, and room to wander.</p>
-                  </div>
-                  <span className="round-arrow">
-                    <ArrowUpRight />
-                  </span>
-                </div>
-              </button>
-            </section>
-          )}
+        {showFeatures && (
+          <FeatureGrid
+            onShowForks={() => {
+              setTab('Places');
+              setArea('The Forks');
+            }}
+            onShowOutdoors={() => setCategory('Outdoors')}
+          />
+        )}
         <section className="results">
           <div className="results-heading">
             <div>
@@ -348,19 +256,9 @@ export default function Winnigo() {
                 {tab === 'Saved' ? 'YOUR COLLECTION' : 'GOOD THINGS ARE HAPPENING'}
               </div>
               <h2>
-                {collection !== 'All discoveries'
+                {collection !== DEFAULT_FILTERS.collection
                   ? collection
-                  : tab === 'Trail map'
-                    ? 'Hiking & cycling map'
-                    : tab === 'Saved'
-                      ? 'Saved for later'
-                      : tab === 'Places'
-                        ? 'Places worth a visit'
-                        : tab === 'Activities'
-                          ? 'Get out and try something'
-                          : tab === 'Events'
-                            ? 'On around town'
-                            : 'Find your kind of good time'}
+                  : RESULT_HEADINGS[tab] || 'Find your kind of good time'}
               </h2>
             </div>
             <span className="result-count" aria-live="polite">
@@ -369,47 +267,26 @@ export default function Winnigo() {
             </span>
           </div>
           <div className="collection-filters" aria-label="Listing collection">
-            {['All discoveries', 'Community Highlights', 'Official Trails'].map((c) => (
+            {COLLECTIONS.map((name) => (
               <Button
-                key={c}
+                key={name}
                 variant="outline"
-                aria-pressed={collection === c}
-                onClick={() => {
-                  setCollection(c);
-                  setOffset(0);
-                }}
+                aria-pressed={collection === name}
+                onClick={() => update(setCollection, name)}
               >
-                {c}
+                {name}
               </Button>
             ))}
           </div>
           <div className="categories">
-            {(tab === 'Trail map'
-              ? ['All', 'Hiking', 'Cycling', 'Winter sports', 'Water activities', 'Outdoors']
-              : [
-                  'All',
-                  'Hiking',
-                  'Cycling',
-                  'Arts & culture',
-                  'Outdoors',
-                  'Family',
-                  'Food & drink',
-                  'Music',
-                  'Experiences',
-                  'Winter sports',
-                  'Water activities',
-                ]
-            ).map((c) => (
+            {(tab === 'Trail map' ? TRAIL_CATEGORIES : CATEGORIES).map((name) => (
               <Button
                 variant="ghost"
-                key={c}
-                className={category === c ? 'selected-category' : ''}
-                onClick={() => {
-                  setCategory(c);
-                  setOffset(0);
-                }}
+                key={name}
+                className={category === name ? 'selected-category' : ''}
+                onClick={() => update(setCategory, name)}
               >
-                {c}
+                {name}
               </Button>
             ))}
           </div>
@@ -419,120 +296,28 @@ export default function Winnigo() {
             </p>
           )}
           {tab === 'Trail map' ? (
-            <TrailMap items={visible} onSelect={setSelected} onFilterChange={changeMapFilters} />
+            <TrailMap items={items} onSelect={setSelected} onFilterChange={changeMapFilters} />
           ) : (
             <>
               <div className="cards">
-                {visible.map((i) => (
-                  <article className="listing-card" key={i.id}>
-                    <div className="card-image">
-                      <button onClick={() => setSelected(i)} aria-label={'View ' + i.title}>
-                        {['manual', 'browser', 'official', 'municipal'].includes(
-                          i.provenance || '',
-                        ) && !i.image ? (
-                          <div className="social-placeholder">
-                            <Compass size={38} />
-                            <span>{i.category}</span>
-                            <small>
-                              {collectionLabel(i) ||
-                                (i.provenance === 'municipal'
-                                  ? 'City of Winnipeg'
-                                  : 'From the local community')}
-                            </small>
-                          </div>
-                        ) : (
-                          <img
-                            src={i.image || forksImage}
-                            alt={i.image ? i.title : 'The Forks, Winnipeg'}
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.src = leafImage;
-                            }}
-                          />
-                        )}
-                        <span className="type-badge">{i.type}</span>
-                      </button>
-                      <Button
-                        size="icon"
-                        className={'save-button ' + (saved.includes(i.id) ? 'is-saved' : '')}
-                        variant="secondary"
-                        aria-label={(saved.includes(i.id) ? 'Unsave ' : 'Save ') + i.title}
-                        onClick={() => save(i.id)}
-                      >
-                        <Bookmark size={17} fill={saved.includes(i.id) ? 'currentColor' : 'none'} />
-                      </Button>
-                    </div>
-                    <div className="card-body">
-                      {collectionLabel(i) && (
-                        <span
-                          className={
-                            'collection-label ' +
-                            (i.source === 'facebook' ? 'community' : 'official')
-                          }
-                        >
-                          {collectionLabel(i)}
-                        </span>
-                      )}
-                      <div className="card-meta">
-                        <span>{i.category}</span>
-                        <span>
-                          {i.price === 0
-                            ? 'Free'
-                            : i.price === null
-                              ? 'See admission'
-                              : '$' + i.price}
-                        </span>
-                      </div>
-                      <button className="card-title" onClick={() => setSelected(i)}>
-                        <h3>{i.title}</h3>
-                      </button>
-                      <p className="card-date">
-                        <CalendarDays size={14} />
-                        {dateLabel(i)}
-                      </p>
-                      <p className="card-venue">
-                        <MapPin size={14} />
-                        {i.venue}
-                      </p>
-                      {i.source === 'winnipeg-free-swim' && <p className="card-date">{i.time}</p>}
-                      {['manual', 'browser'].includes(i.provenance || '') && (
-                        <p className="card-region">{i.neighbourhood}</p>
-                      )}
-                      <div className="card-bottom">
-                        <span>Via {i.sourceName}</span>
-                        <button
-                          aria-label={'Details for ' + i.title}
-                          onClick={() => setSelected(i)}
-                        >
-                          <ArrowUpRight size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
+                {items.map((item) => (
+                  <ListingCard
+                    key={item.id}
+                    item={item}
+                    saved={saved.includes(item.id)}
+                    onSelect={setSelected}
+                    onToggleSave={save}
+                  />
                 ))}
               </div>
-              {visible.length === 0 && (
-                <div className="empty">
-                  <Compass size={40} />
-                  <h3>
-                    {tab === 'Saved'
-                      ? 'Your next adventure starts here.'
-                      : 'No discoveries with these filters.'}
-                  </h3>
-                  <p>
-                    {tab === 'Saved'
-                      ? 'Tap the bookmark on a listing to keep it here.'
-                      : 'Try another date or category. Our collection is still growing.'}
-                  </p>
-                  <Button
-                    onClick={() => {
-                      reset();
-                      if (tab === 'Saved') setTab('Explore');
-                    }}
-                  >
-                    Explore all discoveries
-                  </Button>
-                </div>
+              {items.length === 0 && (
+                <EmptyResults
+                  savedTab={tab === 'Saved'}
+                  onReset={() => {
+                    reset();
+                    if (tab === 'Saved') setTab('Explore');
+                  }}
+                />
               )}
             </>
           )}
@@ -579,7 +364,7 @@ export default function Winnigo() {
             <h3>Local sources. One place to look.</h3>
             <p>Collected from Winnipeg calendars, with a link back to every source.</p>
           </div>
-          <Button variant="ghost" onClick={() => setSourceOpen(true)}>
+          <Button variant="ghost" onClick={() => setSourcesOpen(true)}>
             Meet the sources <ArrowUpRight size={17} />
           </Button>
         </section>
@@ -596,260 +381,69 @@ export default function Winnigo() {
           </a>
         </span>
       </footer>
-      <Dialog
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-      >
-        <DialogContent className="detail-dialog">
-          {selected && (
+      <ListingDetailDialog
+        listing={selected}
+        saved={!!selected && saved.includes(selected.id)}
+        onClose={() => setSelected(null)}
+        onToggleSave={save}
+      />
+      <AreaFilterDialog
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        area={area}
+        areas={areas}
+        onAreaChange={(value) => update(setArea, value)}
+        onReset={reset}
+      />
+      <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} reports={reports} />
+    </div>
+  );
+}
+
+function Intro({ tab }: { tab: string }) {
+  return (
+    <section className="intro">
+      <div>
+        <div className="eyebrow">YOUR CITY. YOUR NEXT ADVENTURE.</div>
+        <h1>
+          {tab === 'Trail map' ? (
+            'Find your next trail.'
+          ) : tab === 'Saved' ? (
+            'Good plans, kept close.'
+          ) : (
             <>
-              {['manual', 'browser', 'official', 'municipal'].includes(selected.provenance || '') &&
-              !selected.image ? (
-                <div className="social-placeholder detail-image">
-                  <Compass size={40} />
-                  <span>{selected.category}</span>
-                </div>
-              ) : (
-                <ListingGallery
-                  key={selected.id}
-                  images={
-                    selected.images?.length ? selected.images : [selected.image || forksImage]
-                  }
-                  title={selected.title}
-                  sourceUrl={selected.url}
-                />
-              )}
-              <span className="eyebrow">
-                {collectionLabel(selected) && collectionLabel(selected) + ' · '}
-                {selected.category} · {selected.type}
-              </span>
-              <DialogTitle className="detail-title">{selected.title}</DialogTitle>
-              <DialogDescription>{selected.description}</DialogDescription>
-              <div className="detail-facts">
-                <p>
-                  <CalendarDays />
-                  {dateLabel(selected)}
-                  {selected.time ? ' · ' + selected.time : ''}
-                </p>
-                <p>
-                  <MapPin />
-                  {selected.address || selected.venue}
-                  {['manual', 'browser'].includes(selected.provenance || '')
-                    ? ' · ' + selected.neighbourhood
-                    : ''}
-                </p>
-                <p>
-                  <Ticket />
-                  {selected.price === null
-                    ? 'Admission details on the source website'
-                    : selected.price === 0
-                      ? 'Free admission'
-                      : '$' + selected.price}
-                </p>
-              </div>
-              {selected.schedule === 'series' && (
-                <p className="notice">
-                  This listing covers select dates. Check the organizer’s schedule before you go.
-                </p>
-              )}
-              {['manual', 'browser', 'official'].includes(selected.provenance || '') && (
-                <div className="outing-facts">
-                  <p>
-                    <strong>Distance</strong>
-                    {selected.distanceKm ? selected.distanceKm + ' km' : 'Not provided'}
-                  </p>
-                  <p>
-                    <strong>Difficulty</strong>
-                    {selected.difficulty || 'Unknown'}
-                  </p>
-                </div>
-              )}
-              <>
-                {!!selected.commentNotes?.length && (
-                  <section className="comment-notes">
-                    <h3>From the discussion</h3>
-                    <p className="source-note">
-                      Community-reported details; check the original comments for updates.
-                    </p>
-                    {selected.commentNotes.map((note, n) => (
-                      <div key={n}>
-                        <p>{note.text}</p>
-                        <a href={note.url} target="_blank" rel="noreferrer">
-                          View comment <ExternalLink size={13} />
-                        </a>
-                      </div>
-                    ))}
-                  </section>
-                )}
-              </>
-              {resolveMapLocation(selected)?.approximate && (
-                <p className="notice">
-                  <strong>
-                    {resolveMapLocation(selected)?.locationKind}:{' '}
-                    {resolveMapLocation(selected)?.title}
-                  </strong>
-                  <br />
-                  This marker shows the general area. The trail entrance and meeting point are not
-                  confirmed.
-                </p>
-              )}
-              {selected.trailVariants && (
-                <section className="official-details">
-                  <h3>Official trail information</h3>
-                  <p>
-                    Trails Manitoba uses a four-level hiking difficulty scale. Map inclusion does
-                    not confirm current access.
-                  </p>
-                  {selected.trailVariants.map((v, n) => (
-                    <div key={n}>
-                      <strong>{v.season} map</strong>
-                      <p>
-                        {[
-                          v.primaryActivity,
-                          v.trailType,
-                          v.distance ? v.distance + ' km' : 'Distance not provided',
-                          v.difficultyLevel
-                            ? 'Difficulty level ' + Number(v.difficultyLevel) + ' / 4'
-                            : 'Difficulty not provided',
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                      {v.otherUses && <p>Other listed uses: {v.otherUses}</p>}
-                      {v.considerations && <p>Considerations: {v.considerations}</p>}
-                      {v.prohibitedActivities && <p>Restrictions: {v.prohibitedActivities}</p>}
-                      <a href={v.url} target="_blank" rel="noreferrer">
-                        View {v.season.toLowerCase()} source map <ExternalLink size={13} />
-                      </a>
-                    </div>
-                  ))}
-                </section>
-              )}
-              <div className="detail-actions">
-                {selected.facilityUrl && (
-                  <Button variant="outline" asChild>
-                    <a href={selected.facilityUrl} target="_blank" rel="noreferrer">
-                      Pool hours & admission requirements <ExternalLink size={16} />
-                    </a>
-                  </Button>
-                )}
-                <Button asChild>
-                  <a href={selected.url} target="_blank" rel="noreferrer">
-                    Visit original listing <ExternalLink size={16} />
-                  </a>
-                </Button>
-                <Button variant="outline" onClick={() => save(selected.id)}>
-                  <Bookmark />
-                  {saved.includes(selected.id) ? 'Saved' : 'Save'}
-                </Button>
-                {!(
-                  ['manual', 'browser'].includes(selected.provenance || '') &&
-                  /not confirmed|to be confirmed|unknown/i.test(selected.venue)
-                ) && (
-                  <Button variant="ghost" asChild>
-                    <a
-                      href={
-                        'https://www.google.com/maps/search/?api=1&query=' +
-                        encodeURIComponent(
-                          selected.venue +
-                            ' ' +
-                            (['manual', 'browser'].includes(selected.provenance || '')
-                              ? selected.neighbourhood
-                              : selected.source === 'trails-manitoba'
-                                ? 'Manitoba'
-                                : 'Winnipeg'),
-                        )
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Directions <ArrowUpRight />
-                    </a>
-                  </Button>
-                )}
-              </div>
-              <p className="source-note">
-                Source: {selected.sourceName} ·{' '}
-                {['manual', 'browser'].includes(selected.provenance || '') ? 'Added' : 'Checked'}{' '}
-                {new Date(selected.checkedAt).toLocaleDateString('en-CA')}
-                <br />
-                Times are local to Winnipeg. Details and availability can change.
-              </p>
+              A little more <span>Winnipeg.</span>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={filters} onOpenChange={setFilters}>
-        <DialogContent>
-          <DialogTitle>Make it your kind of outing</DialogTitle>
-          <DialogDescription>Choose an area to explore.</DialogDescription>
-          <label htmlFor="area">Neighbourhood</label>
-          <select
-            id="area"
-            value={area}
-            onChange={(e) => {
-              setArea(e.target.value);
-              setOffset(0);
-            }}
-          >
-            {['All neighbourhoods', ...areas].map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-          <Button onClick={() => setFilters(false)}>Show discoveries</Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              reset();
-              setFilters(false);
-            }}
-          >
-            Reset filters
-          </Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={sourceOpen} onOpenChange={setSourceOpen}>
-        <DialogContent>
-          <DialogTitle>Connected to the city</DialogTitle>
-          <DialogDescription>
-            Our first sources. Listings link back to the people who know them best.
-          </DialogDescription>
-          {reports.map((s) => (
-            <div className="source-row" key={s.id}>
-              <a href={s.url} target="_blank" rel="noreferrer">
-                <strong>{s.name}</strong>
-                <ExternalLink size={14} />
-              </a>
-              <p>
-                {s.count} collected listings ·{' '}
-                {s.status === 'ok'
-                  ? 'Last checked ' + new Date(s.checkedAt).toLocaleDateString('en-CA')
-                  : 'Update unavailable; using previous listings'}
-              </p>
-            </div>
-          ))}
-          {communitySources.map((s) => (
-            <div className="source-row" key={s.id}>
-              <a href={s.url} target="_blank" rel="noreferrer">
-                <strong>{s.name}</strong>
-                <ExternalLink size={14} />
-              </a>
-              <p>{s.note}</p>
-              <span className="manual-label">
-                {s.mode === 'browser'
-                  ? 'Daily browser collector'
-                  : 'Added by post link · No automatic feed'}
-              </span>
-            </div>
-          ))}
-          <p className="source-note">
-            Collection is growing. Some calendars show only a limited date range. Missing details
-            are left unconfirmed.
-          </p>
-        </DialogContent>
-      </Dialog>
+        </h1>
+        <p>
+          {tab === 'Trail map'
+            ? 'Explore Manitoba trails, community reports, and the places they connect.'
+            : tab === 'Saved'
+              ? 'Your shortlist, saved on this device.'
+              : 'Find your next good time. Events, local places, and everything in between.'}
+        </p>
+      </div>
+      <span className="season">
+        <Sun size={19} /> Make room for getting out
+      </span>
+    </section>
+  );
+}
+
+function EmptyResults({ savedTab, onReset }: { savedTab: boolean; onReset: () => void }) {
+  return (
+    <div className="empty">
+      <Compass size={40} />
+      <h3>
+        {savedTab ? 'Your next adventure starts here.' : 'No discoveries with these filters.'}
+      </h3>
+      <p>
+        {savedTab
+          ? 'Tap the bookmark on a listing to keep it here.'
+          : 'Try another date or category. Our collection is still growing.'}
+      </p>
+      <Button onClick={onReset}>Explore all discoveries</Button>
     </div>
   );
 }

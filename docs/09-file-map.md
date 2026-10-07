@@ -52,7 +52,8 @@ Annotated map of the meaningful files. Ignore `node_modules/`, `dist/`, `.next/`
 
 | File | Purpose |
 | --- | --- |
-| [`components/winnigo.tsx`](../components/winnigo.tsx) | Public discovery UI + detail dialog + filters. |
+| [`components/winnigo.tsx`](../components/winnigo.tsx) | Discovery page: filter state and layout. |
+| [`components/discovery/`](../components/discovery) | Listing card, detail dialog, feature tiles, area/sources dialogs, data hooks, display rules. |
 | [`components/admin.tsx`](../components/admin.tsx) | Collection desk. |
 | [`components/social-outing-form.tsx`](../components/social-outing-form.tsx) | Add-social form. |
 | [`components/trail-map.tsx`](../components/trail-map.tsx) | Leaflet map + Trails Manitoba embed. |

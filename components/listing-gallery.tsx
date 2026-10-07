@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/carousel';
 import { Button } from '@/components/ui/button';
 
+/** Cover photo that opens a full-size carousel with thumbnails. Duplicate URLs are dropped. */
 export default function ListingGallery({
   images,
   title,
@@ -28,12 +29,14 @@ export default function ListingGallery({
   sourceUrl: string;
 }) {
   const photos = [...new Set(images.filter(Boolean))];
-  const [open, setOpen] = useState(false),
-    [api, setApi] = useState<CarouselApi>(),
-    [index, setIndex] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [api, setApi] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(0);
+
+  // Track the carousel's selected photo for the counter and thumbnails.
   useEffect(() => {
     if (!api) return;
-    const select = () => setIndex(api.selectedScrollSnap());
+    const select = () => setCurrent(api.selectedScrollSnap());
     select();
     api.on('select', select);
     return () => {
@@ -74,16 +77,16 @@ export default function ListingGallery({
           aria-label="Listing photos"
         >
           <CarouselContent>
-            {photos.map((src, n) => (
+            {photos.map((src, position) => (
               <CarouselItem key={src}>
                 <div className="full-photo">
                   <img
                     src={src}
-                    alt={`${title} — photo ${n + 1}`}
-                    loading={n === 0 ? 'eager' : 'lazy'}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.parentElement?.classList.add('photo-unavailable');
+                    alt={`${title} — photo ${position + 1}`}
+                    loading={position === 0 ? 'eager' : 'lazy'}
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      event.currentTarget.parentElement?.classList.add('photo-unavailable');
                     }}
                   />
                   <span className="photo-error">
@@ -102,7 +105,7 @@ export default function ListingGallery({
         </Carousel>
         <div className="gallery-footer">
           <span aria-live="polite">
-            {index + 1} / {photos.length}
+            {current + 1} / {photos.length}
           </span>
           <Button variant="ghost" asChild>
             <a href={sourceUrl} target="_blank" rel="noreferrer">
@@ -112,12 +115,12 @@ export default function ListingGallery({
         </div>
         {photos.length > 1 && (
           <div className="gallery-thumbnails" aria-label="Choose a photo">
-            {photos.map((src, n) => (
+            {photos.map((src, position) => (
               <button
                 key={src}
-                aria-label={`Show photo ${n + 1}`}
-                aria-current={index === n ? 'true' : undefined}
-                onClick={() => api?.scrollTo(n)}
+                aria-label={`Show photo ${position + 1}`}
+                aria-current={current === position ? 'true' : undefined}
+                onClick={() => api?.scrollTo(position)}
               >
                 <img src={src} alt="" loading="lazy" />
               </button>
