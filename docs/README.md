@@ -4,6 +4,12 @@ Winnigo now runs on standard Next.js/Node.js. P2 provides PostgreSQL/S3 storage;
 
 Start with the root [README](../README.md), [implementation plan](12-implementation-plan.md), and [P1 acceptance record](14-p1-foundation.md). **Documents 01–10 describe the legacy release**, not the current default startup workflow. Use [legacy checkout instructions](../legacy/cloudflare/README.md) when working on that release.
 
+## Current progress
+
+Updated **2026-10-06**: P0–P2 are complete locally; P3 accounts and permissions are implemented with local acceptance checks passed. Real Google sign-in and SMTP delivery still need configuration and live verification. **P4 — preferences, PostgreSQL bookmarks and ranking — is next.** Production migration and the new collector schedule have not been activated.
+
+See the [current progress and next steps](12-implementation-plan.md#current-progress--2026-10-06) and [P3 activation requirements](16-p3-accounts.md).
+
 ## Start here
 
 **Implementation progress:** [12 — Implementation plan](12-implementation-plan.md) tracks delivery. [13 — P0 baseline](13-p0-baseline.md) records the completed compatibility checks and pinned stack. [14 — P1 foundation](14-p1-foundation.md) records the runtime migration and map fix.
@@ -23,7 +29,11 @@ Start with the root [README](../README.md), [implementation plan](12-implementat
 | [09 — File map](09-file-map.md) | Annotated map of every meaningful file and where logic lives. |
 | [10 — Handover notes](10-handover.md) | Conventions, gotchas, known open work, "if you change X, also change Y". |
 | [11 — Target system design](11-target-system-design.md) | Planned Node.js/PostgreSQL/S3 architecture, cloud collectors and extraction, multi-user access, personalization, AI and phased migration. |
-| [12 — Implementation plan](12-implementation-plan.md) | Ordered work packages, dependencies, task checklists, acceptance gates and migration/cutover steps. |
+| [12 — Implementation plan](12-implementation-plan.md) | Current progress, next steps, phase checklists and cutover gates. |
+| [13 — P0 baseline](13-p0-baseline.md) | Baseline compatibility evidence. |
+| [14 — P1 foundation](14-p1-foundation.md) | Node runtime migration and verification. |
+| [15 — P2 storage](15-p2-storage.md) | PostgreSQL/S3 implementation and migration rehearsal. |
+| [16 — P3 accounts](16-p3-accounts.md) | Accounts, grants, provider setup and acceptance evidence. |
 
 ## Fastest path to running it
 
@@ -54,7 +64,3 @@ docs are derived entirely from the code and the three root markdown files.)
 
 These three files are the source of truth for intent. The `docs/` folder explains the code that
 implements them.
-
-- [15 — P2 PostgreSQL/S3 implementation and migration rehearsal](15-p2-storage.md)
-
-- [16 — P3 accounts, permissions and provider setup](16-p3-accounts.md)

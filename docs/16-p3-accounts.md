@@ -2,6 +2,12 @@
 
 Implemented and verified locally on 2026-09-24. Real Google OAuth and SMTP delivery still require the owner's provider configuration and a live-provider acceptance check. No production deployment, audience change or collector cutover was performed.
 
+## Progress review — 2026-10-06
+
+P3 implementation and local acceptance are recorded in commit `bcdf423`. Retained account and owner-session browser reports both show a pass, including account verification/reset/deletion, device-bookmark isolation, galleries, maps and admin corrections. The progress review did not rerun the complete test suite.
+
+Remaining activation work is provider configuration and a live Google/SMTP acceptance check. The normal local workflow retains password-free loopback access; account mode is available separately. PostgreSQL preferences, bookmarks, cross-device synchronization and personalized ranking are P4, not completed P3 features. Production cutover and replacement of the existing collector remain later phases.
+
 ## Account mode and first owner
 
 The normal local app keeps the requested `WINNIGO_AUTH_MODE=local` password-free loopback experience. `basic` remains a compatibility mode. New setups default to `session`, backed by Better Auth 1.7.6 and PostgreSQL. Session mode exposes the login shell and static assets, but requires authentication for discovery, admin and media. Public browsing and unrestricted signup are disabled.
@@ -98,7 +104,7 @@ Passed:
 - Reviewed auth migration compared against the pinned Better Auth schema: no missing tables or fields.
 - `npm run check:p3`: isolated PostgreSQL schema, invited/uninvited signup, verification, login/reset/logout/session revocation, own-profile isolation, confirmed deletion, explicit owner bootstrap, SQL grants/facets/counts/media filtering, scoped token revocation, and rate limiting. Google authorization URL, callback and state generation tested without contacting Google.
 - Actual Next HTTP checks: anonymous/session access, unauthorized listing/photo lookups, immediate grant revocation, own profile, admin rejection, Origin/body limits, valid/revoked service tokens and rejection of the old shared collector secret.
-- Chrome: styled login, invited signup and email verification, login, private-content exclusion, session management, logout, reset and confirmed deletion using the local outbox.
+- Chrome: styled login, invited signup and email verification, login, private-content exclusion, session management, logout, reset and confirmed deletion using the local outbox; device bookmarks remain isolated when switching accounts.
 - Owner-session browser regression: real layout/assets, pagination, comments, full galleries, approximate markers, map zoom/unmount cycles, seasonal trails and admin edit/hide/show.
 
 QA commands (never against the ordinary or production database):

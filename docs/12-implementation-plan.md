@@ -1,8 +1,34 @@
 # Winnigo — Implementation plan
 
-Date: 2026-09-21
+Plan created: 2026-09-21
+
+Progress updated: 2026-10-06
 
 Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP activation requires provider configuration.** See [P0 acceptance evidence and known baseline defect](13-p0-baseline.md). This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. README commands now run the Node application with PostgreSQL/S3. See [P1 evidence and limits](14-p1-foundation.md) and [P2 storage evidence](15-p2-storage.md).
+
+## Current progress — 2026-10-06
+
+| Phase | Status | Delivered / remaining |
+| --- | --- | --- |
+| P0 — Baseline | Complete | Compatibility checks, representative fixtures and pinned stack. |
+| P1 — Node.js foundation | Complete locally | Next.js/Node runtime, standalone startup, Docker services and preserved discovery layout. |
+| P2 — PostgreSQL and S3 | Complete locally | Transactional repository, paginated discovery, private photos, restartable migration tools and safe orphan cleanup. |
+| P3 — Accounts and permissions | Implemented; local acceptance passed | Invitation-only accounts, verified email/password, reset/logout/session revocation, explicit owner bootstrap, roles, source/listing grants, scoped collector credentials and request protections. Real Google/SMTP acceptance remains pending. |
+| P4 — Preferences and bookmarks | Next; not started | PostgreSQL preferences/bookmarks, onboarding, cross-device saves, explicit browser-save import and personalized ranking. |
+| P5 — Collection jobs | Planned | Durable queue, schedules, retries, review and run-history UI. |
+| P6 — Cloud collector | Planned | Dedicated browser/extraction service and operational recovery. |
+| P7 — AI assistant | Planned | Authorized retrieval, conversational discovery and evaluations. |
+| P8 — Production cutover | Planned | Real-data rehearsal, hosting, backups/restore, launch decision and a single active scheduler. |
+
+**Verification recorded:** 35 unit/regression tests, TypeScript, optimized build, P2/P3 database/storage/account integration checks, HTTP access-boundary checks, and browser coverage for accounts plus discovery/maps/galleries/admin. The retained browser reports also confirm that device bookmarks are isolated between signed-in accounts. These are results from the implementation run, not a new full test run on the progress-update date. See [P2 evidence](15-p2-storage.md) and [P3 evidence](16-p3-accounts.md).
+
+**Still required before enabling hosted accounts:** configure SMTP and Google OAuth, verify delivery and a real Google callback, invite and verify the intended owner, then run the explicit owner-bootstrap command. Local outbox verification and Google authorization-URL tests do not establish live-provider readiness.
+
+**Current boundaries:** password-free loopback development remains available. Saved items are currently per-account browser storage, not PostgreSQL records or cross-device sync. The Node worker has no active collection schedules. Existing production data, site audience and legacy collector destination/schedule have not been migrated or changed by this implementation.
+
+**Repository handoff:** the implementation is recorded in local commit `bcdf423`; `origin` is configured as `https://github.com/pricezhang42/winnigo.git`. Remote publication was not verified during this documentation update.
+
+**Next implementation step: P4.** Add account-owned preference/bookmark migrations and endpoints first, then onboarding/settings, explicit import of existing device saves, and preference-based ranking. Extend deletion and cross-user access tests to these new tables. Keep Google/SMTP activation tracked separately from P4 development.
 
 ## Delivery approach
 
@@ -75,10 +101,10 @@ Implementation and local acceptance: [P3 evidence and provider limits](16-p3-acc
 - [x] Integrate Better Auth with PostgreSQL, reviewed migrations and secure session cookies. Implement Google login plus verified email/password, reset, logout and session revocation using configured providers.
 - [x] Create a controlled owner-to-admin bootstrap. Never grant administration to the first public signup.
 - [x] Add server-side role checks and source/listing grants. Existing private Facebook content defaults to the owner alone.
-- [x] Derive identity from sessions and enforce access before pagination, counts, ranking, media access and AI retrieval. Isolate authorization-aware caches.
+- [x] Derive identity from sessions and enforce access before discovery pagination, counts, ranking and media access. Provide the authorization boundary for future AI retrieval (implemented in P7). Isolate authorization-aware caches.
 - [x] Replace the shared collector secret with revocable, source-scoped service credentials, stored as hashes where applicable. Collector credentials authorize ingestion only.
 - [x] Add origin/CSRF protection, input limits, login/import rate limits and secret-safe audit logs.
-- [x] Define account deletion and associated preference/bookmark/session cleanup. Document audit/backup retention separately.
+- [x] Implement account/session/grant deletion and define the cleanup policy for future PostgreSQL preferences/bookmarks (P4). Document device-local save behavior and audit/backup retention separately.
 - [x] Keep registration/public browsing disabled in production until the launch audience is explicitly chosen.
 
 **Done when:** browser tests cover login, verification/reset and logout; cross-user profile/bookmark access is denied; ordinary users cannot administer; collector credentials cannot read the collection or change arbitrary records; revoked grants/sessions lose access. Private records and photos do not appear in public responses, counts, seeds or caches.
