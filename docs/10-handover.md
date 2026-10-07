@@ -4,9 +4,9 @@ Practical guidance for the next person/agent: conventions, gotchas, coupling, an
 
 ## Code conventions
 
-- **Dense single-line style.** `lib/store.ts`, `lib/connectors.mjs`, `components/winnigo.tsx`,
-  `app/api/sources/route.ts` pack many statements per line intentionally. Match it locally, or
-  reformat a whole file on purpose — don't leave a file half-reformatted.
+- **Prettier formatting.** First-party TS/JS is formatted with Prettier (100-column width, single
+  quotes). Run `npm run format` before committing; `npm run format:check` reports unformatted files.
+  Vendored `components/ui/`, `legacy/`, `spikes/` and data JSON are deliberately excluded.
 - **`.mjs` for shared runtime logic** imported by both the Worker and Node scripts
   (`connectors.mjs`, `free-swim.mjs`, `social.mjs`). Keep them dependency-light and isomorphic
   (they must run in the Workers runtime *and* under plain Node in scripts).

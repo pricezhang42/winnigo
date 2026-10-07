@@ -1,0 +1,19 @@
+# Generated, vendored or archived code keeps its original form.
+node_modules/
+.next/
+build/
+vendor/
+legacy/
+spikes/
+drizzle/
+examples/
+components/ui/
+hooks/
+lib/data/
+scripts/fixtures/
+migrations/
+package-lock.json
+*.json
+*.md
+*.css
+*.yaml

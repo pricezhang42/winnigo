@@ -6,7 +6,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 
 - Read README.md. Run `npm ci`, `npm run setup`, `npm run services:up`, `npm run db:migrate`, `npm run db:seed`, `npm run dev`.
 - `.env.local` now configures Node; `.dev.vars` is retained for the legacy app. Never print or commit secrets. Setup carries forward the owner's local auth preference once.
-- Run `npm test`, `npm run typecheck`, `npm run build` after behavior changes.
+- Run `npm run format` after editing code. Run `npm test`, `npm run typecheck`, `npm run build` after behavior changes.
 - With dev and built servers running, run `npm run check:assets` for each origin and check a real browser for grid layout and completed loading. HTML 200 alone is not evidence that styles/scripts work.
 - Basic mode must deny anonymous and collector reads and general collector admin actions. Explicit `WINNIGO_AUTH_MODE=local` is the owner's authorized password-free loopback option; retain it locally. Session mode uses invitation-only Better Auth accounts; Basic remains a compatibility option. Never open registration or bootstrap the first signup as owner.
 - Browser regression: seed a separate QA PostgreSQL database with `WINNIGO_SEED_PROFILE=qa`, then run `scripts/check-browser.py` against that server. It edits synthetic QA items. See docs/15-p2-storage.md.

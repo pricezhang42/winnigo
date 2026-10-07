@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Winnigo — Find your Winnipeg",
-  description: "Discover events, places, and things to do in Winnipeg. Local sources. One place to look.",
+  title: 'Winnigo — Find your Winnipeg',
+  description:
+    'Discover events, places, and things to do in Winnipeg. Local sources. One place to look.',
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
   },
 };
 

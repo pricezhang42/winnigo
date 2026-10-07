@@ -116,9 +116,8 @@ terminal agent — see [`AGENTS.md`](../AGENTS.md)). `publish-social.mjs` target
 (your deploy URL or localhost); the old Sites owner token is needed only when that origin is a
 `.chatgpt.site` host.
 
-## Why the app dir is so terse
+## Code formatting
 
-Most `.ts`/`.tsx` files are written as extremely dense single-line-per-statement code (see
-[`lib/store.ts`](../lib/store.ts), [`components/winnigo.tsx`](../components/winnigo.tsx)). This is a
-deliberate house style, not minified output. Keep edits in the same style or reformat a whole file
-intentionally. See [10 — Handover notes](10-handover.md).
+First-party source is formatted with Prettier (`.prettierrc.json`). Run `npm run format` after
+editing and `npm run format:check` to verify. Vendored shadcn components, `legacy/`, `spikes/` and
+data files are excluded (see `.prettierignore`). See [10 — Handover notes](10-handover.md).

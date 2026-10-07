@@ -1,2 +1,4 @@
 import Winnigo from '@/components/winnigo';
-export default function Home(){return <Winnigo/>;}
+export default function Home() {
+  return <Winnigo />;
+}

@@ -4,7 +4,7 @@
 
 | File | Role |
 | --- | --- |
-| [`components/winnigo.tsx`](../components/winnigo.tsx) | The whole public discovery UI (client component). ~50 dense lines. |
+| [`components/winnigo.tsx`](../components/winnigo.tsx) | The whole public discovery UI (client component). ~850 lines. |
 | [`components/admin.tsx`](../components/admin.tsx) | Owner collection desk: source status, search, edit dialog, hide/show. |
 | [`components/social-outing-form.tsx`](../components/social-outing-form.tsx) | "Add social outing" form used inside the admin page. |
 | [`components/trail-map.tsx`](../components/trail-map.tsx) | Leaflet map + Trails Manitoba embed + filters + list. |
