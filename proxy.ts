@@ -2,9 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { readConfig } from './lib/server/config.mjs';
 import { authenticationRequired } from './lib/auth-policy.mjs';
 import { principalFromHeaders } from './lib/server/principal.mjs';
+/**
+ * Access gate in front of every page and API route. Anything without a principal is refused,
+ * except the health check, the login/reset shell in session mode and the import routes (which
+ * authenticate collector tokens themselves). Routes still check roles and content access.
+ */
 export async function proxy(request: NextRequest) {
-  const path = request.nextUrl.pathname,
-    config = readConfig();
+  const path = request.nextUrl.pathname;
+  const config = readConfig();
   if (path === '/api/health') return NextResponse.next();
   // Only the authentication shell and its static assets are public in session mode.
   if (

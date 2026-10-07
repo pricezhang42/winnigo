@@ -5,7 +5,12 @@ import { repository } from '@/lib/server/services';
 import { readConfig } from '@/lib/server/config.mjs';
 import { serviceCredential, rateLimit } from '@/lib/server/access.mjs';
 import { applyAction, ActionError } from '@/lib/server/actions.mjs';
+import { readLimited } from '@/lib/server/request-body.mjs';
 export const dynamic = 'force-dynamic';
+
+const MAX_BATCH_BYTES = 250000;
+
+/** Admin listing search: includes hidden items and source errors. */
 export async function GET(request: Request) {
   const principal = await getAdmin();
   if (!principal) return Response.json({ error: 'Sign in to manage listings.' }, { status: 401 });
@@ -23,6 +28,11 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Listing storage is temporarily unavailable.' }, { status: 503 });
   }
 }
+/**
+ * Collection changes. Callers are either a collector (service token, `sync-hiking-manitoba`
+ * only, Facebook scope) or a signed-in admin (`update`) / owner (any action). Cookie-authenticated
+ * requests must come from the configured origin.
+ */
 export async function POST(request: Request) {
   const collector =
     readConfig().repository === 'postgres' ? await serviceCredential(request.headers) : null;
@@ -39,26 +49,11 @@ export async function POST(request: Request) {
   if (!request.headers.get('content-type')?.includes('application/json'))
     return Response.json({ error: 'JSON required' }, { status: 415 });
   try {
-    // Bound the body while reading, including chunked requests without Content-Length.
-    const reader = request.body?.getReader();
-    let raw = '';
-    const decoder = new TextDecoder();
-    let length = 0;
-    if (reader)
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        length += value.byteLength;
-        if (length > 250000) {
-          await reader.cancel();
-          return Response.json({ error: 'Batch too large' }, { status: 413 });
-        }
-        raw += decoder.decode(value, { stream: true });
-      }
-    raw += decoder.decode();
+    const body = await readLimited(request.body, MAX_BATCH_BYTES);
+    if (!body) return Response.json({ error: 'Batch too large' }, { status: 413 });
     let input;
     try {
-      input = JSON.parse(raw);
+      input = JSON.parse(new TextDecoder().decode(body));
     } catch {
       return Response.json({ error: 'Invalid JSON' }, { status: 400 });
     }

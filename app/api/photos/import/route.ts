@@ -1,8 +1,52 @@
 import { photoStorage } from '@/lib/server/services';
 import { readConfig } from '@/lib/server/config.mjs';
 import { serviceCredential, rateLimit } from '@/lib/server/access.mjs';
+import { readLimited } from '@/lib/server/request-body.mjs';
 import { getOwner } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
+
+const MAX_METADATA_BYTES = 8000;
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+
+/** Recognises JPEG, PNG and WebP from their file signatures; anything else is rejected. */
+function imageType(bytes: Uint8Array) {
+  const ascii = (start: number, end: number) => new TextDecoder().decode(bytes.slice(start, end));
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
+    return 'image/png';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+
+async function sha256Hex(bytes: Uint8Array<ArrayBuffer>) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Only original photos from Facebook's CDN may be imported. */
+function isFacebookPhotoUrl(url: URL) {
+  return (
+    url.protocol === 'https:' &&
+    url.hostname.endsWith('.fbcdn.net') &&
+    !url.port &&
+    !url.username &&
+    !url.password
+  );
+}
+
+/**
+ * Stores a Facebook post photo and returns its stable `/api/photos/<sha256>` URL.
+ *
+ * Two request forms are accepted:
+ * - JSON `{ url }`: the server downloads the photo from that URL.
+ * - `application/octet-stream`: the caller uploads the bytes, naming the original URL in the
+ *   `x-winnigo-photo-source` header. The collector uses this because it fetches photos with
+ *   its signed-in browser.
+ *
+ * The photo ID is the content hash, so re-importing the same photo is a no-op.
+ */
 export async function POST(request: Request) {
   const storage = photoStorage();
   const collector =
@@ -18,38 +62,21 @@ export async function POST(request: Request) {
     !(await rateLimit('photo-import:' + (collector?.id || owner!.userId), 120))
   )
     return Response.json({ error: 'Try again later' }, { status: 429 });
+
+  // Only the failing stage is logged, never the error details or source URL.
   let stage = 'read';
   try {
     const uploaded = request.headers.get('content-type') === 'application/octet-stream';
     let url = request.headers.get('x-winnigo-photo-source');
     if (!uploaded) {
-      const reader = request.body?.getReader();
-      let body = '',
-        size = 0;
-      const decoder = new TextDecoder();
-      if (reader)
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          if (size > 8000) {
-            await reader.cancel();
-            return Response.json({ error: 'Request too large' }, { status: 413 });
-          }
-          body += decoder.decode(value, { stream: true });
-        }
-      body += decoder.decode();
-      url = JSON.parse(body).url;
+      const body = await readLimited(request.body, MAX_METADATA_BYTES);
+      if (!body) return Response.json({ error: 'Request too large' }, { status: 413 });
+      url = JSON.parse(new TextDecoder().decode(body)).url;
     }
     const source = new URL(url || '');
-    if (
-      source.protocol !== 'https:' ||
-      !source.hostname.endsWith('.fbcdn.net') ||
-      source.port ||
-      source.username ||
-      source.password
-    )
+    if (!isFacebookPhotoUrl(source))
       return Response.json({ error: 'Use an original Facebook photo URL' }, { status: 400 });
+
     stage = 'fetch';
     const response = uploaded
       ? null
@@ -57,42 +84,16 @@ export async function POST(request: Request) {
     const stream = uploaded ? request.body : response?.body;
     if ((response && !response.ok) || !stream)
       return Response.json({ error: 'Original photo unavailable' }, { status: 422 });
-    const reader = stream.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > 8 * 1024 * 1024) {
-        await reader.cancel();
-        return Response.json({ error: 'Photo exceeds 8 MB' }, { status: 413 });
-      }
-      chunks.push(value);
-    }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.length;
-    }
-    const mime =
-      bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-        ? 'image/jpeg'
-        : bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71
-          ? 'image/png'
-          : new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' &&
-              new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP'
-            ? 'image/webp'
-            : null;
+    const bytes = await readLimited(stream, MAX_PHOTO_BYTES);
+    if (!bytes) return Response.json({ error: 'Photo exceeds 8 MB' }, { status: 413 });
+
+    const mime = imageType(bytes);
     if (!mime) return Response.json({ error: 'Unsupported photo format' }, { status: 415 });
-    const id = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    const id = await sha256Hex(bytes);
     stage = 'store';
     if (!(await storage.get(id))) await storage.put(id, bytes, mime);
     return Response.json({ url: '/api/photos/' + id });
-  } catch (error) {
+  } catch {
     console.error('Photo import failed at stage', stage);
     return Response.json(
       { error: 'Photo could not be saved; retain the original source link.' },
