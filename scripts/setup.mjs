@@ -7,7 +7,10 @@ if (!existsSync('.env.local')) {
   // Preserve the owner's explicit local mode and credentials without copying data.
   const old = existsSync('.dev.vars') ? parseEnv(readFileSync('.dev.vars', 'utf8')) : {};
   const secret = () => randomBytes(32).toString('hex');
-  const dbPassword = secret();
+  // Fixed local-development password so database tools can connect without looking it up.
+  // Acceptable only because compose.yaml publishes PostgreSQL on 127.0.0.1; never reuse it
+  // for a reachable or production database.
+  const dbPassword = 'winnigo';
   const values = {
     BETTER_AUTH_SECRET: secret(),
     WINNIGO_MAIL_MODE: 'file',

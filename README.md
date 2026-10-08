@@ -56,7 +56,7 @@ npm run services:check
 npm run db:migrate
 ```
 
-PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. Setup generates their credentials in `.env.local`. `db:migrate` applies the numbered domain migrations transactionally. `db:seed` adds missing public snapshots to the selected repository and preserves corrections; it does not migrate production data. Do not regenerate the database password while retaining an initialized database volume.
+PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. Setup writes their credentials to `.env.local`: PostgreSQL uses the fixed local login `winnigo` / `winnigo` (database `winnigo`), which is safe only because the port is bound to loopback; the S3 keys and auth secret are random. `db:migrate` applies the numbered domain migrations transactionally. `db:seed` adds missing public snapshots to the selected repository and preserves corrections; it does not migrate production data. PostgreSQL applies the password only when its volume is first created; to change it later, run `ALTER USER` and update `POSTGRES_PASSWORD` and `DATABASE_URL` together.
 
 Stop the services with `npm run services:down`. To run the web app and its separate worker in containers:
 
