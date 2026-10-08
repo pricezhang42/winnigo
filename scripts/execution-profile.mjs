@@ -1,3 +1,4 @@
+// Reads the optional .sites-runtime execution profile used by the install and run-framework scripts.
 import { readFileSync } from 'node:fs';
 
 export function readExecutionProfile() {

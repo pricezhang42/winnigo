@@ -1,3 +1,4 @@
+// Previews (or with --apply deletes) orphaned photos past their grace period (npm run media:cleanup).
 import { loadLocalEnv } from './load-env.mjs';
 import { S3Storage } from '../lib/server/s3-storage.mjs';
 loadLocalEnv();

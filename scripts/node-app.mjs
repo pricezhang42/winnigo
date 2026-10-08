@@ -1,3 +1,4 @@
+// Starts the Next.js app: dev, build or start (npm run dev / build / start), with validated config.
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';

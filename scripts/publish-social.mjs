@@ -1,3 +1,4 @@
+// Publishes a reviewed Hiking Manitoba batch: uploads photos, then the listings (npm run publish:hiking).
 import { readFile } from 'node:fs/promises';
 import { normalizeHikingBatch } from '../lib/social.mjs';
 

@@ -1,3 +1,4 @@
+// Environment defaults for the legacy Sites/Wrangler tooling.
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

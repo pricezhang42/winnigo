@@ -1,3 +1,4 @@
+// Applies numbered SQL migrations from migrations/postgres in order (npm run db:migrate).
 import { Pool } from 'pg';
 import { readFile, readdir } from 'node:fs/promises';
 import { loadLocalEnv } from './load-env.mjs';

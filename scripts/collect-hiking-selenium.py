@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Collect visible Hiking Manitoba post candidates, without publishing or handling passwords."""
+
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -20,7 +21,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_RUNTIME = ROOT / '.sites-runtime'
-DEFAULT_RUNTIME = LEGACY_RUNTIME if (LEGACY_RUNTIME / 'hiking-chrome-profile').is_dir() else ROOT / '.winnigo'
+DEFAULT_RUNTIME = (
+    LEGACY_RUNTIME if (LEGACY_RUNTIME / 'hiking-chrome-profile').is_dir() else ROOT / '.winnigo'
+)
 RUNTIME = Path(os.environ.get('WINNIGO_RUNTIME_DIR', DEFAULT_RUNTIME))
 GROUP = '810758152436911'
 GROUP_URL = f'https://www.facebook.com/groups/{GROUP}/?sorting_setting=CHRONOLOGICAL'
@@ -31,7 +34,11 @@ MESSAGES = '[data-ad-preview="message"], [data-ad-comet-preview="message"]'
 def post_url(value):
     """Accept only canonical post permalinks within this group, never comment/profile links."""
     url = urlsplit(value)
-    if url.scheme != 'https' or url.hostname not in {'facebook.com', 'www.facebook.com', 'm.facebook.com'}:
+    if url.scheme != 'https' or url.hostname not in {
+        'facebook.com',
+        'www.facebook.com',
+        'm.facebook.com',
+    }:
         return None
     match = re.fullmatch(rf'/groups/{GROUP}/(?:posts|permalink)/(\d+)/?', url.path)
     if not match:
@@ -42,7 +49,11 @@ def post_url(value):
 
 def redact_contacts(text):
     text = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '[contact in original post]', text)
-    return re.sub(r'(?<!\d)(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?!\d)', '[contact in original post]', text)
+    return re.sub(
+        r'(?<!\d)(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?!\d)',
+        '[contact in original post]',
+        text,
+    )
 
 
 def write_private(path, result):
@@ -65,7 +76,9 @@ def profile_lock():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise RuntimeError('The Selenium profile is already in use. Finish the other collector or login run first.')
+            raise RuntimeError(
+                'The Selenium profile is already in use. Finish the other collector or login run first.'
+            )
         yield
 
 
@@ -90,10 +103,21 @@ def make_driver(profile, headless=False):
 def access_problem(driver):
     if re.search(r'/checkpoint|/challenge|/login|/recover', urlsplit(driver.current_url).path):
         return 'Facebook requires sign-in or an account check in the Selenium Chrome profile.'
-    if any(e.is_displayed() for e in driver.find_elements(By.CSS_SELECTOR, 'input[type="password"]')):
+    if any(
+        e.is_displayed() for e in driver.find_elements(By.CSS_SELECTOR, 'input[type="password"]')
+    ):
         return 'Sign in to Facebook in the Selenium Chrome profile.'
     page = driver.find_element(By.TAG_NAME, 'body').text.lower()
-    if any(s in page for s in ['temporarily blocked', 'you’re temporarily blocked', "you're temporarily blocked", 'confirm you are human', 'confirm your identity']):
+    if any(
+        s in page
+        for s in [
+            'temporarily blocked',
+            'you’re temporarily blocked',
+            "you're temporarily blocked",
+            'confirm you are human',
+            'confirm your identity',
+        ]
+    ):
         return 'Facebook blocked access or requires a verification step. Collection stopped.'
     return None
 
@@ -101,12 +125,15 @@ def access_problem(driver):
 def group_ready(driver):
     if access_problem(driver):
         return False
-    return any('Hiking Manitoba' in e.text for e in driver.find_elements(By.CSS_SELECTOR, 'h1')) and bool(driver.find_elements(By.CSS_SELECTOR, '[role="feed"]'))
+    return any(
+        'Hiking Manitoba' in e.text for e in driver.find_elements(By.CSS_SELECTOR, 'h1')
+    ) and bool(driver.find_elements(By.CSS_SELECTOR, '[role="feed"]'))
 
 
 def candidates_on_screen(driver):
     """Only visible post message nodes; exclude comment articles, profiles and sidebar content."""
-    return driver.execute_script(r'''
+    return driver.execute_script(
+        r"""
       const out=[];
       for (const article of document.querySelectorAll(arguments[0])) {
         // Current Facebook feed roots are plain divs; role=article is used for comments.
@@ -123,29 +150,46 @@ def candidates_on_screen(driver):
         out.push({text:text.slice(0,8000),links,comments,photos});
       }
       return out;
-    ''', POST_ROOT, MESSAGES)
+    """,
+        POST_ROOT,
+        MESSAGES,
+    )
 
 
 def expand_posts(driver, expanded):
-    roots = driver.execute_script("return [...document.querySelectorAll(arguments[0])].filter(n=>{const r=n.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight*1.5})", POST_ROOT)
+    roots = driver.execute_script(
+        'return [...document.querySelectorAll(arguments[0])].filter(n=>{const r=n.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight*1.5})',
+        POST_ROOT,
+    )
     for root in roots:
         try:
             # Hovering Facebook's timestamp resolves its lazy permalink without opening a profile.
             for link in root.find_elements(By.CSS_SELECTOR, 'a[href]'):
-                href=link.get_attribute('href') or ''
-                if urlsplit(href).path == f'/groups/{GROUP}/' and link.is_displayed() and driver.execute_script('const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',link):
+                href = link.get_attribute('href') or ''
+                if (
+                    urlsplit(href).path == f'/groups/{GROUP}/'
+                    and link.is_displayed()
+                    and driver.execute_script(
+                        'const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',
+                        link,
+                    )
+                ):
                     ActionChains(driver).move_to_element(link).perform()
                     break
-            clicks=0
+            clicks = 0
             for button in root.find_elements(By.CSS_SELECTOR, '[role="button"],button'):
                 if not button.is_displayed() or button.id in expanded:
                     continue
-                label=button.text.strip()
-                if label=='See more' and driver.execute_script('const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',button):
+                label = button.text.strip()
+                if label == 'See more' and driver.execute_script(
+                    'const r=arguments[0].getBoundingClientRect();return r.top>=0&&r.bottom<innerHeight',
+                    button,
+                ):
                     expanded.add(button.id)
                     button.click()
-                    clicks+=1
-                    if clicks>=4:break
+                    clicks += 1
+                    if clicks >= 4:
+                        break
         except WebDriverException:
             continue
 
@@ -155,23 +199,33 @@ def collect(driver, limit=100, scrolls=80):
     try:
         WebDriverWait(driver, 25).until(lambda d: group_ready(d) or access_problem(d))
     except TimeoutException:
-        return {'status':'blocked','message':'Group feed not found. Membership, page layout or session needs attention.','posts':[]}
+        return {
+            'status': 'blocked',
+            'message': 'Group feed not found. Membership, page layout or session needs attention.',
+            'posts': [],
+        }
     if problem := access_problem(driver):
-        return {'status':'blocked','message':problem,'posts':[]}
+        return {'status': 'blocked', 'message': problem, 'posts': []}
     # Query parameters alone do not prove sort order; verify the rendered control.
-    if not any('New posts' in e.text for e in driver.find_elements(By.CSS_SELECTOR, '[role="button"],h2')):
-        return {'status':'blocked','message':'Could not verify New posts ordering. No posts collected.','posts':[]}
+    if not any(
+        'New posts' in e.text for e in driver.find_elements(By.CSS_SELECTOR, '[role="button"],h2')
+    ):
+        return {
+            'status': 'blocked',
+            'message': 'Could not verify New posts ordering. No posts collected.',
+            'posts': [],
+        }
     posts = {}
-    expanded=set()
-    started=time.monotonic()
+    expanded = set()
+    started = time.monotonic()
     unlinked = set()
     status, message = 'partial', 'Scroll limit reached; this is a partial check.'
     for turn in range(scrolls + 1):
         if problem := access_problem(driver):
             status, message = ('partial' if posts else 'blocked'), problem
             break
-        if time.monotonic()-started>300:
-            message='Five-minute collection limit reached; this is a partial check.'
+        if time.monotonic() - started > 300:
+            message = 'Five-minute collection limit reached; this is a partial check.'
             break
         expand_posts(driver, expanded)
         for item in candidates_on_screen(driver):
@@ -179,20 +233,42 @@ def collect(driver, limit=100, scrolls=80):
             if len(links) != 1:
                 unlinked.add(item['text'])
                 continue
-            comments=[]
-            for comment in item.get('comments',[]):
-                if post_url(comment['url'])!=links[0]:continue
-                query=parse_qs(urlsplit(comment['url']).query)
-                identity={k:query[k][0] for k in ['comment_id','reply_comment_id'] if k in query and query[k][0].isdigit()}
-                comments.append({'text':redact_contacts(comment['text']),'url':links[0]+'?'+urlencode(identity)})
-            photos=[p for p in item.get('photos',[]) if urlsplit(p['url']).scheme=='https' and (urlsplit(p['url']).hostname or '').endswith('.fbcdn.net')]
-            old=posts.get(links[0],{})
-            merged_comments={x['url']:x for x in old.get('comments',[])+comments}
-            merged_photos={x['sourceUrl']:x for x in old.get('photos',[])+photos}
-            posts[links[0]] = {'url':links[0], 'text':redact_contacts(item['text']) or old.get('text',''), 'comments':list(merged_comments.values())[:30], 'photos':list(merged_photos.values())[:20], 'sourceVisibility':'private'}
+            comments = []
+            for comment in item.get('comments', []):
+                if post_url(comment['url']) != links[0]:
+                    continue
+                query = parse_qs(urlsplit(comment['url']).query)
+                identity = {
+                    k: query[k][0]
+                    for k in ['comment_id', 'reply_comment_id']
+                    if k in query and query[k][0].isdigit()
+                }
+                comments.append(
+                    {
+                        'text': redact_contacts(comment['text']),
+                        'url': links[0] + '?' + urlencode(identity),
+                    }
+                )
+            photos = [
+                p
+                for p in item.get('photos', [])
+                if urlsplit(p['url']).scheme == 'https'
+                and (urlsplit(p['url']).hostname or '').endswith('.fbcdn.net')
+            ]
+            old = posts.get(links[0], {})
+            merged_comments = {x['url']: x for x in old.get('comments', []) + comments}
+            merged_photos = {x['sourceUrl']: x for x in old.get('photos', []) + photos}
+            posts[links[0]] = {
+                'url': links[0],
+                'text': redact_contacts(item['text']) or old.get('text', ''),
+                'comments': list(merged_comments.values())[:30],
+                'photos': list(merged_photos.values())[:20],
+                'sourceVisibility': 'private',
+            }
             if len(posts) >= limit:
                 break
-        if turn%10==0:print(json.dumps({'scroll':turn,'linkedPosts':len(posts)}),flush=True)
+        if turn % 10 == 0:
+            print(json.dumps({'scroll': turn, 'linkedPosts': len(posts)}), flush=True)
         if len(posts) >= limit:
             status, message = 'ok', f'Collected the {limit} newest linked post candidates.'
             break
@@ -204,31 +280,46 @@ def collect(driver, limit=100, scrolls=80):
         status = 'partial'
         message += ' Some visible posts lacked an unambiguous permalink and were skipped.'
     if not posts and status != 'blocked':
-        status, message = 'blocked', 'No supported post messages and permalinks found; selectors may need updating.'
-    return {'status':status,'message':message,'posts':list(posts.values())[:limit]}
+        status, message = (
+            'blocked',
+            'No supported post messages and permalinks found; selectors may need updating.',
+        )
+    return {'status': status, 'message': message, 'posts': list(posts.values())[:limit]}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--login', action='store_true', help='Open a dedicated Chrome window for you to sign in manually.')
+    parser.add_argument(
+        '--login',
+        action='store_true',
+        help='Open a dedicated Chrome window for you to sign in manually.',
+    )
     parser.add_argument('--headless', action='store_true')
-    parser.add_argument('--limit', type=int, choices=range(1,101), default=100, metavar='1..100')
-    parser.add_argument('--max-scrolls', type=int, choices=range(0,81), default=80, metavar='0..80')
-    parser.add_argument('--output', type=Path, default=RUNTIME/'hiking-candidates.json')
+    parser.add_argument('--limit', type=int, choices=range(1, 101), default=100, metavar='1..100')
+    parser.add_argument(
+        '--max-scrolls', type=int, choices=range(0, 81), default=80, metavar='0..80'
+    )
+    parser.add_argument('--output', type=Path, default=RUNTIME / 'hiking-candidates.json')
     args = parser.parse_args()
     if args.login and args.headless:
         parser.error('--login needs a visible browser')
-    result = {'status':'blocked','message':'Collector did not complete.','posts':[]}
+    result = {'status': 'blocked', 'message': 'Collector did not complete.', 'posts': []}
     driver = None
     try:
         with profile_lock():
             try:
-                driver = make_driver(RUNTIME/'hiking-chrome-profile', args.headless)
+                driver = make_driver(RUNTIME / 'hiking-chrome-profile', args.headless)
                 if args.login:
                     driver.get(GROUP_URL)
-                    print('Sign in directly in the Selenium Chrome window, then open Hiking Manitoba. Waiting up to 10 minutes.', flush=True)
+                    print(
+                        'Sign in directly in the Selenium Chrome window, then open Hiking Manitoba. Waiting up to 10 minutes.',
+                        flush=True,
+                    )
                     WebDriverWait(driver, 600, poll_frequency=2).until(group_ready)
-                    print('The dedicated profile can access Hiking Manitoba. Login setup complete.', flush=True)
+                    print(
+                        'The dedicated profile can access Hiking Manitoba. Login setup complete.',
+                        flush=True,
+                    )
                     return 0
                 result = collect(driver, args.limit, args.max_scrolls)
             finally:
@@ -238,12 +329,24 @@ def main():
         result['message'] = 'Sign-in or page loading timed out. Run --login to complete setup.'
     except (WebDriverException, RuntimeError) as error:
         # Browser exception dumps may contain page data or sensitive local paths; do not persist them.
-        result['message'] = f'Browser unavailable ({type(error).__name__}). Check Chrome, the driver and profile access.'
+        result['message'] = (
+            f'Browser unavailable ({type(error).__name__}). Check Chrome, the driver and profile access.'
+        )
     result['checkedAt'] = datetime.now(timezone.utc).isoformat()
     result['groupUrl'] = GROUP_URL
     write_private(args.output, result)
-    print(json.dumps({'status':result['status'],'candidates':len(result['posts']),'comments':sum(len(p.get('comments',[])) for p in result['posts']),'photos':sum(len(p.get('photos',[])) for p in result['posts']),'message':result['message']}))
-    return 2 if result['status']=='blocked' else 0
+    print(
+        json.dumps(
+            {
+                'status': result['status'],
+                'candidates': len(result['posts']),
+                'comments': sum(len(p.get('comments', [])) for p in result['posts']),
+                'photos': sum(len(p.get('photos', [])) for p in result['posts']),
+                'message': result['message'],
+            }
+        )
+    )
+    return 2 if result['status'] == 'blocked' else 0
 
 
 if __name__ == '__main__':

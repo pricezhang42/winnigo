@@ -1,3 +1,5 @@
+// P3 HTTP access checks against a running QA server (see docs/16-p3-accounts.md). Requires a
+// *_p3_qa database; creates synthetic accounts only.
 import assert from 'node:assert/strict';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { loadLocalEnv } from './load-env.mjs';
@@ -23,18 +25,18 @@ async function request(path, body, headers = {}) {
     redirect: 'manual',
   });
 }
-const cookies = (r) =>
-  r.headers
+const cookies = (response) =>
+  response.headers
     .getSetCookie()
     .map((c) => c.split(';')[0])
     .join('; ');
 async function verify(email) {
   const files = await readdir('.winnigo/p3-mail');
-  for (const f of files) {
-    const m = JSON.parse(await readFile('.winnigo/p3-mail/' + f));
-    if (m.to === email && m.kind === 'verify') {
-      const r = await fetch(m.url, { redirect: 'manual' });
-      assert.ok([200, 302].includes(r.status));
+  for (const file of files) {
+    const message = JSON.parse(await readFile('.winnigo/p3-mail/' + file));
+    if (message.to === email && message.kind === 'verify') {
+      const response = await fetch(message.url, { redirect: 'manual' });
+      assert.ok([200, 302].includes(response.status));
       return;
     }
   }
@@ -48,8 +50,12 @@ try {
   assert.equal((await request('/')).status, 307);
   assert.equal((await request('/login')).status, 200);
   for (const email of [ownerEmail, memberEmail]) {
-    const r = await request('/api/auth/sign-up/email', { email, password, name: 'Browser QA' });
-    assert.equal(r.status, 200, await r.clone().text());
+    const response = await request('/api/auth/sign-up/email', {
+      email,
+      password,
+      name: 'Browser QA',
+    });
+    assert.equal(response.status, 200, await response.clone().text());
     await verify(email);
   }
   // QA database may contain a previous owner; release that synthetic role only.
@@ -138,8 +144,8 @@ try {
   assert.equal((await request('/api/photos/import', { url: 'x'.repeat(8100) }, owner)).status, 413);
   const credential = await issueCredential({ source: 'facebook', label: 'HTTP QA' }, pool),
     collector = { 'x-winnigo-collector-key': credential.token };
-  for (const p of ['/api/listings', '/api/sources', photo])
-    assert.equal((await request(p, null, collector)).status, 401);
+  for (const route of ['/api/listings', '/api/sources', photo])
+    assert.equal((await request(route, null, collector)).status, 401);
   assert.equal(
     (
       await request(

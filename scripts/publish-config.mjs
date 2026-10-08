@@ -1,3 +1,4 @@
+// Destination and credential header for publishing collector batches to a Winnigo origin.
 export function publishingConfig(env) {
   const url = new URL(env.WINNIGO_ORIGIN || 'http://127.0.0.1:5173');
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/')

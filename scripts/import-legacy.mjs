@@ -1,10 +1,11 @@
+// Imports a legacy export manifest into PostgreSQL/S3 (npm run migrate:import; dry run unless --apply).
 import { loadLocalEnv } from './load-env.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { S3Storage } from '../lib/server/s3-storage.mjs';
 import { migrateLegacy } from '../lib/server/migrate-legacy.mjs';
 loadLocalEnv();
 const args = process.argv.slice(2),
-  file = args.find((a) => !a.startsWith('--'));
+  file = args.find((arg) => !arg.startsWith('--'));
 if (!file) throw Error('Provide manifest.json [--apply]');
 try {
   console.log(
@@ -18,7 +19,7 @@ try {
       2,
     ),
   );
-} catch (e) {
-  console.error('Migration stopped:', e.message);
+} catch (failure) {
+  console.error('Migration stopped:', failure.message);
   process.exitCode = 1;
 }

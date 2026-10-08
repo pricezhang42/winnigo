@@ -1,3 +1,4 @@
+// Legacy dev/build wrapper for the Vinext app; uses the execution profile and build-verified.sh.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readExecutionProfile } from './execution-profile.mjs';

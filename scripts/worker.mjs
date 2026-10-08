@@ -1,3 +1,5 @@
+// Background worker process (npm run worker). Until P5 it only checks storage and writes a
+// heartbeat; --once exits after the check.
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadLocalEnv } from './load-env.mjs';

@@ -1,3 +1,5 @@
+// Collects the public venue sources once and rewrites the bundled snapshot in lib/data/listings.json
+// and sources.json. Stops if a source returns no listings.
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseSource, collectSource, dedupe, sources } from '../lib/connectors.mjs';
 import { applyPoolClosures } from '../lib/free-swim.mjs';

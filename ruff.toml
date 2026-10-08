@@ -1,0 +1,7 @@
+# Python formatting for the collector and QA scripts: `ruff format scripts`.
+line-length = 100
+target-version = "py39"
+extend-exclude = ["legacy", "spikes", "node_modules", ".sites-runtime"]
+
+[format]
+quote-style = "single"

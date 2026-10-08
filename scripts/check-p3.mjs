@@ -1,3 +1,5 @@
+// P3 integration check (npm run check:p3): accounts, verification, sessions, owner bootstrap,
+// grants, collector credentials and rate limits in a temporary PostgreSQL schema.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { readFile } from 'node:fs/promises';
@@ -50,20 +52,20 @@ const credentials = {
   email: 'member@example.test',
   password: 'Unique-test-password-123',
 };
-const cookieOf = (r) =>
-  r.headers
+const cookieOf = (reply) =>
+  reply.headers
     .getSetCookie()
     .map((c) => c.split(';')[0])
     .join('; ');
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
-  for (const f of [
+  for (const migration of [
     '0001_foundation.sql',
     '0002_discovery.sql',
     '0003_accounts.sql',
     '0004_restrict_community.sql',
   ])
-    await pool.query(await readFile('migrations/postgres/' + f, 'utf8'));
+    await pool.query(await readFile('migrations/postgres/' + migration, 'utf8'));
   auth = createAccounts({ pool, env, sendMail: async (m) => mail.push(m) });
   assert.ok([200, 403].includes((await call('sign-up/email', credentials)).status));
   assert.equal((await pool.query('SELECT count(*) FROM auth_user')).rows[0].count, '0');
@@ -72,20 +74,20 @@ try {
     'owner@example.test',
     'other@example.test',
   ]);
-  let r = await call('sign-up/email', credentials);
-  assert.equal(r.status, 200, await r.clone().text());
+  let reply = await call('sign-up/email', credentials);
+  assert.equal(reply.status, 200, await reply.clone().text());
   assert.equal((await call('sign-in/email', credentials)).status, 403);
   const verify = mail.find((m) => m.kind === 'verify');
   assert.ok(verify);
   assert.ok(!verify.url.includes(credentials.password));
-  r = await auth.handler(new Request(verify.url));
-  assert.ok([200, 302].includes(r.status), await r.clone().text());
-  r = await call('sign-in/email', credentials);
-  assert.equal(r.status, 200, await r.clone().text());
-  const cookie = cookieOf(r);
+  reply = await auth.handler(new Request(verify.url));
+  assert.ok([200, 302].includes(reply.status), await reply.clone().text());
+  reply = await call('sign-in/email', credentials);
+  assert.equal(reply.status, 200, await reply.clone().text());
+  const cookie = cookieOf(reply);
   assert.ok(cookie.includes('session_token'));
-  assert.ok(r.headers.get('set-cookie').includes('HttpOnly'));
-  assert.ok(r.headers.get('set-cookie').includes('SameSite=Lax'));
+  assert.ok(reply.headers.get('set-cookie').includes('HttpOnly'));
+  assert.ok(reply.headers.get('set-cookie').includes('SameSite=Lax'));
   const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
   const userId = session.user.id;
   assert.equal(
@@ -99,8 +101,8 @@ try {
   );
   const otherCookie = cookieOf(await call('sign-in/email', second));
   const other = await auth.api.getSession({ headers: new Headers({ cookie: otherCookie }) });
-  r = await call('update-user', { name: 'Own profile change', userId: other.user.id }, cookie);
-  assert.equal(r.status, 200);
+  reply = await call('update-user', { name: 'Own profile change', userId: other.user.id }, cookie);
+  assert.equal(reply.status, 200);
   assert.equal(
     (await pool.query('SELECT name FROM auth_user WHERE id=$1', [other.user.id])).rows[0].name,
     'QA Member',
@@ -112,8 +114,8 @@ try {
   // Arbitrary role input is ignored; owner bootstrap requires a verified named account.
   const ownerCred = { ...credentials, email: 'owner@example.test', role: 'owner' };
   await pool.query('TRUNCATE auth_rate_limit');
-  r = await call('sign-up/email', ownerCred);
-  assert.equal(r.status, 200, await r.clone().text());
+  reply = await call('sign-up/email', ownerCred);
+  assert.equal(reply.status, 200, await reply.clone().text());
   await assert.rejects(bootstrapOwner(ownerCred.email, pool), /verified/);
   await auth.handler(
     new Request(mail.find((m) => m.to === ownerCred.email && m.kind === 'verify').url),
@@ -182,8 +184,8 @@ try {
   assert.equal(await rateLimit('test', 1, 60, pool), true);
   assert.equal(await rateLimit('test', 1, 60, pool), false);
   // Another user cannot revoke this user's session. Reset invalidates existing sessions.
-  r = await call('revoke-session', { token: session.session.token }, otherCookie);
-  assert.ok([200, 400, 403].includes(r.status));
+  reply = await call('revoke-session', { token: session.session.token }, otherCookie);
+  assert.ok([200, 400, 403].includes(reply.status));
   assert.ok(await auth.api.getSession({ headers: new Headers({ cookie }) }));
   assert.equal(
     (
@@ -197,23 +199,26 @@ try {
   const reset = mail.find((m) => m.kind === 'reset'),
     resetToken = new URL(reset.url).pathname.split('/').pop();
   assert.ok(resetToken);
-  r = await call('reset-password', { token: resetToken, newPassword: 'Replacement-password-456' });
-  assert.equal(r.status, 200, await r.clone().text());
+  reply = await call('reset-password', {
+    token: resetToken,
+    newPassword: 'Replacement-password-456',
+  });
+  assert.equal(reply.status, 200, await reply.clone().text());
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie }) }), null);
   assert.equal((await call('sign-in/email', credentials)).status, 401);
-  r = await call('sign-in/email', { ...credentials, password: 'Replacement-password-456' });
-  assert.equal(r.status, 200);
-  const newCookie = cookieOf(r);
-  r = await call('sign-out', {}, newCookie);
-  assert.equal(r.status, 200);
+  reply = await call('sign-in/email', { ...credentials, password: 'Replacement-password-456' });
+  assert.equal(reply.status, 200);
+  const newCookie = cookieOf(reply);
+  reply = await call('sign-out', {}, newCookie);
+  assert.equal(reply.status, 200);
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie: newCookie }) }), null);
   // Email-confirmed account deletion cascades access and sessions.
   await pool.query("INSERT INTO source_grants VALUES($1,'facebook')", [other.user.id]);
-  r = await call('delete-user', { callbackURL: origin + '/login' }, otherCookie);
-  assert.equal(r.status, 200, await r.clone().text());
+  reply = await call('delete-user', { callbackURL: origin + '/login' }, otherCookie);
+  assert.equal(reply.status, 200, await reply.clone().text());
   const deletion = mail.find((m) => m.kind === 'delete');
-  r = await auth.handler(new Request(deletion.url, { headers: { cookie: otherCookie } }));
-  assert.ok([200, 302].includes(r.status), await r.clone().text());
+  reply = await auth.handler(new Request(deletion.url, { headers: { cookie: otherCookie } }));
+  assert.ok([200, 302].includes(reply.status), await reply.clone().text());
   assert.equal(
     (await pool.query('SELECT 1 FROM auth_user WHERE id=$1', [other.user.id])).rowCount,
     0,
@@ -223,8 +228,8 @@ try {
     0,
   );
   const ownerCookie = cookieOf(await call('sign-in/email', ownerCred));
-  r = await call('delete-user', { callbackURL: origin + '/login' }, ownerCookie);
-  assert.ok([200, 403].includes(r.status));
+  reply = await call('delete-user', { callbackURL: origin + '/login' }, ownerCookie);
+  assert.ok([200, 403].includes(reply.status));
   assert.equal(mail.filter((m) => m.kind === 'delete' && m.to === ownerCred.email).length, 0);
   assert.equal((await pool.query("SELECT 1 FROM user_access WHERE role='owner'")).rowCount, 1);
   const google = createAccounts({

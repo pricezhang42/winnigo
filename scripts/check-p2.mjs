@@ -1,3 +1,5 @@
+// P2 integration check (npm run check:p2): runs migrations in a temporary PostgreSQL schema and
+// S3 prefix, then exercises imports, search, overrides, media and legacy migration.
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
@@ -29,8 +31,10 @@ const client = new S3Client(config.s3),
   repo = new PostgresRepository(pool);
 const search = repo.search.bind(repo),
   detail = repo.detail.bind(repo);
-repo.search = (q) => search({ ...q, principal: { userId: 'test-owner', role: 'owner' } });
-repo.detail = (id, q) => detail(id, { ...q, principal: { userId: 'test-owner', role: 'owner' } });
+repo.search = (filters) =>
+  search({ ...filters, principal: { userId: 'test-owner', role: 'owner' } });
+repo.detail = (id, filters) =>
+  detail(id, { ...filters, principal: { userId: 'test-owner', role: 'owner' } });
 const dir = await mkdtemp(join(tmpdir(), 'winnigo-p2-')),
   objects = [];
 try {

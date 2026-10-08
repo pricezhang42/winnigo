@@ -1,3 +1,4 @@
+// Creates .env.local with generated secrets on first run (npm run setup); never overwrites it.
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { parseEnv } from 'node:util';

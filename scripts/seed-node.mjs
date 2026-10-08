@@ -1,3 +1,5 @@
+// Seeds the selected repository with snapshot data, or synthetic QA data when
+// WINNIGO_SEED_PROFILE=qa (npm run db:seed). Existing records and owner corrections are kept.
 import { readFile } from 'node:fs/promises';
 import { loadLocalEnv } from './load-env.mjs';
 import { readConfig } from '../lib/server/config.mjs';
@@ -14,17 +16,17 @@ const [listings, sources, official] = await Promise.all([
   json('../lib/data/official-trails.json'),
 ]);
 const items = [...listings, ...official.items];
-const reports = [...sources, { ...official.source }].map((s) => ({
-  id: s.id,
-  checkedAt: s.checkedAt,
-  attemptedAt: s.checkedAt,
-  count: s.count,
-  status: s.status,
+const reports = [...sources, { ...official.source }].map((sourceInfo) => ({
+  id: sourceInfo.id,
+  checkedAt: sourceInfo.checkedAt,
+  attemptedAt: sourceInfo.checkedAt,
+  count: sourceInfo.count,
+  status: sourceInfo.status,
 }));
 if (config.profile === 'qa') {
-  const f = await json('./fixtures/p0-discovery.json');
+  const fixture = await json('./fixtures/p0-discovery.json');
   const community = {
-    ...normalizeHikingBatch({ status: 'ok', items: [f.community] }).items[0],
+    ...normalizeHikingBatch({ status: 'ok', items: [fixture.community] }).items[0],
     id: 'p0-community',
   };
   community.image = community.images[0];

@@ -1,3 +1,4 @@
+// pnpm-based installer used by install-pnpm.sh (legacy Sites tooling).
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {

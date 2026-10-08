@@ -1,3 +1,5 @@
+// Legacy Vinext dev/build launcher from the pre-P1 app. No npm script uses it and vinext is no
+// longer a dependency.
 import { fileURLToPath } from 'node:url';
 const [command, ...args] = process.argv.slice(2);
 if (!['dev', 'build', 'build:sites'].includes(command))

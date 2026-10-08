@@ -1,3 +1,5 @@
+// Access-boundary check against a running loopback server (npm run check:boundary): anonymous,
+// owner and collector requests to pages, APIs, admin and photos.
 import assert from 'node:assert/strict';
 import { issueCredential } from '../lib/server/access.mjs';
 import { database } from '../lib/server/postgres.mjs';

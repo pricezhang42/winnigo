@@ -1,3 +1,5 @@
+// Checks that PostgreSQL and S3 are reachable (npm run services:check). `serviceConfig` is
+// shared by the other database scripts.
 import { Pool } from 'pg';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { loadLocalEnv } from './load-env.mjs';

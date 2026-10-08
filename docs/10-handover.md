@@ -7,6 +7,8 @@ Practical guidance for the next person/agent: conventions, gotchas, coupling, an
 - **Prettier formatting.** First-party TS/JS is formatted with Prettier (100-column width, single
   quotes). Run `npm run format` before committing; `npm run format:check` reports unformatted files.
   Vendored `components/ui/`, `legacy/`, `spikes/` and data JSON are deliberately excluded.
+  Python scripts use [Ruff](https://docs.astral.sh/ruff/) with `ruff.toml` (100 columns, single
+  quotes): `ruff format scripts`. Ruff is not an npm dependency; install it with pip or pipx.
 - **`.mjs` for shared runtime logic** imported by both the Worker and Node scripts
   (`connectors.mjs`, `free-swim.mjs`, `social.mjs`). Keep them dependency-light and isomorphic
   (they must run in the Workers runtime *and* under plain Node in scripts).

@@ -1,3 +1,5 @@
+// Previews (or with --apply removes) expired sessions, verifications, invitations, rate-limit
+// buckets and old audit/credential rows (npm run accounts:cleanup).
 import { loadLocalEnv } from './load-env.mjs';
 import { database, writeTransaction } from '../lib/server/postgres.mjs';
 loadLocalEnv();

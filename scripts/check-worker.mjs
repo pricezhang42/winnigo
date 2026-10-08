@@ -1,3 +1,4 @@
+// Container health check: exits non-zero unless the worker heartbeat is under a minute old.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 const value = Number(

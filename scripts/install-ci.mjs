@@ -1,3 +1,5 @@
+// Dependency installer for npm run install:ci; on the managed-linux execution profile it runs
+// install-ci.sh instead.
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
 import path from 'node:path';

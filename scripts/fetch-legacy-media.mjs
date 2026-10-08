@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { contentHash } from '../lib/server/s3-storage.mjs';
 const args = process.argv.slice(2),
-  file = args.find((a) => !a.startsWith('--'));
+  file = args.find((arg) => !arg.startsWith('--'));
 if (!file) throw Error('Provide manifest.json [--apply]');
 const manifest = JSON.parse(await readFile(file, 'utf8')),
   directory = dirname(resolve(file));
@@ -40,8 +40,8 @@ try {
     let bytes;
     try {
       bytes = await readFile(join(directory, m.file));
-    } catch (e) {
-      if (e.code !== 'ENOENT') throw e;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
     }
     if (!bytes) {
       const result = await client.send(
