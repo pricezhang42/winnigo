@@ -38,7 +38,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 ## Fastest path to running it
 
 ```bash
-npm ci               # install (or npm run install:ci)
+npm ci               # install (npm run install:ci is an alias)
 npm run setup        # create .env.local
 npm run services:up  # PostgreSQL and private S3
 npm run db:migrate

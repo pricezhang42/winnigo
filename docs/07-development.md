@@ -12,22 +12,28 @@ root [`README.md`](../README.md). This is the practical subset.
 ## Everyday commands ([`package.json`](../package.json))
 
 ```bash
-npm ci               # install (npm run install:ci is the locked-lockfile variant)
-npm run setup        # generate .dev.vars (owner + collector secrets) and apply D1 migrations
-npm run dev          # vinext dev server, HMR, http://localhost:5173
-npm run build        # build the deployable Worker artifact into dist/
-npm start            # preview the built Worker locally via Wrangler on 127.0.0.1 (D1/R2)
+npm ci               # install (npm run install:ci is an alias)
+npm run setup        # create .env.local with generated secrets (never overwrites it)
+npm run services:up  # PostgreSQL + S3-compatible storage via Docker Compose
+npm run db:migrate   # apply migrations/postgres in order
+npm run db:seed      # seed snapshot data (WINNIGO_SEED_PROFILE=qa for synthetic QA data)
+npm run dev          # Next.js dev server, http://127.0.0.1:5173
+npm run build        # optimized Next.js build (standalone server)
+npm start            # run the built app
+npm run worker       # background worker (no collection schedules until P5)
 npm test             # node --test on scripts/tests/*.test.mjs
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
-npm run deploy       # build + wrangler deploy to YOUR Cloudflare account
-npm run db:generate  # regenerate Drizzle migration SQL after editing db/schema.ts
-npm run build:sites  # legacy: build for the old ChatGPT Sites target
+npm run format       # prettier (Python: ruff format scripts)
+npm run check:assets # verify real CSS/JS responses and layout for a running server
+npm run check:p2     # PostgreSQL/S3 integration checks (temporary schema)
+npm run check:p3     # accounts and permissions checks (temporary schema)
 ```
 
-`npm run dev`/`build` go through [`scripts/framework.mjs`](../scripts/framework.mjs), a thin wrapper
-that invokes vinext's CLI (and sets `WINNIGO_TARGET=sites` for `build:sites`). There is no execution
-profile / Sites plugin to configure anymore.
+`npm run dev`/`build`/`start` go through [`scripts/node-app.mjs`](../scripts/node-app.mjs), which
+validates configuration before starting Next.js. The pre-P1 Vinext/Sites commands (`deploy`,
+`build:sites`, `db:generate`) and their helper scripts were removed; they remain available in the
+rollback release described in [`legacy/cloudflare/README.md`](../legacy/cloudflare/README.md).
 
 ## Authentication model ([`lib/auth-policy.mjs`](../lib/auth-policy.mjs), [`lib/auth.ts`](../lib/auth.ts))
 

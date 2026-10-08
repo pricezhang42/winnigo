@@ -1,7 +1,6 @@
 # Generated, vendored or archived code keeps its original form.
 node_modules/
 .next/
-build/
 vendor/
 legacy/
 spikes/

@@ -1,7 +1,7 @@
 # 09 — File map
 
 Annotated map of the meaningful files. Ignore `node_modules/`, `dist/`, `.next/`, `.vinext/`,
-`.wrangler/`, `.sites-runtime/`, `build/`, `vendor/`, and lockfiles.
+`.wrangler/`, `.sites-runtime/`, `vendor/`, and lockfiles.
 
 ## Root docs
 
@@ -78,14 +78,13 @@ Annotated map of the meaningful files. Ignore `node_modules/`, `dist/`, `.next/`
 | [`enrich-hiking-posts.py`](../scripts/enrich-hiking-posts.py) | Deep per-post comment/photo enrichment. |
 | [`publish-social.mjs`](../scripts/publish-social.mjs) | Upload a sanitized batch + photos to `WINNIGO_ORIGIN`. |
 | [`publish-config.mjs`](../scripts/publish-config.mjs) | `publishingConfig(env)` — resolves origin + auth headers for the publisher. |
-| [`framework.mjs`](../scripts/framework.mjs) | dev/build wrapper around vinext's CLI (active; replaces `run-framework.mjs`). |
+| [`node-app.mjs`](../scripts/node-app.mjs) | dev/build/start wrapper around Next.js with validated config. |
 | [`setup.mjs`](../scripts/setup.mjs) | Generate `.dev.vars` (owner + collector secrets); run by `npm run setup`. |
 | [`import-official-trails.py`](../scripts/import-official-trails.py) | Build `official-trails.json` from Trails Manitoba KML. |
 | [`import-snapshot.mjs`](../scripts/import-snapshot.mjs) | Regenerate `listings.json`/`sources.json` from live sites. |
-| [`install-ci.mjs`](../scripts/install-ci.mjs) / `install-ci.sh` / `pnpm-install.mjs` / `install-pnpm.sh` | Locked install helpers. |
 | [`selenium-requirements.txt`](../scripts/selenium-requirements.txt) | Pinned Selenium dependency. |
 | [`tests/`](../scripts/tests) | `connectors.test.mjs`, `free-swim.test.mjs`, `portability.test.mjs`, `selenium_collector_test.py`. |
-| _legacy (Sites):_ `run-framework.mjs`, `execution-profile.mjs`, `sites-env.mjs`/`.sh`, `build-verified.sh` | Kept for the old ChatGPT Sites target (`build:sites`); not used by the standalone scripts. |
+| _removed:_ Vinext/Sites helpers (`framework.mjs`, `run-framework.mjs`, `execution-profile.mjs`, `sites-env.*`, `build-verified.sh`, install/pnpm helpers) and `build/sites-vite-plugin.ts` | Only in the rollback release (see [`legacy/cloudflare/README.md`](../legacy/cloudflare/README.md)). |
 
 ## Config
 
