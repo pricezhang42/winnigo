@@ -41,7 +41,9 @@ type Run = {
   status: string;
   trigger: string | null;
   attempts: number;
-  counts: Partial<Record<'found' | 'added' | 'updated' | 'unchanged' | 'cancelled', number>>;
+  counts: Partial<
+    Record<'found' | 'added' | 'updated' | 'unchanged' | 'cancelled' | 'rejected' | 'pages', number>
+  >;
   error: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -307,7 +309,15 @@ function RunHistory({
                 </td>
                 <td>{run.trigger || 'collector'}</td>
                 <td>{formatTime(run.startedAt || run.createdAt)}</td>
-                <td>{run.error || summarizeCounts(run.counts)}</td>
+                <td>
+                  {summarizeCounts(run.counts)}
+                  {run.error && (
+                    <span className="run-note">
+                      {run.status === 'error' || run.status === 'retrying' ? '' : ' — '}
+                      {run.error}
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -328,6 +338,8 @@ function summarizeCounts(counts: Run['counts']) {
     `${counts.updated || 0} changed`,
   ];
   if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
+  if (counts.rejected) parts.push(`${counts.rejected} rejected`);
+  if (counts.pages && counts.pages > 1) parts.push(`${counts.pages} pages`);
   return parts.join(' · ');
 }
 

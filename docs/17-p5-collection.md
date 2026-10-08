@@ -1,4 +1,4 @@
-# P5 — Collection jobs (step 1)
+# P5 — Collection jobs
 
 Implemented 2026-10-08 on branch `feat/p5-collection-jobs`. The owner chose to do P5 before P4.
 This step automates the existing public HTTP sources. Facebook collection is unchanged: its
@@ -71,10 +71,37 @@ Then use **Refresh sources** on `/admin`. To enable schedules permanently, set
   confirming change detection is stable on real pages.
 - `check:p2`, `check:p3`, unit tests, typecheck, lint and formatting still pass.
 
+## Step 2 — coverage and guards (2026-10-08)
+
+None of the five sources publishes structured event data (no event JSON-LD, iCal or RSS; Travel
+Manitoba's JSON-LD only describes the organisation), so the HTML parsers stay. The gap was
+coverage: three sources paginate and only their first page was read.
+
+- **Pagination** ([`collectSourcePages`](../lib/connectors.mjs)): The Forks reads this month's
+  calendar plus the next two month lists; Assiniboine Park follows `?page=N` up to 5 pages and
+  Travel Manitoba up to 6, continuing only while the previous page links to the next. Pages are
+  read one at a time, one second apart, and merged by URL. Live result: The Forks 3 → 9 events
+  (3 pages), Assiniboine Park 9 → 25 (3 pages), Travel Manitoba 18 → 77 Winnipeg events (6 pages).
+- **Partial runs:** if the first page fails the run fails as before; if a later page fails, the
+  listings already read are saved, the run is `partial`, nothing is cancelled and the source's
+  baseline count is kept.
+- **Validation** ([`invalidReason`](../lib/server/collection.mjs)): listings without a title or
+  http(s) link, with impossible dates or an end before the start are rejected and counted. If every
+  listing is rejected the run fails as a probable layout change.
+- **Drop guard:** fewer than half of the last successful count (of at least ten) marks the run
+  `warning`; for free swim it also skips cancellations, so a half-broken parse cannot cancel real
+  sessions.
+- **Saved-page tests** ([`source-pages.test.mjs`](../scripts/tests/source-pages.test.mjs)): trimmed
+  copies of every source page in [`scripts/fixtures/pages`](../scripts/fixtures/pages) (352 KB,
+  verified to parse exactly like the full pages) pin the listing counts, a sample listing, the
+  Winnipeg filter, pagination discovery, month roll-over and multi-page collection with a failed
+  page. A layout change shows up as a failing test when a fixture is refreshed.
+- `check:p5` adds the validation, partial-run and drop-guard scenarios (12 in total).
+
 ## Not in this step
 
 - Source-scoped batch import endpoint with idempotency keys for the external collector (P5 item 3)
   and an admin review queue: needed for the Facebook pipeline, planned with P6.
 - Notifications for failing sources (no email channel configured yet); failures show in the admin
   run history and source cards.
-- Structured-data (JSON-LD/iCal) parsers, saved-page fixtures and new sources: step 2.
+- New sources: candidates need the owner's choice and a terms/robots check before adding.

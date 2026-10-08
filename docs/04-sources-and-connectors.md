@@ -20,9 +20,12 @@ in `initialize()`.
 
 ## Parsing ([`lib/connectors.mjs`](../lib/connectors.mjs))
 
-- `collectSource(source, checkedAt)` — fetches HTML with a `Winnigo/1.0` UA, a 12 s timeout, and a
-  2 MB size cap, then dispatches to the right parser. Free swim fetches **two** pages (schedule +
-  indoor-pool directory) and applies closures.
+- `collectSourcePages(source, checkedAt)` — fetches HTML with a `Winnigo/1.0` UA, a 12 s timeout and
+  a 2 MB size cap per page, follows each source's own pagination (The Forks: next two month lists;
+  Assiniboine Park and Travel Manitoba: `?page=N` while linked, up to 5 and 6 pages) one second
+  apart, and merges listings by URL. Free swim fetches **two** pages (schedule + indoor-pool
+  directory) and applies closures. `collectSource` returns just the listings. Parser regression
+  tests run against saved pages in `scripts/fixtures/pages` (see [17](17-p5-collection.md)).
 - `parseSource(id, html, checkedAt)` — regex-based extraction per source. Each entry is normalized
   into the listing shape, given a deterministic id, categorized heuristically (`category()`), and
   de-duplicated by URL within the source.

@@ -15,7 +15,7 @@ Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP acti
 | P2 — PostgreSQL and S3 | Complete locally | Transactional repository, paginated discovery, private photos, restartable migration tools and safe orphan cleanup. |
 | P3 — Accounts and permissions | Implemented; local acceptance passed | Invitation-only accounts, verified email/password, reset/logout/session revocation, explicit owner bootstrap, roles, source/listing grants, scoped collector credentials and request protections. Real Google/SMTP acceptance remains pending. |
 | P4 — Preferences and bookmarks | Deferred by the owner; not started | PostgreSQL preferences/bookmarks, onboarding, cross-device saves, explicit browser-save import and personalized ranking. |
-| P5 — Collection jobs | Step 1 implemented locally | Durable queue, schedules, retries, lease recovery, run history and admin refresh for public sources ([evidence](17-p5-collection.md)). Remaining: collector import endpoint with idempotency keys, review queue, notifications. |
+| P5 — Collection jobs | Steps 1–2 implemented locally | Durable queue, schedules, retries, lease recovery, run history and admin refresh; full pagination (about 111 events instead of 30), validation, partial runs, drop guard and saved-page parser tests ([evidence](17-p5-collection.md)). Remaining: collector import endpoint with idempotency keys, review queue, notifications, new sources. |
 | P6 — Cloud collector | Planned | Dedicated browser/extraction service and operational recovery. |
 | P7 — AI assistant | Planned | Authorized retrieval, conversational discovery and evaluations. |
 | P8 — Production cutover | Planned | Real-data rehearsal, hosting, backups/restore, launch decision and a single active scheduler. |
@@ -28,7 +28,7 @@ Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP acti
 
 **Repository handoff:** the implementation is recorded in local commit `bcdf423`; `origin` is configured as `https://github.com/pricezhang42/winnigo.git`. Remote publication was not verified during this documentation update.
 
-**Next implementation step: P5 step 2** (sturdier parsers from structured data, saved-page fixtures, new sources). P4 is deferred by the owner. The earlier P4 note follows for reference.
+**Next implementation step:** choose new public sources (owner decision), or continue with the collector import endpoint and review queue ahead of P6. P4 is deferred by the owner. The earlier P4 note follows for reference.
 
 **P4 (deferred).** Add account-owned preference/bookmark migrations and endpoints first, then onboarding/settings, explicit import of existing device saves, and preference-based ranking. Extend deletion and cross-user access tests to these new tables. Keep Google/SMTP activation tracked separately from P4 development.
 

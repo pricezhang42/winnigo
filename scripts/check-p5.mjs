@@ -38,7 +38,8 @@ const responses = {};
 const collect = async (source, checkedAt) => {
   const response = responses[source.id];
   if (response instanceof Error) throw response;
-  return response.map((item) => ({ ...item, checkedAt }));
+  const stamp = (items) => items.map((item) => ({ ...item, checkedAt }));
+  return Array.isArray(response) ? stamp(response) : { ...response, items: stamp(response.items) };
 };
 const listing = (source, id, extra = {}) => ({
   id,
@@ -97,7 +98,15 @@ try {
   assert.equal(job.id, first.jobId);
   let result = await runCollection('forks', job, deps);
   await boss.complete(COLLECTION_QUEUE, job.id);
-  assert.deepEqual(result.counts, { found: 2, added: 2, updated: 0, unchanged: 0, cancelled: 0 });
+  assert.deepEqual(result.counts, {
+    found: 2,
+    added: 2,
+    updated: 0,
+    unchanged: 0,
+    cancelled: 0,
+    rejected: 0,
+    pages: 1,
+  });
   let [row] = await runRow(job.id);
   assert.equal(row.status, 'ok');
   assert.equal(row.trigger, 'manual');
@@ -122,7 +131,15 @@ try {
   [job] = await boss.fetch(COLLECTION_QUEUE, { includeMetadata: true });
   result = await runCollection('forks', job, deps);
   await boss.complete(COLLECTION_QUEUE, jobId);
-  assert.deepEqual(result.counts, { found: 2, added: 0, updated: 0, unchanged: 2, cancelled: 0 });
+  assert.deepEqual(result.counts, {
+    found: 2,
+    added: 0,
+    updated: 0,
+    unchanged: 2,
+    cancelled: 0,
+    rejected: 0,
+    pages: 1,
+  });
   assert.notEqual((await payload('p5-a')).checkedAt, firstCheck);
   assert.equal(await audits('collect'), 2);
   assert.equal((await repo.detail('p5-a', { admin: true, principal: owner })).title, 'Owner title');
@@ -204,6 +221,63 @@ try {
   assert.equal((await payload('p5-swim-2')).status, 'cancelled');
   assert.equal(await repo.detail('p5-swim-2', { principal: owner }), null);
   checks.push('Free swim sessions missing from the schedule are cancelled, not deleted');
+
+  // 7b. Step 2 guards: invalid listings are rejected, partial reads never cancel, and a sharp drop
+  //     is flagged and skips cancellation.
+  const runOnce = async (sourceId) => {
+    const id = await send(sourceId);
+    const [next] = await boss.fetch(COLLECTION_QUEUE, { includeMetadata: true });
+    const outcome = await runCollection(sourceId, next, deps);
+    await boss.complete(COLLECTION_QUEUE, id);
+    return { outcome, row: (await runRow(id))[0] };
+  };
+  responses.park = [
+    listing('park', 'p5-park'),
+    listing('park', 'p5-bad-date', { start: '2026-02-30' }),
+    listing('park', 'p5-backwards', { start: '2026-05-02', end: '2026-05-01' }),
+    listing('park', 'p5-no-title', { title: ' ' }),
+    listing('park', 'p5-bad-url', { url: 'javascript:alert(1)' }),
+  ];
+  let { outcome, row: guarded } = await runOnce('park');
+  assert.equal(outcome.status, 'ok');
+  assert.equal(outcome.counts.rejected, 4);
+  assert.match(guarded.error, /4 listing\(s\) rejected/);
+  assert.equal(await payload('p5-bad-date'), undefined);
+  responses.park = [listing('park', 'p5-bad-date', { start: '2026-02-30' })];
+  ({ outcome, row: guarded } = await runOnce('park'));
+  assert.equal(outcome.status, 'error');
+  assert.match(guarded.error, /failed validation/);
+
+  const sessions = Array.from({ length: 12 }, (_, n) =>
+    listing('winnipeg-free-swim', 'p5-pool-' + n),
+  );
+  responses['winnipeg-free-swim'] = sessions;
+  await runOnce('winnipeg-free-swim');
+  // A later page failed: what was read is saved, nothing is cancelled.
+  responses['winnipeg-free-swim'] = {
+    items: sessions.slice(0, 8),
+    pagesRead: 1,
+    failedPages: [{ url: 'https://example.test/2', error: 'Source returned HTTP 503' }],
+  };
+  ({ outcome, row: guarded } = await runOnce('winnipeg-free-swim'));
+  assert.equal(outcome.status, 'partial');
+  assert.equal(outcome.counts.cancelled, 0);
+  assert.match(guarded.error, /page\(s\) unavailable/);
+  assert.equal((await payload('p5-pool-11')).status, 'active');
+  // A sharp drop (4 of 12) is flagged and cancels nothing.
+  responses['winnipeg-free-swim'] = sessions.slice(0, 4);
+  ({ outcome, row: guarded } = await runOnce('winnipeg-free-swim'));
+  assert.equal(outcome.status, 'warning');
+  assert.equal(outcome.counts.cancelled, 0);
+  assert.match(guarded.error, /down from 12; cancellations skipped/);
+  assert.equal((await payload('p5-pool-11')).status, 'active');
+  // A normal shrink (11 of 12) still cancels the missing session.
+  responses['winnipeg-free-swim'] = sessions.slice(0, 11);
+  ({ outcome } = await runOnce('winnipeg-free-swim'));
+  assert.equal(outcome.status, 'ok');
+  assert.equal(outcome.counts.cancelled, 1);
+  assert.equal((await payload('p5-pool-11')).status, 'cancelled');
+  checks.push('Invalid listings rejected; partial reads and sharp drops never cancel sessions');
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];
