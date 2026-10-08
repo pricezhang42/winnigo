@@ -1,11 +1,14 @@
 """P1 browser regression against a QA fixture server; never uses the collector profile."""
 
-import argparse, json, pathlib, re, tempfile, subprocess
+import argparse, json, pathlib, re, sys, tempfile, subprocess
 from urllib.parse import quote
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
+
+# Select-all shortcut: Cmd+A on macOS, Ctrl+A elsewhere.
+SELECT_ALL = (Keys.COMMAND if sys.platform == 'darwin' else Keys.CONTROL) + 'a'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--origin', default='http://127.0.0.1:5181')
@@ -217,12 +220,12 @@ with tempfile.TemporaryDirectory(prefix='winnigo-p0-browser-') as profile:
         )
         click_text('Edit', '.admin-list ')
         title = css('#edit-title')
-        title.send_keys(Keys.CONTROL + 'a')
+        title.send_keys(SELECT_ALL)
         title.send_keys('P0 browser correction')
         click_text('Save corrections')
         wait.until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, '#edit-title')) == 0)
         search = css('input[aria-label="Search collection"]')
-        search.send_keys(Keys.CONTROL + 'a')
+        search.send_keys(SELECT_ALL)
         search.send_keys('P0 browser correction')
         css('button[aria-label="Hide P0 browser correction"]').click()
         css('button[aria-label="Show P0 browser correction"]').click()
@@ -231,7 +234,7 @@ with tempfile.TemporaryDirectory(prefix='winnigo-p0-browser-') as profile:
         # Restore the synthetic title for a repeatable run.
         click_text('Edit', '.admin-list ')
         title = css('#edit-title')
-        title.send_keys(Keys.CONTROL + 'a')
+        title.send_keys(SELECT_ALL)
         title.send_keys('P0 Betula Lake outing')
         click_text('Save corrections')
         wait.until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, '#edit-title')) == 0)
