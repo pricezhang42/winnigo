@@ -1,8 +1,10 @@
-// Applies numbered SQL migrations from migrations/postgres in order (npm run db:migrate).
+// Applies numbered SQL migrations from migrations/postgres in order, then installs or upgrades the
+// pg-boss job tables and the collection queue (npm run db:migrate).
 import { Pool } from 'pg';
 import { readFile, readdir } from 'node:fs/promises';
 import { loadLocalEnv } from './load-env.mjs';
 import { serviceConfig } from './check-services.mjs';
+import { createBoss, ensureCollectionQueue } from '../lib/server/job-queue.mjs';
 loadLocalEnv();
 const pool = new Pool({
   connectionString: serviceConfig().connectionString,
@@ -36,6 +38,14 @@ try {
     }
     await client.query('COMMIT');
     console.log('PostgreSQL migrations applied.');
+    const boss = createBoss({ connectionString: serviceConfig().connectionString, migrate: true });
+    await boss.start();
+    try {
+      await ensureCollectionQueue(boss);
+    } finally {
+      await boss.stop({ graceful: false });
+    }
+    console.log('Job queue tables ready.');
   } catch {
     await client.query('ROLLBACK');
     throw Error('Migration failed');

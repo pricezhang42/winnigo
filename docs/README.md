@@ -8,7 +8,7 @@ Start with the root [README](../README.md), [implementation plan](12-implementat
 
 Updated **2026-10-06**: P0–P2 are complete locally; P3 accounts and permissions are implemented with local acceptance checks passed. Real Google sign-in and SMTP delivery still need configuration and live verification. **P4 — preferences, PostgreSQL bookmarks and ranking — is next.** Production migration and the new collector schedule have not been activated.
 
-See the [current progress and next steps](12-implementation-plan.md#current-progress--2026-10-06) and [P3 activation requirements](16-p3-accounts.md).
+See the [current progress and next steps](12-implementation-plan.md#current-progress--2026-10-08) and [P3 activation requirements](16-p3-accounts.md).
 
 ## Start here
 
@@ -34,6 +34,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [14 — P1 foundation](14-p1-foundation.md) | Node runtime migration and verification. |
 | [15 — P2 storage](15-p2-storage.md) | PostgreSQL/S3 implementation and migration rehearsal. |
 | [16 — P3 accounts](16-p3-accounts.md) | Accounts, grants, provider setup and acceptance evidence. |
+| [17 — P5 collection jobs](17-p5-collection.md) | Job queue, schedules, run history, failure handling and evidence. |
 
 ## Fastest path to running it
 

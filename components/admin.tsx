@@ -35,6 +35,21 @@ type Data = {
 
 const PAGE_SIZE = 50;
 
+type Run = {
+  id: number;
+  source: string;
+  status: string;
+  trigger: string | null;
+  attempts: number;
+  counts: Partial<Record<'found' | 'added' | 'updated' | 'unchanged' | 'cancelled', number>>;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+const ACTIVE_RUN = ['queued', 'running', 'retrying'];
+const RUN_POLL_MS = 5000;
+
 /** Collection desk: source status, the social-outing form, and listing corrections. */
 export default function Admin() {
   const [data, setData] = useState<Data>({ items: [], sources: [] });
@@ -43,6 +58,9 @@ export default function Admin() {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Item | null>(null);
   const [offset, setOffset] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [runsVersion, setRunsVersion] = useState(0);
+  const [collectionAvailable, setCollectionAvailable] = useState(false);
   // Ignores responses from loads that a newer load has superseded.
   const loadVersion = useRef(0);
 
@@ -87,6 +105,37 @@ export default function Admin() {
     }
   }
 
+  /** Queues collection for every public source; the run history shows progress. */
+  async function refresh() {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh' }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        queued?: { sourceId: string; alreadyQueued?: boolean }[];
+      };
+      if (!response.ok) throw Error(result.error);
+      const queued = result.queued || [];
+      const waiting = queued.filter((entry) => entry.alreadyQueued).length;
+      setNotice(
+        `Queued ${queued.length - waiting} source check${queued.length - waiting === 1 ? '' : 's'}` +
+          (waiting ? ` (${waiting} already waiting)` : '') +
+          '. Results appear in the run history.',
+      );
+      setRunsVersion((version) => version + 1);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not queue a refresh.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const reports = [
     ...data.sources,
     ...(data.communitySources || []).filter((source) => source.id === 'facebook'),
@@ -103,15 +152,21 @@ export default function Admin() {
           <h1>Keep the good things current.</h1>
           <p>Review sources, correct details, and hide duplicate or cancelled listings.</p>
         </div>
-        <Button disabled={busy} onClick={() => action({ action: 'refresh' })}>
+        <Button disabled={busy} onClick={refresh}>
           <RefreshCw size={16} />
           {busy ? 'Working…' : 'Refresh sources'}
         </Button>
       </div>
       <p className="source-note">
-        This development collection uses saved snapshots. Your corrections are stored locally.
-        Automatic collection will be available after the collection worker is connected.
+        {collectionAvailable
+          ? 'Public sources are collected by the background worker on a schedule. Refresh queues a check now; your corrections are always kept.'
+          : 'This development collection uses saved snapshots. Your corrections are stored locally. Automatic collection needs the PostgreSQL repository and the worker.'}
       </p>
+      {notice && (
+        <p className="success-note" role="status">
+          {notice}
+        </p>
+      )}
       {error && (
         <p className="notice" role="alert">
           {error}{' '}
@@ -121,6 +176,7 @@ export default function Admin() {
         </p>
       )}
       <SocialOutingForm onAdded={load} />
+      <RunHistory version={runsVersion} onAvailable={setCollectionAvailable} onSettled={load} />
       <div className="admin-sources">
         {reports.map((report) => (
           <SourceStatus key={report.id} report={report} />
@@ -176,6 +232,103 @@ export default function Admin() {
       />
     </main>
   );
+}
+
+/**
+ * Recent collection runs. Polls while any run is queued, running or retrying, and calls
+ * `onSettled` once they finish so the source cards refresh.
+ */
+function RunHistory({
+  version,
+  onAvailable,
+  onSettled,
+}: {
+  version: number;
+  onAvailable: (available: boolean) => void;
+  onSettled: () => void;
+}) {
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [available, setAvailable] = useState(false);
+  const wasActive = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function poll() {
+      try {
+        const response = await fetch('/api/runs');
+        if (!response.ok) return;
+        const result = (await response.json()) as { runs: Run[]; available: boolean };
+        if (cancelled) return;
+        setRuns(result.runs);
+        setAvailable(result.available);
+        onAvailable(result.available);
+        const active = result.runs.some((run) => ACTIVE_RUN.includes(run.status));
+        if (wasActive.current && !active) onSettled();
+        wasActive.current = active;
+        if (active) timer = setTimeout(poll, RUN_POLL_MS);
+      } catch {
+        // Run history is informational; the next refresh or page load retries.
+      }
+    }
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // Callbacks come from the parent's state setters and load(); polling restarts per refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
+
+  if (!available) return null;
+  return (
+    <section className="run-history" aria-label="Collection runs">
+      <h2>Collection runs</h2>
+      {runs.length === 0 ? (
+        <p className="source-note">No runs yet. Use Refresh sources or enable schedules.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Trigger</th>
+              <th>Started</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.slice(0, 20).map((run) => (
+              <tr key={run.id}>
+                <td>{run.source}</td>
+                <td>
+                  <span className={'run-status run-' + run.status}>{run.status}</span>
+                  {run.attempts > 1 ? ` (attempt ${run.attempts})` : ''}
+                </td>
+                <td>{run.trigger || 'collector'}</td>
+                <td>{formatTime(run.startedAt || run.createdAt)}</td>
+                <td>{run.error || summarizeCounts(run.counts)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+const formatTime = (value: string) =>
+  new Date(value).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' });
+
+function summarizeCounts(counts: Run['counts']) {
+  if (counts.found === undefined) return '';
+  const parts = [
+    `${counts.found} found`,
+    `${counts.added || 0} new`,
+    `${counts.updated || 0} changed`,
+  ];
+  if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
+  return parts.join(' · ');
 }
 
 function SourceStatus({ report }: { report: Report }) {

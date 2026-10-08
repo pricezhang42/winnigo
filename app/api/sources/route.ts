@@ -6,6 +6,9 @@ import { readConfig } from '@/lib/server/config.mjs';
 import { serviceCredential, rateLimit } from '@/lib/server/access.mjs';
 import { applyAction, ActionError } from '@/lib/server/actions.mjs';
 import { readLimited } from '@/lib/server/request-body.mjs';
+import { database } from '@/lib/server/postgres.mjs';
+import { localSources } from '@/lib/server/collection.mjs';
+import { queueRefresh } from '@/lib/server/job-queue.mjs';
 export const dynamic = 'force-dynamic';
 
 const MAX_BATCH_BYTES = 250000;
@@ -65,6 +68,15 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Wrong source scope' }, { status: 403 });
     if (!collector && principal?.role !== 'owner' && input.action !== 'update')
       return Response.json({ error: 'Owner access required' }, { status: 403 });
+    // With PostgreSQL, refresh queues collection jobs and returns at once (P5). The fixture
+    // repository has no queue, so it falls through to the action's "unavailable" response.
+    if (input.action === 'refresh' && readConfig().repository === 'postgres') {
+      const known = localSources.some((source) => source.id === input.source);
+      if (input.source !== undefined && !known)
+        return Response.json({ error: 'Unknown source' }, { status: 400 });
+      const queued = await queueRefresh(input.source, database());
+      return Response.json({ queued }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     const result = await applyAction(input, repository(), principal || undefined);
     return Response.json(result ?? { ok: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

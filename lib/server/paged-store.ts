@@ -4,6 +4,7 @@ import { getCollection } from '../store';
 import { sources, localDay, weekendRange } from '../connectors.mjs';
 import official from '../data/official-trails.json';
 import { communitySources } from '../social.mjs';
+import { schedulesEnabled } from './job-queue.mjs';
 import type { Listing } from '../domain';
 
 type Principal = { userId: string; role: string };
@@ -44,7 +45,9 @@ export async function searchCollection(filters: Filters, admin = false, principa
         .filter((source) => principal?.role === 'owner' || reportFor(source.id))
         .map((source) => ({ ...source, ...reportFor(source.id) })),
       reports: undefined,
-      notice: 'Automatic source collection is not running yet. Check source dates before visiting.',
+      notice: schedulesEnabled()
+        ? 'Sources are checked daily. Confirm details with the source before visiting.'
+        : 'Automatic source collection is not running. Check source dates before visiting.',
     };
   }
 

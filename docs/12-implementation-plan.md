@@ -2,11 +2,11 @@
 
 Plan created: 2026-09-21
 
-Progress updated: 2026-10-06
+Progress updated: 2026-10-08
 
 Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP activation requires provider configuration.** See [P0 acceptance evidence and known baseline defect](13-p0-baseline.md). This plan implements [11 — Target system design](11-target-system-design.md): Node.js, PostgreSQL, S3-compatible storage, user accounts/preferences, cloud collection and an AI discovery assistant. README commands now run the Node application with PostgreSQL/S3. See [P1 evidence and limits](14-p1-foundation.md) and [P2 storage evidence](15-p2-storage.md).
 
-## Current progress — 2026-10-06
+## Current progress — 2026-10-08
 
 | Phase | Status | Delivered / remaining |
 | --- | --- | --- |
@@ -14,8 +14,8 @@ Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP acti
 | P1 — Node.js foundation | Complete locally | Next.js/Node runtime, standalone startup, Docker services and preserved discovery layout. |
 | P2 — PostgreSQL and S3 | Complete locally | Transactional repository, paginated discovery, private photos, restartable migration tools and safe orphan cleanup. |
 | P3 — Accounts and permissions | Implemented; local acceptance passed | Invitation-only accounts, verified email/password, reset/logout/session revocation, explicit owner bootstrap, roles, source/listing grants, scoped collector credentials and request protections. Real Google/SMTP acceptance remains pending. |
-| P4 — Preferences and bookmarks | Next; not started | PostgreSQL preferences/bookmarks, onboarding, cross-device saves, explicit browser-save import and personalized ranking. |
-| P5 — Collection jobs | Planned | Durable queue, schedules, retries, review and run-history UI. |
+| P4 — Preferences and bookmarks | Deferred by the owner; not started | PostgreSQL preferences/bookmarks, onboarding, cross-device saves, explicit browser-save import and personalized ranking. |
+| P5 — Collection jobs | Step 1 implemented locally | Durable queue, schedules, retries, lease recovery, run history and admin refresh for public sources ([evidence](17-p5-collection.md)). Remaining: collector import endpoint with idempotency keys, review queue, notifications. |
 | P6 — Cloud collector | Planned | Dedicated browser/extraction service and operational recovery. |
 | P7 — AI assistant | Planned | Authorized retrieval, conversational discovery and evaluations. |
 | P8 — Production cutover | Planned | Real-data rehearsal, hosting, backups/restore, launch decision and a single active scheduler. |
@@ -28,7 +28,9 @@ Status: **P0–P3 implemented locally; P4–P8 planned. P3 live Google/SMTP acti
 
 **Repository handoff:** the implementation is recorded in local commit `bcdf423`; `origin` is configured as `https://github.com/pricezhang42/winnigo.git`. Remote publication was not verified during this documentation update.
 
-**Next implementation step: P4.** Add account-owned preference/bookmark migrations and endpoints first, then onboarding/settings, explicit import of existing device saves, and preference-based ranking. Extend deletion and cross-user access tests to these new tables. Keep Google/SMTP activation tracked separately from P4 development.
+**Next implementation step: P5 step 2** (sturdier parsers from structured data, saved-page fixtures, new sources). P4 is deferred by the owner. The earlier P4 note follows for reference.
+
+**P4 (deferred).** Add account-owned preference/bookmark migrations and endpoints first, then onboarding/settings, explicit import of existing device saves, and preference-based ranking. Extend deletion and cross-user access tests to these new tables. Keep Google/SMTP activation tracked separately from P4 development.
 
 ## Delivery approach
 
@@ -122,13 +124,13 @@ Implementation and local acceptance: [P3 evidence and provider limits](16-p3-acc
 
 ## P5 — Move collection into durable jobs
 
-- [ ] Implement the chosen PostgreSQL-backed queue, source schedules, job leases, heartbeats, retries/backoff, dead-letter/blocked states and per-source concurrency limits.
-- [ ] Port existing public-source parsers unchanged where possible. Remove scraping from page reads; admin refresh enqueues a job and returns a run ID.
+- [x] Implement the chosen PostgreSQL-backed queue, source schedules, job leases, heartbeats, retries/backoff, dead-letter/blocked states and per-source concurrency limits. (Public sources: failures that need a person end as `error` without retry; a sign-in `blocked` state arrives with the browser collector in P6.)
+- [x] Port existing public-source parsers unchanged where possible. Remove scraping from page reads; admin refresh enqueues a job and returns a run ID.
 - [ ] Implement source-scoped import/media endpoints with validation, bounded batches and idempotency keys. Publish run counts across the whole run, not just its final chunk.
-- [ ] Track scanned coverage, extraction status, accepted/rejected/review counts, photo failures, last attempt and last successful collection independently.
-- [ ] Retain prior listings on network/parser failure. Distinguish partial coverage from a complete source snapshot; cancellation policy remains source-specific.
-- [ ] Add an admin run-history and review screen. Show source freshness and actionable failures without dumping raw private text into logs.
-- [ ] Implement timezone-aware scheduling and a bounded catch-up policy. Test daily 09:00 America/Winnipeg across daylight-saving changes and restarts.
+- [ ] Track scanned coverage, extraction status, accepted/rejected/review counts, photo failures, last attempt and last successful collection independently. _(Last attempt, last success and found/added/updated/unchanged/cancelled counts done; extraction, review and photo counts come with the collector pipeline.)_
+- [x] Retain prior listings on network/parser failure. Distinguish partial coverage from a complete source snapshot; cancellation policy remains source-specific.
+- [ ] Add an admin run-history and review screen. _(Run history done; review queue pending.)_ Show source freshness and actionable failures without dumping raw private text into logs.
+- [x] Implement timezone-aware scheduling and a bounded catch-up policy. Test daily 09:00 America/Winnipeg across daylight-saving changes and restarts. (Public sources use 06:00; tested across the 2026/2027 DST changes and a three-day outage. The Facebook 09:00 schedule moves with P6.)
 
 **Done when:** worker crashes, duplicate deliveries, network failures and retries cause neither lost accepted records nor duplicate listings. Lease expiry recovers work; sign-in blocks do not trigger endless retries. Browse requests do not wait for collection.
 

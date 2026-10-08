@@ -77,7 +77,8 @@ docker compose --env-file .env.local --profile app stop
 | `npm run setup` | Generate local config once; preserves existing configuration |
 | `npm run dev` | Standard Next.js development server |
 | `npm run build` / `npm start` | Assemble and run standalone Node app |
-| `npm run worker` | Separate worker shell; no schedules or collectors enabled |
+| `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
+| `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites) |
 | `npm run worker:check` | Validate the selected store and exit |
 | `npm run db:seed` | Add missing snapshots/QA fixtures; preserve existing records |
 | `npm run db:migrate` | Apply pending PostgreSQL migrations |

@@ -22,7 +22,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 - `lib/server/contracts.ts`, `services.ts`, `fixture-*.mjs`: repository/photo boundaries and P1 file-backed fixtures.
 - `lib/store.ts`, `lib/server/actions.mjs`: discovery and atomic import/editorial operations.
 - `lib/connectors.mjs`, `lib/free-swim.mjs`: public parsers; P1 does not collect during page reads.
-- `scripts/worker.mjs`: separate worker shell; no collection schedules until P5.
+- `scripts/worker.mjs`, `lib/server/job-queue.mjs`, `lib/server/collection.mjs`: P5 collection jobs (pg-boss). Schedules run only with `WINNIGO_SCHEDULES=enabled`; run `npm run check:p5` after changes (docs/17-p5-collection.md). Facebook collection stays on its existing scheduler until P6.
 - `compose.yaml`, `Dockerfile`, `migrations/postgres/`: local infrastructure and numbered SQL migrations.
 - `legacy/cloudflare/README.md`: complete pre-P1 release commit and rollback checkout instructions. Reference files here are excluded from the Node build.
 
