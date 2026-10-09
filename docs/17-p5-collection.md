@@ -98,6 +98,27 @@ coverage: three sources paginate and only their first page was read.
   page. A layout change shows up as a failing test when a fixture is refreshed.
 - `check:p5` adds the validation, partial-run and drop-guard scenarios (12 in total).
 
+## Event descriptions (2026-10-08)
+
+Events from The Forks, Assiniboine Park and Travel Manitoba previously all carried the placeholder
+"See … for the full program…".
+
+- **The Forks / Assiniboine Park:** the summary already on the list page (the body paragraph without
+  a class; `.event-brief`). No extra requests.
+- **Travel Manitoba:** its cards have no description, so each event's own page is read: the longer
+  of its schema.org Event description and meta description, marked with "…" when the site cut it
+  mid-sentence. Descriptions already stored for the same URL are reused
+  ([`knownDescriptions`](../lib/server/postgres-repository.mjs)), so after the first run only new
+  events cost a request; at most 80 event pages per run, one second apart, only on the source's own
+  site (`robots.txt` allows `/events/`). A failed event page keeps the placeholder, is counted in the
+  run notes and retried next run; it never makes the run partial.
+- **Text:** plain text, at most 600 characters, cut at a sentence end. Every listing links to the
+  source for the full text. Owner-corrected descriptions still win.
+- **Tests:** [`descriptions.test.mjs`](../scripts/tests/descriptions.test.mjs) (saved pages, reuse,
+  the per-run limit, failures) and a `check:p5` scenario for passing stored descriptions.
+- **Live:** all current Forks (9) and Travel Manitoba (78 event pages, 161 s) listings described;
+  Assiniboine Park 25 of 25 collected listings.
+
 ## Not in this step
 
 - Source-scoped batch import endpoint with idempotency keys for the external collector (P5 item 3)

@@ -24,7 +24,10 @@ in `initialize()`.
   a 2 MB size cap per page, follows each source's own pagination (The Forks: next two month lists;
   Assiniboine Park and Travel Manitoba: `?page=N` while linked, up to 5 and 6 pages) one second
   apart, and merges listings by URL. Free swim fetches **two** pages (schedule + indoor-pool
-  directory) and applies closures. `collectSource` returns just the listings. Parser regression
+  directory) and applies closures. Descriptions come from list-page summaries (The Forks,
+  Assiniboine Park) or, for Travel Manitoba, each new event's own page (structured data or meta
+  description, at most 80 pages per run); see [17](17-p5-collection.md). `collectSource` returns
+  just the listings. Parser regression
   tests run against saved pages in `scripts/fixtures/pages` (see [17](17-p5-collection.md)).
 - `parseSource(id, html, checkedAt)` — regex-based extraction per source. Each entry is normalized
   into the listing shape, given a deterministic id, categorized heuristically (`category()`), and

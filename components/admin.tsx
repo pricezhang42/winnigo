@@ -42,7 +42,17 @@ type Run = {
   trigger: string | null;
   attempts: number;
   counts: Partial<
-    Record<'found' | 'added' | 'updated' | 'unchanged' | 'cancelled' | 'rejected' | 'pages', number>
+    Record<
+      | 'found'
+      | 'added'
+      | 'updated'
+      | 'unchanged'
+      | 'cancelled'
+      | 'rejected'
+      | 'pages'
+      | 'eventPages',
+      number
+    >
   >;
   error: string | null;
   createdAt: string;
@@ -340,6 +350,7 @@ function summarizeCounts(counts: Run['counts']) {
   if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
   if (counts.rejected) parts.push(`${counts.rejected} rejected`);
   if (counts.pages && counts.pages > 1) parts.push(`${counts.pages} pages`);
+  if (counts.eventPages) parts.push(`${counts.eventPages} event pages`);
   return parts.join(' · ');
 }
 

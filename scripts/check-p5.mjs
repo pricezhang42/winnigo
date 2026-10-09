@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Pool } from 'pg';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { placeholderDescription } from '../lib/connectors.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
 import { ensureSource, runCollection } from '../lib/server/collection.mjs';
 import {
@@ -106,6 +107,7 @@ try {
     cancelled: 0,
     rejected: 0,
     pages: 1,
+    eventPages: 0,
   });
   let [row] = await runRow(job.id);
   assert.equal(row.status, 'ok');
@@ -139,6 +141,7 @@ try {
     cancelled: 0,
     rejected: 0,
     pages: 1,
+    eventPages: 0,
   });
   assert.notEqual((await payload('p5-a')).checkedAt, firstCheck);
   assert.equal(await audits('collect'), 2);
@@ -278,6 +281,30 @@ try {
   assert.equal(outcome.counts.cancelled, 1);
   assert.equal((await payload('p5-pool-11')).status, 'cancelled');
   checks.push('Invalid listings rejected; partial reads and sharp drops never cancel sessions');
+
+  // 7c. Stored descriptions reach the collector so event pages are read only for new events;
+  //     placeholders are not treated as descriptions.
+  responses.manitoba = [
+    listing('manitoba', 'p5-described', { description: 'A real summary.' }),
+    listing('manitoba', 'p5-placeholder', {
+      description: placeholderDescription('Travel Manitoba'),
+    }),
+  ];
+  await runOnce('manitoba');
+  const known = await repo.knownDescriptions('manitoba');
+  assert.equal(known.get('https://example.test/p5-described'), 'A real summary.');
+  assert.equal(known.has('https://example.test/p5-placeholder'), false);
+  let received;
+  const capturing = async (source, checkedAt, options) => {
+    received = options.knownDescriptions;
+    return collect(source, checkedAt);
+  };
+  jobId = await send('manitoba');
+  [job] = await boss.fetch(COLLECTION_QUEUE, { includeMetadata: true });
+  await runCollection('manitoba', job, { ...deps, collect: capturing });
+  await boss.complete(COLLECTION_QUEUE, jobId);
+  assert.equal(received.get('https://example.test/p5-described'), 'A real summary.');
+  checks.push('Stored descriptions are passed to the collector; placeholders excluded');
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];
