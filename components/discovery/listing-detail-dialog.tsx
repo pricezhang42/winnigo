@@ -132,7 +132,14 @@ function ListingDetail({
             </a>
           </Button>
         )}
-        <Button asChild>
+        {listing.ticketUrl && (
+          <Button asChild>
+            <a href={listing.ticketUrl} target="_blank" rel="noreferrer">
+              Tickets & registration <ExternalLink size={16} />
+            </a>
+          </Button>
+        )}
+        <Button variant={listing.ticketUrl ? 'outline' : 'default'} asChild>
           <a href={listing.url} target="_blank" rel="noreferrer">
             Visit original listing <ExternalLink size={16} />
           </a>

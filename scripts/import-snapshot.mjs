@@ -7,7 +7,7 @@ import { applyPoolClosures } from '../lib/free-swim.mjs';
 const fromFiles = process.argv.includes('--from-files');
 const all = [];
 const reports = [];
-for (const source of sources) {
+for (const source of sources.filter((candidate) => !candidate.workerOnly)) {
   const checkedAt = new Date().toISOString();
   let items;
   if (fromFiles) {

@@ -1,6 +1,8 @@
 import type { MapLocation } from './trail-locations';
 export type Listing = {
   facilityUrl?: string;
+  /** Registration or ticket page, when the source publishes one. */
+  ticketUrl?: string;
   collection?: string;
   activityCategories?: string[];
   seasons?: string[];

@@ -140,6 +140,30 @@ listing and left stale copies behind; Assiniboine Park pages ending in `/info` c
   110 → 107, Assiniboine Park 38 → 29. The first run reports every event as updated and renamed
   rows as merged, because the ID inside each record changed.
 
+## Rotary Club of Winnipeg (2026-10-09)
+
+The first source added beyond the original five, collected by
+[`lib/server/rotary.mjs`](../lib/server/rotary.mjs) in the worker (it is marked `workerOnly`, so
+the snapshot script skips it).
+
+1. **Upcoming Events** box on the home page: the club's public events only (member meetings are not
+   listed), each with a link to its event page. The board members listed nearby are never read.
+2. **Event page:** stable ID (the ClubRunner event GUID, also the calendar feed's UID), date and
+   time, venue and address, description, and the small poster. The contact person is never read.
+3. **Full-size poster:** large images on the home page are checked for a QR code; the code's link
+   (followed only through an allowlist of hosts) must lead to a ClubRunner registration page whose
+   title and written-out date match the event. Then the full poster becomes the listing image and
+   the registration page adds the ticket link (shown as "Tickets & registration"), door and start
+   times, and its address. An unmatched or unreadable poster is simply not attached.
+- An empty box is normal between events; a missing box fails the run as a layout change. An event
+  page that fails still lists the event from the box.
+- Price, performers and host appear only in the poster image; the owner adds them on the admin page
+  until poster reading (P6 extraction with review) exists. OCR (Tesseract) was tested and missed the
+  price, so it is not used.
+- Live: two events collected; the concert got the full poster, ticket link, "Doors Open 6:30 pm ·
+  Concert 7:00 pm" and "603 Wellington Crescent". Tests: [`rotary.test.mjs`](../scripts/tests/rotary.test.mjs)
+  with trimmed fixtures (no member names) and a crop of the poster's QR code.
+
 ## Not in this step
 
 - Source-scoped batch import endpoint with idempotency keys for the external collector (P5 item 3)

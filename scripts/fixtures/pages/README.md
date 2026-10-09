@@ -13,6 +13,11 @@ trimmed page was checked to parse exactly like the full page.
 | `park-page-1.html` … `-3` | assiniboinepark.ca/events (`?page=2`, `?page=3`) |
 | `manitoba-page-1.html`, `-2` | travelmanitoba.com/events/ (`?page=2`) |
 | `free-swim.html`, `indoor-pools.html` | winnipeg.ca free-swim schedule and indoor-pool directory |
+| `manitoba-event.html` | one Travel Manitoba event page (structured data and meta description only) |
+| `rotary-home.html` | winnipegrotary.org Upcoming Events box and the full-size poster's image tag (2026-10-09) |
+| `rotary-event-*.html` | two Rotary event pages, with the contact person removed |
+| `rotary-registration.html` | the concert's registration page text, without the form |
+| `rotary-poster-qr.png` | a crop of the full-size poster around its QR code |
 
 Content belongs to the source sites; it is kept only to test parsing. To refresh after a site
 change, save the page again, trim it the same way, confirm the parser output is what the site

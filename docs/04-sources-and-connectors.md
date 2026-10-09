@@ -14,6 +14,7 @@ Facebook collector is separate — see [05](05-social-collector.md).
 | `park` | Assiniboine Park | assiniboinepark.ca/events | `parseSource('park')` |
 | `attractions` | The Forks · places | theforks.com/attractions | `parsePlaces` |
 | `manitoba` | Travel Manitoba | travelmanitoba.com/events | `parseSource('manitoba')` (Winnipeg-only) |
+| `winnipeg-rotary` | Rotary Club of Winnipeg | winnipegrotary.org | [`collectRotary`](../lib/server/rotary.mjs), worker only (see [17](17-p5-collection.md)) |
 
 `trails-manitoba` is **not** in this array — it is imported offline (below) and only seeded/upserted
 in `initialize()`.
