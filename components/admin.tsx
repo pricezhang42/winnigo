@@ -48,6 +48,7 @@ type Run = {
       | 'updated'
       | 'unchanged'
       | 'cancelled'
+      | 'merged'
       | 'rejected'
       | 'pages'
       | 'eventPages',
@@ -348,6 +349,7 @@ function summarizeCounts(counts: Run['counts']) {
     `${counts.updated || 0} changed`,
   ];
   if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
+  if (counts.merged) parts.push(`${counts.merged} duplicates merged`);
   if (counts.rejected) parts.push(`${counts.rejected} rejected`);
   if (counts.pages && counts.pages > 1) parts.push(`${counts.pages} pages`);
   if (counts.eventPages) parts.push(`${counts.eventPages} event pages`);

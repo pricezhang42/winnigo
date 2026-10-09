@@ -159,3 +159,40 @@ test('collecting a source reads every linked page and merges listings', async ()
   });
   assert.equal(result.items.length, 291);
 });
+
+test('event IDs come from the page URL, never the dates', async () => {
+  const { eventListingId } = await import('../../lib/connectors.mjs');
+  assert.equal(
+    eventListingId('park', 'https://www.assiniboinepark.ca/events/boo-at-the-zoo/info'),
+    'park-boo-at-the-zoo-info',
+  );
+  assert.equal(
+    eventListingId('forks', 'https://www.theforks.com/events/calendar-of-events/event/1314'),
+    'forks-event-1314',
+  );
+  assert.equal(
+    eventListingId(
+      'manitoba',
+      'https://www.travelmanitoba.com/events/couples-clownselling-winnipeg/',
+    ),
+    'manitoba-couples-clownselling-winnipeg',
+  );
+  // Pages ending in the same segment no longer collide.
+  assert.notEqual(
+    eventListingId('park', 'https://www.assiniboinepark.ca/events/a/info'),
+    eventListingId('park', 'https://www.assiniboinepark.ca/events/b/info'),
+  );
+  const long = 'https://example.test/events/' + 'very-long-name-'.repeat(10);
+  assert.ok(eventListingId('park', long).length <= 'park-'.length + 80);
+  assert.notEqual(
+    eventListingId('park', 'https://example.test/e?occurrence=1'),
+    eventListingId('park', 'https://example.test/e?occurrence=2'),
+  );
+  // The same event parsed on two different days keeps its ID.
+  const today = parseSource('park', page('park-page-1'), '2026-10-08T12:00:00Z');
+  const later = parseSource('park', page('park-page-1'), '2026-10-20T12:00:00Z');
+  assert.deepEqual(
+    today.map((item) => item.id),
+    later.map((item) => item.id),
+  );
+});

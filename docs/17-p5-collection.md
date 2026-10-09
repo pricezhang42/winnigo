@@ -119,6 +119,27 @@ Events from The Forks, Assiniboine Park and Travel Manitoba previously all carri
 - **Live:** all current Forks (9) and Travel Manitoba (78 event pages, 161 s) listings described;
   Assiniboine Park 25 of 25 collected listings.
 
+## Stable event IDs (2026-10-08)
+
+Event IDs used to combine the last URL segment with the start date a site showed. Ongoing events
+(Boo at the Zoo, Gardener Chats) show a start date that moves forward, so each run created a new
+listing and left stale copies behind; Assiniboine Park pages ending in `/info` could also collide.
+
+- IDs now come from the page URL path only ([`eventListingId`](../lib/connectors.mjs)), for example
+  `park-boo-at-the-zoo-info`, `forks-event-1314`. Free swim keeps its per-session IDs.
+- Each run merges rows of the same source and page URL into the stable ID and **deletes** the
+  copies: the owner's edits (the current ID's, else the newest copy's), access grants and audit
+  history move to the survivor; dates, locations, media links and notes are rebuilt from the
+  source. Copies of pages a source no longer lists collapse into their newest row. Runs report
+  this as `merged`.
+- The bundled snapshot uses the new IDs, and `db:seed` skips an event whose page URL is already
+  stored, so seeding cannot recreate copies.
+- Saved items in a browser that pointed at an old ID no longer match (accepted by the owner;
+  bookmarks are per-browser until P4).
+- Live cleanup on the development database: The Forks 16 listings / 16 pages, Travel Manitoba
+  110 → 107, Assiniboine Park 38 → 29. The first run reports every event as updated and renamed
+  rows as merged, because the ID inside each record changed.
+
 ## Not in this step
 
 - Source-scoped batch import endpoint with idempotency keys for the external collector (P5 item 3)

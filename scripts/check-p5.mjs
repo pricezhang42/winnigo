@@ -77,7 +77,13 @@ const checks = [];
 let boss;
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
-  for (const file of ['0001_foundation.sql', '0002_discovery.sql', '0005_collection_runs.sql'])
+  for (const file of [
+    '0001_foundation.sql',
+    '0002_discovery.sql',
+    '0003_accounts.sql',
+    '0004_restrict_community.sql',
+    '0005_collection_runs.sql',
+  ])
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
   boss = bossFor({ migrate: true });
   await boss.start();
@@ -105,6 +111,7 @@ try {
     updated: 0,
     unchanged: 0,
     cancelled: 0,
+    merged: 0,
     rejected: 0,
     pages: 1,
     eventPages: 0,
@@ -139,6 +146,7 @@ try {
     updated: 0,
     unchanged: 2,
     cancelled: 0,
+    merged: 0,
     rejected: 0,
     pages: 1,
     eventPages: 0,
@@ -305,6 +313,70 @@ try {
   await boss.complete(COLLECTION_QUEUE, jobId);
   assert.equal(received.get('https://example.test/p5-described'), 'A real summary.');
   checks.push('Stored descriptions are passed to the collector; placeholders excluded');
+
+  // 7d. Copies of the same page under older, date-based IDs are merged into the stable ID and
+  //     deleted: the owner's edit, an access grant and the history move to the survivor.
+  const pageUrl = 'https://example.test/boo-at-the-zoo/info';
+  const oldCopies = ['park-info-2026-10-02', 'park-info-2026-10-08'];
+  await repo.importRecords(
+    oldCopies.map((id) => ({
+      id,
+      source: 'park',
+      payload: listing('park', id, { url: pageUrl, title: 'Boo at the Zoo' }),
+      hidden: false,
+      override: {},
+    })),
+  );
+  await applyAction({ action: 'update', id: oldCopies[0], title: 'Owner Boo' }, repo, owner);
+  await pool.query(
+    "INSERT INTO auth_user(id, name, email, \"emailVerified\", \"updatedAt\") VALUES ('p5-user', 'P5', 'p5@example.test', true, now())",
+  );
+  await pool.query("INSERT INTO listing_grants(user_id, listing_id) VALUES ('p5-user', $1)", [
+    oldCopies[1],
+  ]);
+  // A page the source no longer lists, also stored twice.
+  const gone = 'https://example.test/finished-event';
+  await repo.importRecords(
+    ['park-gone-2026-09-01', 'park-gone-2026-09-05'].map((id) => ({
+      id,
+      source: 'park',
+      payload: listing('park', id, { url: gone, title: 'Finished event' }),
+      hidden: false,
+      override: {},
+    })),
+  );
+  responses.park = [
+    listing('park', 'park-boo-at-the-zoo-info', { url: pageUrl, title: 'Boo at the Zoo' }),
+    listing('park', 'p5-park'),
+  ];
+  ({ outcome } = await runOnce('park'));
+  assert.equal(outcome.counts.merged, 3);
+  const rowsFor = async (url) =>
+    (await pool.query("SELECT id FROM listings WHERE payload->>'url' = $1", [url])).rows.map(
+      (row) => row.id,
+    );
+  assert.deepEqual(await rowsFor(pageUrl), ['park-boo-at-the-zoo-info']);
+  assert.equal((await rowsFor(gone)).length, 1);
+  assert.equal(
+    (await repo.detail('park-boo-at-the-zoo-info', { admin: true, principal: owner })).title,
+    'Owner Boo',
+  );
+  assert.equal(
+    (await pool.query("SELECT 1 FROM listing_grants WHERE listing_id = 'park-boo-at-the-zoo-info'"))
+      .rowCount,
+    1,
+  );
+  assert.equal(
+    (await pool.query('SELECT 1 FROM audit_records WHERE listing_id = ANY($1)', [oldCopies]))
+      .rowCount,
+    0,
+  );
+  assert.equal(
+    (await pool.query('SELECT 1 FROM source_identities WHERE listing_id = ANY($1)', [oldCopies]))
+      .rowCount,
+    0,
+  );
+  checks.push('Same-page copies merged into the stable ID and deleted; edits and grants kept');
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];

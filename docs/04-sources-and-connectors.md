@@ -30,7 +30,7 @@ in `initialize()`.
   just the listings. Parser regression
   tests run against saved pages in `scripts/fixtures/pages` (see [17](17-p5-collection.md)).
 - `parseSource(id, html, checkedAt)` — regex-based extraction per source. Each entry is normalized
-  into the listing shape, given a deterministic id, categorized heuristically (`category()`), and
+  into the listing shape, given a stable id from its page URL (`eventListingId`, never its dates), categorized heuristically (`category()`), and
   de-duplicated by URL within the source.
 - `parsePlaces(html)` — extracts year-round Forks attractions; filters out a hardcoded exclusion
   list; marks currently-closed places `hidden`.
