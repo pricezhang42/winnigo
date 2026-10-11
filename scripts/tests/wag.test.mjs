@@ -178,8 +178,11 @@ test('FlareSolverr restricts targets, sanitizes errors, rejects challenges and d
 
 test('weekly classes retain their date span and exclusions without generating occurrences', () => {
   const html = event
-    .replace('Nov 6 - Nov 8', 'Sep 20 - Nov 29*No Classes Oct 11')
-    .replace('Friday | 11am-9pm', 'Sundays 12pm-1:30pm');
+    .replace(
+      'Nov 6 - Nov 8',
+      'Sep 20 - Nov 29<div class="date-details">*No Classes Oct 11<br>Sundays</div><div class="age-range">Ages 6-8</div>',
+    )
+    .replace('Friday | 11am-9pm', '<strong>12pm-1:30pm</strong>');
   const parsed = parseWagEvent(html, { ...entry, when: "Sep 20 Nov 29 '26" }, now);
   assert.equal(parsed.item.type, 'Activity');
   assert.equal(parsed.item.start, '2026-09-20');
