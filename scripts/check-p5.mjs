@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Pool } from 'pg';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { collectWag } from '../lib/server/wag.mjs';
 import { placeholderDescription } from '../lib/connectors.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
 import { ensureSource, runCollection } from '../lib/server/collection.mjs';
@@ -377,6 +378,48 @@ try {
     0,
   );
   checks.push('Same-page copies merged into the stable ID and deleted; edits and grants kept');
+
+  // WAG's real parser flows through storage without duplicating records or losing edits.
+  const wagCalendar = (await readFile('scripts/fixtures/wag/calendar.html', 'utf8')).replace(
+    'class="btn-more"',
+    'class="unused"',
+  );
+  const wagEvent = await readFile('scripts/fixtures/wag/event.html', 'utf8');
+  const wagResult = await collectWag(
+    { id: 'wag', name: 'WAG–Qaumajuq', url: 'https://www.wag.ca/events/event-calendar/' },
+    '2026-10-11T12:00:00Z',
+    {
+      pauseMs: 0,
+      fetchPage: async (url) => ({ body: url.includes('/event/') ? wagEvent : wagCalendar }),
+    },
+  );
+  responses.wag = wagResult;
+  ({ outcome } = await runOnce('wag'));
+  assert.equal(outcome.status, 'ok');
+  assert.equal(outcome.counts.added, 1);
+  const wagId = wagResult.items[0].id;
+  await applyAction({ action: 'update', id: wagId, title: 'Owner WAG title' }, repo, owner);
+  ({ outcome } = await runOnce('wag'));
+  assert.equal(outcome.counts.unchanged, 1);
+  assert.equal(outcome.counts.added, 0);
+  assert.equal(
+    (await repo.detail(wagId, { admin: true, principal: owner })).title,
+    'Owner WAG title',
+  );
+  responses.wag = {
+    ...wagResult,
+    reviewRequired: 1,
+    failedPages: [{ url: 'https://www.wag.ca/event/conflict/', error: 'Dates conflict' }],
+  };
+  ({ outcome, row: guarded } = await runOnce('wag'));
+  assert.equal(outcome.status, 'partial');
+  assert.equal(outcome.counts.reviewRequired, 1);
+  assert.match(guarded.error, /withheld for date review/);
+  responses.wag = Error('WAG calendar layout changed');
+  ({ outcome } = await runOnce('wag'));
+  assert.equal(outcome.status, 'error');
+  assert.equal((await payload(wagId)).status, 'active');
+  checks.push('WAG parser imports idempotently; edits and records survive partial/failed runs');
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];

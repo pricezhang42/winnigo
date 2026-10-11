@@ -3,6 +3,10 @@ export type Listing = {
   facilityUrl?: string;
   /** Registration or ticket page, when the source publishes one. */
   ticketUrl?: string;
+  /** Source wording preserves admission exceptions and audience restrictions. */
+  admission?: string;
+  audience?: string;
+  availability?: 'sold-out' | 'unknown';
   collection?: string;
   activityCategories?: string[];
   seasons?: string[];
