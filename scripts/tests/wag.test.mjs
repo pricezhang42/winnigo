@@ -224,3 +224,74 @@ test('event galleries cap at three distinct photos and exclude unrelated or unsa
   assert.equal(item.image, item.images[0]);
   assert.deepEqual(parseWagEvent(event, entry, now).item.images, []);
 });
+
+test('photo downloads validate origin and bytes, and forward only WAG session cookies', async () => {
+  const { fetchWagPhoto } = await import('../../lib/server/wag-photos.mjs');
+  const url = 'https://www.wag.ca/isl/uploads/2026/10/art.jpg';
+  const session = {
+    userAgent: 'Test browser',
+    url: entry.url,
+    cookies: [
+      { domain: '.wag.ca', name: 'clearance', value: 'secret' },
+      { domain: 'other.test', name: 'foreign', value: 'excluded' },
+    ],
+  };
+  let headers;
+  const options = {
+    container: '',
+    fetchImpl: async (_, init) => {
+      headers = init.headers;
+      return new Response(new Uint8Array([255, 216, 255, 0]));
+    },
+  };
+  assert.equal((await fetchWagPhoto(url, session, options)).contentType, 'image/jpeg');
+  assert.equal(headers.Cookie, 'clearance=secret');
+  await assert.rejects(fetchWagPhoto('https://other.test/a.jpg', session, options), /Refused/);
+  await assert.rejects(
+    fetchWagPhoto(url, session, {
+      ...options,
+      fetchImpl: async () => new Response('<html>challenge</html>'),
+    }),
+    /supported image/,
+  );
+  await assert.rejects(
+    fetchWagPhoto(url, session, {
+      ...options,
+      fetchImpl: async () => new Response('', { status: 403 }),
+    }),
+    /HTTP 403/,
+  );
+});
+
+test('saved collection replaces source URLs with stored photos and withholds failed photo imports', async () => {
+  const html =
+    '<meta property="og:image" content="https://www.wag.ca/isl/uploads/2026/10/art.jpg">' + event;
+  const fetchPage = async (url) => ({
+    body: url === WAG_CALENDAR ? calendar.replace('class="btn-more"', 'class="unused"') : html,
+  });
+  fetchPage.fetchPhoto = async () => ({
+    bytes: new Uint8Array([255, 216, 255]),
+    contentType: 'image/jpeg',
+  });
+  const stored = '/api/photos/' + 'a'.repeat(64);
+  const good = await collectWag(source, now, {
+    fetchPage,
+    pauseMs: 0,
+    storePhoto: async () => stored,
+  });
+  assert.deepEqual(good.items[0].images, [stored]);
+  assert.equal(good.items[0].image, stored);
+  assert.match(good.items[0].sourceImages[0], /^https:\/\/www.wag.ca/);
+  fetchPage.fetchPhoto = async () => {
+    throw Error('Private upstream details');
+  };
+  const bad = await collectWag(source, now, {
+    fetchPage,
+    pauseMs: 0,
+    storePhoto: async () => stored,
+  });
+  assert.equal(bad.items.length, 0);
+  assert.equal(bad.allowEmpty, false);
+  assert.match(bad.failedPages[0].error, /photos unavailable/);
+  assert.doesNotMatch(JSON.stringify(bad), /Private upstream/);
+});

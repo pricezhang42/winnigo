@@ -8,6 +8,7 @@ With the existing FlareSolverr container listening on loopback port 8191, set th
 
 ```dotenv
 WINNIGO_FLARESOLVERR_URL=http://127.0.0.1:8191
+WINNIGO_WAG_PHOTO_CONTAINER=flaresolverr
 ```
 
 The value must be an HTTP(S) origin, without credentials or a path. A worker running in Docker needs a reachable service hostname on its private network; `127.0.0.1` inside a container refers to that container. FlareSolverr is not bundled into the production Compose stack.
@@ -28,7 +29,7 @@ To save results to the configured local PostgreSQL database, start `npm run work
 - Only WAG calendar and event URLs are allowed. Challenge pages, unsuccessful responses, changed markup, oversized responses, and unexpected event redirects fail validation.
 - Canonical event URLs provide stable IDs. Owner edits and hidden states survive repeated collection. Missing events are never inferred to be cancelled.
 - Printed years and date ranges are retained; the current year is never guessed. Conflicting dates are withheld for review. Events already ended in Winnipeg time are skipped. Undated pages explicitly describing multiple class options remain activities linking to the source; individual occurrences are not invented.
-- Admission restrictions, audience, ticket links and sold-out/cancelled notices are retained. Unknown or multiple prices remain unknown. Summaries exclude related events, sponsor blocks and contact widgets. Up to three distinct WAG-hosted event photos are linked in the existing gallery, with the first used as the cover. Featured artwork and event-body photos are eligible; sponsor logos, related stories and artist-profile sections are excluded. WordPress size variants count as one photo. Photo files are not copied into storage.
+- Admission restrictions, audience, ticket links and sold-out/cancelled notices are retained. Unknown or multiple prices remain unknown. Summaries exclude related events, sponsor blocks and contact widgets. Up to three distinct WAG-hosted event photos are linked in the existing gallery, with the first used as the cover. Featured artwork and event-body photos are eligible; sponsor logos, related stories and artist-profile sections are excluded. WordPress size variants count as one photo. Saved worker runs copy original photo bytes into private content-addressed storage; dry runs only list source URLs. If an event’s photos fail, that event is withheld for retry and its previous saved version is preserved.
 
 ## Observed limitation
 
@@ -37,3 +38,5 @@ The live calendar advertised three pages during the October 11, 2026 check. Requ
 The November Canada Life page also printed November 15 while describing the second Sunday of November. That conflict is withheld rather than silently resolved. Raw browser output is intentionally not a test fixture: the committed fixtures are synthetic structural examples.
 
 Two bounded local runs retrieved all 12 first-page detail pages through FlareSolverr 3.5.2. The second run produced ten listings, skipped one past event, and withheld the November date conflict. A follow-up check of the class page verified weekly scheduling and its explicit October 11 exclusion. These results verify repeat access, not complete calendar coverage or long-term reliability.
+
+For a host worker, `WINNIGO_WAG_PHOTO_CONTAINER` names the existing FlareSolverr Docker container. The worker uses `docker exec` to download images there with the page’s temporary browser cookies and User-Agent; this requires Docker CLI access and the container’s existing Python/requests installation. No service is installed or container configuration changed. In local testing, the host received HTTP 403 even with those cookies, while downloading inside the browser container returned the original image successfully. Without the setting, downloads use the worker’s own network context. Cookies remain in memory and are never saved in listings or logs. Each image is limited to 8 MiB and 20 seconds, and all photos share the overall collection budget.
