@@ -198,3 +198,29 @@ test('weekly classes retain their date span and exclusions without generating oc
     );
   assert.equal(parseWagEvent(free, entry, now).item.price, 0);
 });
+
+test('event galleries cap at three distinct photos and exclude unrelated or unsafe images', () => {
+  const base = 'https://www.wag.ca/isl/uploads/2026/10/';
+  const html = event
+    .replace(
+      '<main>',
+      `<meta property="og:image" content="${base}cover-scaled.jpg"><main><div class="event-featured-img" style="background-image: url('${base}cover-scaled-2000x1000.jpg')"></div>`,
+    )
+    .replace(
+      'Public event description.',
+      `Public event description.
+      <img src="${base}sponsor-logo.jpg"><a href="https://sponsor.test"><img src="${base}business.jpg"></a>
+      <img src="https://other.test/photo.jpg"><img src="data:image/png;base64,abc">
+      <div class="story-card"><img src="${base}unrelated.jpg"></div>
+      <a href="${base}second.jpg"><img src="${base}second-300x200.jpg"></a>
+      <img data-src="${base}third.webp" src="placeholder.gif"><img src="${base}fourth.png">`,
+    );
+  const { item } = parseWagEvent(html, entry, now);
+  assert.deepEqual(item.images, [
+    base + 'cover-scaled-2000x1000.jpg',
+    base + 'second.jpg',
+    base + 'third.webp',
+  ]);
+  assert.equal(item.image, item.images[0]);
+  assert.deepEqual(parseWagEvent(event, entry, now).item.images, []);
+});

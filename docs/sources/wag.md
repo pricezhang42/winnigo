@@ -28,7 +28,7 @@ To save results to the configured local PostgreSQL database, start `npm run work
 - Only WAG calendar and event URLs are allowed. Challenge pages, unsuccessful responses, changed markup, oversized responses, and unexpected event redirects fail validation.
 - Canonical event URLs provide stable IDs. Owner edits and hidden states survive repeated collection. Missing events are never inferred to be cancelled.
 - Printed years and date ranges are retained; the current year is never guessed. Conflicting dates are withheld for review. Events already ended in Winnipeg time are skipped. Undated pages explicitly describing multiple class options remain activities linking to the source; individual occurrences are not invented.
-- Admission restrictions, audience, ticket links and sold-out/cancelled notices are retained. Unknown or multiple prices remain unknown. Summaries exclude related events, sponsor blocks and contact widgets. Images are not collected.
+- Admission restrictions, audience, ticket links and sold-out/cancelled notices are retained. Unknown or multiple prices remain unknown. Summaries exclude related events, sponsor blocks and contact widgets. Up to three distinct WAG-hosted event photos are linked in the existing gallery, with the first used as the cover. Featured artwork and event-body photos are eligible; sponsor logos, related stories and artist-profile sections are excluded. WordPress size variants count as one photo. Photo files are not copied into storage.
 
 ## Observed limitation
 

@@ -384,7 +384,9 @@ try {
     'class="btn-more"',
     'class="unused"',
   );
-  const wagEvent = await readFile('scripts/fixtures/wag/event.html', 'utf8');
+  const wagEvent =
+    '<meta property="og:image" content="https://www.wag.ca/isl/uploads/2026/10/qa-art.jpg">' +
+    (await readFile('scripts/fixtures/wag/event.html', 'utf8'));
   const wagResult = await collectWag(
     { id: 'wag', name: 'WAG–Qaumajuq', url: 'https://www.wag.ca/events/event-calendar/' },
     '2026-10-11T12:00:00Z',
@@ -398,6 +400,10 @@ try {
   assert.equal(outcome.status, 'ok');
   assert.equal(outcome.counts.added, 1);
   const wagId = wagResult.items[0].id;
+  assert.deepEqual((await payload(wagId)).images, [
+    'https://www.wag.ca/isl/uploads/2026/10/qa-art.jpg',
+  ]);
+  assert.equal((await payload(wagId)).image, wagResult.items[0].images[0]);
   await applyAction({ action: 'update', id: wagId, title: 'Owner WAG title' }, repo, owner);
   ({ outcome } = await runOnce('wag'));
   assert.equal(outcome.counts.unchanged, 1);
