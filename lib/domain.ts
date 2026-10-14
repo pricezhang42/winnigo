@@ -42,6 +42,10 @@ export type Listing = {
   indoor: boolean;
   description: string;
   schedule: string;
+  scheduleText?: string;
+  dateUncertain?: boolean;
+  parentUrl?: string;
+  classOptions?: { url: string; title: string }[];
   status: string;
   distanceKm?: number | null;
   difficulty?: string;

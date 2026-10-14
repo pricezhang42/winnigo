@@ -412,6 +412,48 @@ try {
     (await repo.detail(wagId, { admin: true, principal: owner })).title,
     'Owner WAG title',
   );
+  // Refresh an existing landing page in place and add its separately scheduled class.
+  const parentHtml = wagEvent
+    .replace('Nov 6 - Nov 8', 'Multiple Dates/Ages Available')
+    .replace(
+      '<div class="widget"><p>SOLD OUT!</p>',
+      '<div class="widget"><h3>Choose from:</h3><a href="/event/qa-class/">Weekly class</a></div><div class="widget"><p>SOLD OUT!</p>',
+    );
+  const childHtml = wagEvent.replace(
+    'Nov 6 - Nov 8',
+    'Sep 20 - Nov 29<div> Sundays<br>*No classes Oct 11</div>',
+  );
+  const classes = await collectWag(
+    { id: 'wag', name: 'WAG–Qaumajuq', url: 'https://www.wag.ca/events/event-calendar/' },
+    '2026-10-11T12:00:00Z',
+    {
+      pauseMs: 0,
+      fetchPage: async (url) => ({
+        body: url.includes('/qa-class/')
+          ? childHtml
+          : url.includes('/event/')
+            ? parentHtml
+            : wagCalendar.replace("Nov 6 Nov 8 '26", 'Multiple Dates/Ages Available'),
+      }),
+    },
+  );
+  responses.wag = classes;
+  ({ outcome } = await runOnce('wag'));
+  assert.equal(outcome.counts.added, 1);
+  assert.equal((await payload(wagId)).classOptions.length, 1);
+  assert.equal(
+    (await repo.detail(wagId, { admin: true, principal: owner })).title,
+    'Owner WAG title',
+  );
+  const childId = classes.items.find((item) => item.parentUrl).id;
+  assert.equal((await payload(childId)).dateUncertain, true);
+  assert.match((await payload(childId)).scheduleText, /No classes Oct 11/);
+  ({ outcome } = await runOnce('wag'));
+  assert.equal(outcome.counts.added, 0);
+  assert.equal(outcome.counts.unchanged, 2);
+  checks.push(
+    'WAG class expansion updates the parent in place and persists distinct uncertain schedules',
+  );
   responses.wag = {
     ...wagResult,
     reviewRequired: 1,

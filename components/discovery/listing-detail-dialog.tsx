@@ -79,11 +79,32 @@ function ListingDetail({
       </span>
       <DialogTitle className="detail-title">{listing.title}</DialogTitle>
       <DialogDescription>{listing.description}</DialogDescription>
+      {!!listing.classOptions?.length && (
+        <section aria-label="Class options" className="rounded-lg border p-4">
+          <h3 className="font-semibold">Choose a class</h3>
+          <ul className="mt-2 grid gap-3 text-sm">
+            {listing.classOptions.map((option) => (
+              <li key={option.url}>
+                <a
+                  href={option.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline"
+                >
+                  {option.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="detail-facts">
         <p>
           <CalendarDays />
           {dateLabel(listing)}
-          {listing.time ? ' · ' + listing.time : ''}
+          {listing.time && !(listing.dateUncertain && !listing.start && listing.scheduleText)
+            ? ' · ' + listing.time
+            : ''}
         </p>
         <p>
           <MapPin />

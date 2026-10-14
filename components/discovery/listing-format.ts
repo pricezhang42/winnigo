@@ -23,9 +23,14 @@ export const usesPlaceholderImage = (item: Listing) =>
 
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
 export function dateLabel(item: Listing) {
+  if (item.classOptions?.length) return 'Multiple dates — see class options';
+  if (!item.start && item.dateUncertain && item.scheduleText)
+    return item.scheduleText.replace(/\s+/g, ' ').trim() + ' · Year unconfirmed';
   if (!item.start && item.seasons?.length) return item.seasons.join(' & ') + ' · Check access';
   if (!item.start)
-    return item.schedule === 'unscheduled' ? 'Check dates with organizer' : 'Explore year-round';
+    return item.type === 'Place' && item.schedule !== 'unscheduled'
+      ? 'Explore year-round'
+      : 'Check dates with organizer';
   const format = (day: string) =>
     new Date(day + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   return (

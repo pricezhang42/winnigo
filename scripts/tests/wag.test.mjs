@@ -295,3 +295,120 @@ test('saved collection replaces source URLs with stored photos and withholds fai
   assert.match(bad.failedPages[0].error, /photos unavailable/);
   assert.doesNotMatch(JSON.stringify(bad), /Private upstream/);
 });
+
+const classPage = event
+  .replace(
+    'Nov 6 - Nov 8',
+    'Sep 20 - Nov 29<div>*No Classes Oct 11<br>Sundays</div><div>Ages 9-11</div>',
+  )
+  .replace('Friday | 11am-9pm', '2pm-3:30pm');
+const classParent = event.replace('Nov 6 - Nov 8', 'Multiple Dates/Ages Available').replace(
+  '<div class="widget"><p>SOLD OUT!</p>',
+  `<div class="widget"><h3>Choose from:</h3>
+    <a href="/event/class-a">Class A</a><a href="/event/class-a/?ref=duplicate">Class A</a>
+    <a href="/event/class-b/">Class B</a><a href="https://other.test/event/class-c/">External</a>
+    <a href="/event/qa-art/">Self</a></div><div class="widget"><p>SOLD OUT!</p>`,
+);
+const classCalendar = calendar
+  .replace('class="btn-more"', 'class="unused"')
+  .replace("Nov 6 Nov 8 '26", 'Multiple Dates/Ages Available');
+
+test('class discovery is scoped to the parent choice widget and canonicalizes links', async () => {
+  const { parseWagClassOptions } = await import('../../lib/server/wag.mjs');
+  assert.deepEqual(
+    parseWagClassOptions(classParent, entry.url).map((o) => o.url),
+    ['https://www.wag.ca/event/class-a/', 'https://www.wag.ca/event/class-b/'],
+  );
+  assert.deepEqual(parseWagClassOptions(event, entry.url), []);
+});
+
+test('linked weekly classes retain unknown-year schedules without inventing dates', () => {
+  const child = { ...entry, when: 'Class A', parentUrl: entry.url };
+  const { item } = parseWagEvent(classPage, child, now);
+  assert.equal(item.start, undefined);
+  assert.equal(item.end, undefined);
+  assert.equal(item.dateUncertain, true);
+  assert.equal(item.schedule, 'unscheduled');
+  assert.match(item.scheduleText, /No classes Oct 11/);
+  assert.match(item.scheduleText, /Sundays/);
+  assert.match(item.scheduleText, /2pm-3:30pm/);
+  assert.match(item.scheduleText, /Ages 9-11/);
+  assert.match(item.description, /Year unconfirmed/);
+  assert.ok(parseWagEvent(classPage, { ...child, parentUrl: undefined }, now).review);
+  assert.ok(parseWagEvent(classPage.replace('Sep 20 - Nov 29', 'Feb 30'), child, now).review);
+  const dated = parseWagEvent(classPage, { ...child, when: "Sep 20 Nov 29 '26" }, now).item;
+  assert.equal(dated.start, '2026-09-20');
+  assert.equal(dated.schedule, 'series');
+  const misleading =
+    '<script type="application/ld+json">{"@type":"WebPage","datePublished":"2026-07-24"}</script>' +
+    classPage;
+  assert.equal(
+    parseWagEvent(
+      misleading,
+      { ...child, url: 'https://www.wag.ca/event/class-f26/' },
+      '2027-01-01',
+    ).item.start,
+    undefined,
+  );
+});
+
+test('collection follows class choices once, bounds child requests and preserves partial successes', async () => {
+  const calls = [];
+  const fetchPage = async (url) => {
+    calls.push(url);
+    return {
+      body: url === WAG_CALENDAR ? classCalendar : url === entry.url ? classParent : classPage,
+    };
+  };
+  const result = await collectWag(source, now, { fetchPage, pauseMs: 0 });
+  assert.equal(result.items.length, 3);
+  assert.equal(result.discovered, 3);
+  assert.equal(result.eventPagesRead, 3);
+  assert.equal(result.failedPages.length, 0);
+  assert.equal(new Set(calls).size, calls.length);
+  assert.equal(result.items[0].classOptions.length, 2);
+  assert.equal(result.items[1].parentUrl, entry.url);
+  assert.equal(result.items[2].dateUncertain, true);
+  const repeat = await collectWag(source, now, { fetchPage, pauseMs: 0 });
+  assert.deepEqual(
+    repeat.items.map((i) => i.id),
+    result.items.map((i) => i.id),
+  );
+  const limited = await collectWag(source, now, { fetchPage, pauseMs: 0, maxEvents: 2 });
+  assert.equal(limited.eventPagesRead, 2);
+  assert.match(limited.failedPages[0].error, /limit/);
+  const partial = await collectWag(source, now, {
+    pauseMs: 0,
+    fetchPage: async (url) => {
+      if (url.endsWith('/class-b/')) throw Error('Unavailable');
+      return fetchPage(url);
+    },
+  });
+  assert.equal(partial.items.length, 2);
+  assert.equal(partial.eventPageFailures, 1);
+  assert.equal(partial.allowEmpty, false);
+});
+
+test('a child already listed before its parent retains calendar dates and is fetched once', async () => {
+  const card = `<a class="event-card" href="/event/class-a/"><h3>Class A</h3><div class="event-date">Sep 20 Nov 29 '26</div></a>`;
+  const calls = [];
+  const result = await collectWag(source, now, {
+    pauseMs: 0,
+    fetchPage: async (url) => {
+      calls.push(url);
+      return {
+        body:
+          url === WAG_CALENDAR
+            ? classCalendar.replace('<div id="returned-posts">', '<div id="returned-posts">' + card)
+            : url === entry.url
+              ? classParent
+              : classPage,
+      };
+    },
+  });
+  assert.equal(result.items.length, 3);
+  const child = result.items.find((i) => i.url.endsWith('/class-a/'));
+  assert.equal(child.parentUrl, entry.url);
+  assert.equal(child.start, '2026-09-20');
+  assert.equal(calls.filter((url) => url === child.url).length, 1);
+});
