@@ -44,6 +44,7 @@ export type Listing = {
   schedule: string;
   scheduleText?: string;
   dateUncertain?: boolean;
+  yearAssumed?: boolean;
   parentUrl?: string;
   classOptions?: { url: string; title: string }[];
   status: string;

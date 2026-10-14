@@ -30,3 +30,16 @@ test('undated activities never imply year-round availability; class schedules pr
     /Select dates$/,
   );
 });
+
+test('dated classes display a concise range without raw schedule details', () => {
+  const label = dateLabel({
+    start: '2026-09-20',
+    end: '2026-11-29',
+    schedule: 'series',
+    yearAssumed: true,
+    scheduleText: 'No classes Oct 11 Sundays Ages 9-11',
+  });
+  assert.match(label, /Sep 20/);
+  assert.match(label, /Nov 29/);
+  assert.doesNotMatch(label, /No classes|Sundays|Ages|unconfirmed/i);
+});

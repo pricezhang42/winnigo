@@ -412,7 +412,7 @@ try {
     (await repo.detail(wagId, { admin: true, principal: owner })).title,
     'Owner WAG title',
   );
-  // Refresh an existing landing page in place and add its separately scheduled class.
+  // Retire an existing landing page from discovery and keep its editable history.
   const parentHtml = wagEvent
     .replace('Nov 6 - Nov 8', 'Multiple Dates/Ages Available')
     .replace(
@@ -440,19 +440,24 @@ try {
   responses.wag = classes;
   ({ outcome } = await runOnce('wag'));
   assert.equal(outcome.counts.added, 1);
-  assert.equal((await payload(wagId)).classOptions.length, 1);
+  assert.equal(
+    (await pool.query('SELECT hidden FROM listings WHERE id = $1', [wagId])).rows[0].hidden,
+    true,
+  );
+  assert.equal(await repo.detail(wagId, { principal: owner }), null);
   assert.equal(
     (await repo.detail(wagId, { admin: true, principal: owner })).title,
     'Owner WAG title',
   );
   const childId = classes.items.find((item) => item.parentUrl).id;
-  assert.equal((await payload(childId)).dateUncertain, true);
+  assert.equal((await payload(childId)).start, '2026-09-20');
+  assert.equal((await payload(childId)).yearAssumed, true);
   assert.match((await payload(childId)).scheduleText, /No classes Oct 11/);
   ({ outcome } = await runOnce('wag'));
   assert.equal(outcome.counts.added, 0);
-  assert.equal(outcome.counts.unchanged, 2);
+  assert.equal(outcome.counts.unchanged, 1);
   checks.push(
-    'WAG class expansion updates the parent in place and persists distinct uncertain schedules',
+    'WAG class expansion hides the parent, preserves edits, and persists default-year dates',
   );
   responses.wag = {
     ...wagResult,
