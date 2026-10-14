@@ -43,10 +43,8 @@ export type Listing = {
   description: string;
   schedule: string;
   scheduleText?: string;
-  dateUncertain?: boolean;
   yearAssumed?: boolean;
   parentUrl?: string;
-  classOptions?: { url: string; title: string }[];
   status: string;
   distanceKm?: number | null;
   difficulty?: string;
