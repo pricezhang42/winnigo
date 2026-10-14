@@ -3,6 +3,10 @@ export type Listing = {
   facilityUrl?: string;
   /** Registration or ticket page, when the source publishes one. */
   ticketUrl?: string;
+  /** Source wording preserves admission exceptions and audience restrictions. */
+  admission?: string;
+  audience?: string;
+  availability?: 'sold-out' | 'unknown';
   collection?: string;
   activityCategories?: string[];
   seasons?: string[];
@@ -38,6 +42,9 @@ export type Listing = {
   indoor: boolean;
   description: string;
   schedule: string;
+  scheduleText?: string;
+  yearAssumed?: boolean;
+  parentUrl?: string;
   status: string;
   distanceKm?: number | null;
   difficulty?: string;

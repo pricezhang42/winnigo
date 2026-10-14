@@ -35,7 +35,8 @@
     "check:p3": "node scripts/check-p3.mjs",
     "check:p5": "node scripts/check-p5.mjs",
     "accounts:manage": "node scripts/manage-accounts.mjs",
-    "accounts:cleanup": "node scripts/cleanup-accounts.mjs"
+    "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
+    "collect:wag": "node scripts/collect-wag.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1137.0",
@@ -43,6 +44,7 @@
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",
     "better-auth": "1.7.6",
+    "cheerio": "1.1.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",

@@ -18,8 +18,15 @@ test('P5 retries network trouble but not source changes', () => {
 });
 
 test('P5 schedules cover exactly the HTTP sources and never Facebook', () => {
-  assert.deepEqual(Object.keys(SCHEDULES).sort(), localSources.map((s) => s.id).sort());
+  assert.deepEqual(
+    Object.keys(SCHEDULES).sort(),
+    localSources
+      .filter((s) => !s.manualOnly)
+      .map((s) => s.id)
+      .sort(),
+  );
   assert.equal('facebook' in SCHEDULES, false);
+  assert.equal('wag' in SCHEDULES, false);
   for (const cron of Object.values(SCHEDULES)) assert.match(cron, /^0 [\d,]+ \* \* \*$/);
 });
 

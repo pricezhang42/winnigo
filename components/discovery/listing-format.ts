@@ -25,7 +25,9 @@ export const usesPlaceholderImage = (item: Listing) =>
 export function dateLabel(item: Listing) {
   if (!item.start && item.seasons?.length) return item.seasons.join(' & ') + ' · Check access';
   if (!item.start)
-    return item.schedule === 'unscheduled' ? 'Check dates with organizer' : 'Explore year-round';
+    return item.type === 'Place' && item.schedule !== 'unscheduled'
+      ? 'Explore year-round'
+      : 'Check dates with organizer';
   const format = (day: string) =>
     new Date(day + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   return (

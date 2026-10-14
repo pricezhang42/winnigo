@@ -171,3 +171,10 @@ the snapshot script skips it).
 - Notifications for failing sources (no email channel configured yet); failures show in the admin
   run history and source cards.
 - New sources: candidates need the owner's choice and a terms/robots check before adding.
+
+### Manual WAG collection
+
+WAG–Qaumajuq uses a separately configured FlareSolverr service. It is deliberately excluded from
+scheduled jobs and Refresh all. See [WAG setup and limitations](sources/wag.md) for the dry-run
+command, manual owner refresh, bounded requests, and date-review behavior. Source terms review
+is deferred at the owner's explicit request for issue #16.
