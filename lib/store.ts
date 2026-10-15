@@ -12,7 +12,11 @@ export async function getCollection(admin = false) {
     .map((r) => ({ ...r.payload, ...r.override, status: r.hidden ? 'hidden' : r.payload.status }))
     .map((i) => ({ ...i, collection: collectionLabel(i), mapLocation: resolveMapLocation(i) }))
     .filter(
-      (i) => admin || (!['hidden', 'cancelled'].includes(i.status) && (!i.end || i.end >= today)),
+      (i) =>
+        admin ||
+        (!['hidden', 'cancelled'].includes(i.status) &&
+          (!i.end || i.end >= today) &&
+          (!i.endMonth || i.endMonth >= today.slice(0, 7))),
     );
   const sorted: Listing[] = (admin ? items : dedupe(items)).sort(
     (a: Listing, b: Listing) =>

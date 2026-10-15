@@ -32,3 +32,12 @@ test('dated classes display a concise range without raw schedule details', () =>
   assert.match(label, /Nov 29/);
   assert.doesNotMatch(label, /No classes|Sundays|Ages|unconfirmed/i);
 });
+
+test('closing-month dates show an overall exhibition run without an invented day', () => {
+  assert.equal(
+    dateLabel({ start: '2026-05-01', endMonth: '2027-04', schedule: 'series' }),
+    'May 1, 2026 – Apr 2027',
+  );
+  assert.equal(dateLabel({ endMonth: '2027-04', schedule: 'series' }), 'Until Apr 2027');
+  assert.equal(dateLabel({ schedule: 'series' }), 'Recurring program · Check dates');
+});

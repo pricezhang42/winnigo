@@ -31,6 +31,12 @@ export type Listing = {
   neighbourhood: string;
   start?: string;
   end?: string;
+  /** A source-confirmed closing month when no closing day is published. */
+  endMonth?: string;
+  runDates?: { start?: string; end?: string; endMonth?: string };
+  observedFrom?: string;
+  observedThrough?: string;
+  occurrenceSamples?: { url: string; start: string; end: string; cancelled: boolean }[];
   time: string;
   image: string;
   url: string;

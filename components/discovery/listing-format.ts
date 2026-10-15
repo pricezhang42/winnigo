@@ -19,17 +19,39 @@ export const isOuting = (item: Listing) =>
  * placeholder rather than a stock photo that could be mistaken for the place.
  */
 export const usesPlaceholderImage = (item: Listing) =>
-  ['manual', 'browser', 'official', 'municipal'].includes(item.provenance || '') && !item.image;
+  (item.source === 'manitoba-museum' ||
+    ['manual', 'browser', 'official', 'municipal'].includes(item.provenance || '')) &&
+  !item.image;
 
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
 export function dateLabel(item: Listing) {
+  if (item.endMonth && !item.end) {
+    const end = new Date(item.endMonth + '-01T12:00:00').toLocaleDateString('en-CA', {
+      month: 'short',
+      year: 'numeric',
+    });
+    const start = item.start
+      ? new Date(item.start + 'T12:00:00').toLocaleDateString('en-CA', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : '';
+    return (start ? start + ' – ' : 'Until ') + end;
+  }
+  if (!item.start && item.schedule === 'series') return 'Recurring program · Check dates';
   if (!item.start && item.seasons?.length) return item.seasons.join(' & ') + ' · Check access';
   if (!item.start)
     return item.type === 'Place' && item.schedule !== 'unscheduled'
       ? 'Explore year-round'
       : 'Check dates with organizer';
+  const crossYear = !!item.end && item.start.slice(0, 4) !== item.end.slice(0, 4);
   const format = (day: string) =>
-    new Date(day + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    new Date(day + 'T12:00:00').toLocaleDateString('en-CA', {
+      month: 'short',
+      day: 'numeric',
+      ...(crossYear ? { year: 'numeric' } : {}),
+    });
   return (
     format(item.start) +
     (item.end && item.end !== item.start ? ' – ' + format(item.end) : '') +

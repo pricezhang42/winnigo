@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { collectWag } from '../lib/server/wag.mjs';
+import { collectMuseum } from '../lib/server/museum.mjs';
 import { placeholderDescription } from '../lib/connectors.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
 import { ensureSource, runCollection } from '../lib/server/collection.mjs';
@@ -473,6 +474,83 @@ try {
   assert.equal(outcome.status, 'error');
   assert.equal((await payload(wagId)).status, 'active');
   checks.push('WAG parser imports idempotently; edits and records survive partial/failed runs');
+
+  // Museum series keeps month precision, history and private-photo-ready source metadata.
+  const museumDetail = await readFile('scripts/fixtures/museum/exhibition.html', 'utf8');
+  const museumEntry = {
+    '@type': 'Event',
+    name: 'Paper exhibition',
+    url: 'https://manitobamuseum.ca/event/paper/2026-10-15/',
+    startDate: '2026-10-15T10:00:00-05:00',
+    endDate: '2026-10-15T16:00:00-05:00',
+  };
+  const museumMonth =
+    '<div data-view="month"></div><script type="application/ld+json">' +
+    JSON.stringify([museumEntry]) +
+    '</script>';
+  const museumResult = await collectMuseum(
+    { id: 'manitoba-museum', name: 'Manitoba Museum', url: 'https://manitobamuseum.ca/whats-on/' },
+    '2026-10-14T12:00:00Z',
+    {
+      pauseMs: 0,
+      fetchImpl: async (url) => new Response(url.includes('/month/') ? museumMonth : museumDetail),
+    },
+  );
+  responses['manitoba-museum'] = museumResult;
+  ({ outcome } = await runOnce('manitoba-museum'));
+  assert.equal(outcome.counts.added, 1);
+  assert.equal(outcome.counts.occurrences, 1);
+  const museumId = museumResult.items[0].id;
+  assert.equal((await payload(museumId)).endMonth, '2027-04');
+  assert.equal((await payload(museumId)).end, undefined);
+  const museumOccurrence = (
+    await pool.query('SELECT details FROM occurrences WHERE listing_id=$1', [museumId])
+  ).rows[0].details;
+  assert.equal(museumOccurrence.end, undefined);
+  assert.equal(museumOccurrence.endMonth, '2027-04');
+  assert.equal(
+    (await repo.knownSourceListings('manitoba-museum')).get(museumId).runDates.endMonth,
+    '2027-04',
+  );
+  await applyAction(
+    { action: 'update', id: museumId, title: 'Owner Museum title', hidden: true },
+    repo,
+    owner,
+  );
+  ({ outcome } = await runOnce('manitoba-museum'));
+  assert.equal(outcome.counts.added, 0);
+  const editedMuseum = await repo.detail(museumId, { admin: true, principal: owner });
+  assert.equal(editedMuseum.title, 'Owner Museum title');
+  assert.equal(editedMuseum.status, 'hidden');
+  assert.equal(await repo.detail(museumId, { principal: owner }), null);
+  // Month-only expiry compares month precision without converting it to an invented day.
+  await repo.applySourceCollection(
+    'manitoba-museum',
+    [
+      {
+        ...museumResult.items[0],
+        id: 'museum-expired',
+        url: 'https://manitobamuseum.ca/event/expired/',
+        endMonth: '2020-04',
+        start: '2020-01-01',
+      },
+    ],
+    { checkedAt: new Date().toISOString() },
+  );
+  assert.equal(await repo.detail('museum-expired', { principal: owner }), null);
+  assert.ok(await repo.detail('museum-expired', { admin: true, principal: owner }));
+  responses['manitoba-museum'] = {
+    ...museumResult,
+    failedPages: [
+      { url: 'https://manitobamuseum.ca/whats-on/month/2026-11/', error: 'Unavailable' },
+    ],
+  };
+  ({ outcome } = await runOnce('manitoba-museum'));
+  assert.equal(outcome.status, 'partial');
+  assert.equal((await payload(museumId)).endMonth, '2027-04');
+  checks.push(
+    'Museum groups persist, retain owner edits/hidden state, and expire at month precision',
+  );
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];
