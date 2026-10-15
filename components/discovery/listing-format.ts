@@ -23,59 +23,8 @@ export const usesPlaceholderImage = (item: Listing) =>
     ['manual', 'browser', 'official', 'municipal'].includes(item.provenance || '')) &&
   !item.image;
 
-/** Latest published Museum program occurrence; samples never become overall run bounds. */
-export function latestProgramOccurrence(item: Listing) {
-  if (
-    item.source !== 'manitoba-museum' ||
-    item.schedule !== 'series' ||
-    item.start ||
-    item.end ||
-    item.endMonth
-  )
-    return undefined;
-  return item.occurrenceSamples
-    ?.filter(
-      (sample) =>
-        !sample.cancelled &&
-        Number.isFinite(Date.parse(sample.start)) &&
-        Number.isFinite(Date.parse(sample.end)),
-    )
-    .reduce<NonNullable<Listing['occurrenceSamples']>[number] | undefined>(
-      (latest, sample) =>
-        !latest || Date.parse(sample.start) > Date.parse(latest.start) ? sample : latest,
-      undefined,
-    );
-}
-
-/** Occurrence times are shown in Winnipeg time, respecting each timestamp's DST offset. */
-export function timeLabel(item: Listing) {
-  const occurrence = latestProgramOccurrence(item);
-  if (!occurrence) return item.time || '';
-  if (!occurrence.start.includes('T') || !occurrence.end.includes('T')) return '';
-  const format = (timestamp: string) =>
-    new Date(timestamp).toLocaleTimeString('en-CA', {
-      timeZone: 'America/Winnipeg',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  const start = format(occurrence.start);
-  const end = format(occurrence.end);
-  return start === end ? start : start + ' – ' + end;
-}
-
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
 export function dateLabel(item: Listing) {
-  const occurrence = latestProgramOccurrence(item);
-  if (occurrence) {
-    const format = (timestamp: string) =>
-      new Date(timestamp.includes('T') ? timestamp : timestamp + 'T12:00:00Z').toLocaleDateString(
-        'en-CA',
-        { timeZone: 'America/Winnipeg', month: 'short', day: 'numeric', year: 'numeric' },
-      );
-    const start = format(occurrence.start);
-    const end = format(occurrence.end);
-    return start + (start !== end ? ' – ' + end : '') + ' · Recurring';
-  }
   if (item.endMonth && !item.end) {
     const end = new Date(item.endMonth + '-01T12:00:00').toLocaleDateString('en-CA', {
       month: 'short',
@@ -106,7 +55,7 @@ export function dateLabel(item: Listing) {
   return (
     format(item.start) +
     (item.end && item.end !== item.start ? ' – ' + format(item.end) : '') +
-    (item.schedule === 'series' ? ' · Select dates' : '')
+    (item.recurring ? ' · Recurring' : item.schedule === 'series' ? ' · Select dates' : '')
   );
 }
 

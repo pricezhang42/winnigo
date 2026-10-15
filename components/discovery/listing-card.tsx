@@ -9,8 +9,6 @@ import {
   cardPriceLabel,
   dateLabel,
   isCommunityPost,
-  latestProgramOccurrence,
-  timeLabel,
   usesPlaceholderImage,
 } from './listing-format';
 
@@ -85,8 +83,9 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
           <MapPin size={14} />
           {item.venue}
         </p>
-        {(item.source === 'winnipeg-free-swim' || latestProgramOccurrence(item)) &&
-          timeLabel(item) && <p className="card-date">{timeLabel(item)}</p>}
+        {(item.source === 'winnipeg-free-swim' || item.recurring) && item.time && (
+          <p className="card-date">{item.time}</p>
+        )}
         {isCommunityPost(item) && <p className="card-region">{item.neighbourhood}</p>}
         <div className="card-bottom">
           <span>Via {item.sourceName}</span>

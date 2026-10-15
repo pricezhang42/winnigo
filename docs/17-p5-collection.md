@@ -181,4 +181,4 @@ is deferred at the owner's explicit request for issue #16.
 
 ### Manual Manitoba Museum collection
 
-The Museum collector reads month-calendar JSON-LD and groups occurrences into one exhibition/series listing. It is worker-only/manual-only and does not use FlareSolverr. See [Museum setup and date precision](sources/museum.md) for dry runs, queued imports, photo limits and partial-run handling.
+The Museum collector reads month-calendar JSON-LD, saves recurring program sessions as separate single events marked Recurring, and retains verified exhibition runs as one listing. Its window covers the full current and following Winnipeg months. It is worker-only/manual-only and does not use FlareSolverr. See [Museum setup and date precision](sources/museum.md) for dry runs, queued imports, photo limits and partial-run handling.

@@ -140,9 +140,10 @@ test('unknown series bounds remain unknown; prior verified run survives narrower
     pauseMs: 0,
     fetchImpl: transport([a], [], { [a.url]: detail }),
   });
-  assert.equal(unknown.items[0].start, undefined);
-  assert.equal(unknown.items[0].end, undefined);
-  assert.equal(unknown.items[0].observedFrom, '2026-10-14');
+  assert.equal(unknown.items[0].start, '2026-10-14');
+  assert.equal(unknown.items[0].end, '2026-10-14');
+  assert.equal(unknown.items[0].recurring, true);
+  assert.equal(unknown.items[0].runDates, undefined);
   const exact = exhibition.replace('until April 2027', 'until April 15, 2027');
   const updated = await collectMuseum(source, now, {
     pauseMs: 0,
@@ -323,4 +324,132 @@ test('explicit one-night events use calendar dates without crawling a booking re
   assert.equal(result.items[0].end, '2026-11-21');
   assert.equal(result.items[0].schedule, 'event');
   assert.equal(result.eventPagesRead, 0);
+});
+
+test('recurring programs become distinct sessions for both full months, with DST and cancellations', async () => {
+  const early = event('program/2026-10-02', '2026-10-02');
+  const first = event('program/2026-10-15', '2026-10-15');
+  const second = event('program/2026-11-06', '2026-11-06', '10:00:00', {
+    eventStatus: 'https://schema.org/EventCancelled',
+  });
+  const after = event('program/2026-12-01', '2026-12-01');
+  const before = event('program/2026-09-30', '2026-09-30');
+  let requests = 0;
+  const fetchImpl = async (url) => {
+    requests++;
+    return new Response(
+      url.includes('/month/2026-10/')
+        ? month([before, early, first, second])
+        : url.includes('/month/2026-11/')
+          ? month([second, after])
+          : detail,
+    );
+  };
+  const result = await collectMuseum(source, now, { pauseMs: 0, fetchImpl });
+  assert.equal(result.items.length, 3);
+  assert.equal(requests, 3); // one detail request for the source program
+  assert.equal(result.occurrencesFound, 3);
+  assert.equal(result.observedFrom, '2026-10-01');
+  assert.equal(result.observedThrough, '2026-11-30');
+  assert.equal(new Set(result.items.map((e) => e.id)).size, 3);
+  assert.equal(new Set(result.items.map(listingDedupeKey)).size, 3);
+  assert.equal(new Set(result.items.map((e) => e.seriesId)).size, 1);
+  assert.deepEqual(
+    result.items.map((e) => e.start),
+    ['2026-10-02', '2026-10-15', '2026-11-06'],
+  );
+  for (const item of result.items) {
+    assert.equal(item.type, 'Event');
+    assert.equal(item.schedule, 'event');
+    assert.equal(item.recurring, true);
+    assert.equal(invalidReason(item), null);
+    assert.equal(item.end, item.start);
+    assert.match(item.time, /10:00/);
+    assert.equal(item.occurrenceSamples.length, 1);
+  }
+  assert.match(result.items[1].startAt, /-05:00$/);
+  assert.match(result.items[2].startAt, /-06:00$/);
+  assert.equal(result.items[2].status, 'cancelled');
+  const repeat = await collectMuseum(source, '2026-11-15T12:00:00Z', { pauseMs: 0, fetchImpl });
+  assert.equal(repeat.items.find((e) => e.start === '2026-11-06').id, result.items[2].id);
+});
+
+test('shared source URL supports multiple same-day sessions and equivalent timestamp deduplication', async () => {
+  const morning = event('program', '2026-10-15');
+  const equivalent = { ...morning, startDate: '2026-10-15T15:00:00Z' };
+  const afternoon = event('program', '2026-10-15', '13:00:00');
+  const result = await collectMuseum(source, now, {
+    pauseMs: 0,
+    fetchImpl: transport([morning, equivalent, afternoon], [], { [morning.url]: detail }),
+  });
+  assert.equal(result.items.length, 2);
+  assert.notEqual(result.items[0].id, result.items[1].id);
+  assert.equal(result.items[0].url, result.items[1].url);
+});
+
+test('program summary retires only after its replacement sessions and photos succeed', async () => {
+  const e = { ...a, image: 'https://manitobamuseum.ca/wp-content/uploads/art.jpg' };
+  const previous = {
+    id: 'manitoba-museum-event-paper',
+    title: a.name,
+    url: a.url,
+    schedule: 'series',
+  };
+  const knownListings = new Map([[previous.id, previous]]);
+  const success = await collectMuseum(source, now, {
+    pauseMs: 0,
+    knownListings,
+    fetchImpl: transport([a], [], { [a.url]: detail }),
+  });
+  assert.deepEqual(success.supersededIds, [previous.id]);
+  const failure = await collectMuseum(source, now, {
+    pauseMs: 0,
+    knownListings,
+    storePhoto: async () => {
+      throw Error('broken');
+    },
+    fetchImpl: async (url) =>
+      url.includes('/uploads/')
+        ? new Response(new Uint8Array([255, 216, 255, 0]))
+        : transport([e], [], { [e.url]: detail })(url),
+  });
+  assert.equal(failure.items.length, 0);
+  assert.deepEqual(failure.supersededIds, []);
+  assert.equal(failure.failedPages.length, 1);
+});
+
+test('full-month window crosses December into January without including adjacent-grid dates', async () => {
+  const entries = ['2026-11-30', '2026-12-01', '2027-01-31', '2027-02-01'].map((day) =>
+    event('program/' + day, day),
+  );
+  const result = await collectMuseum(source, '2026-12-31T15:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (url) => new Response(url.includes('/month/') ? month(entries) : detail),
+  });
+  assert.equal(result.observedFrom, '2026-12-01');
+  assert.equal(result.observedThrough, '2027-01-31');
+  assert.deepEqual(
+    result.items.map((e) => e.start),
+    ['2026-12-01', '2027-01-31'],
+  );
+  assert.equal(invalidReason({ ...result.items[0], startAt: 'bad' }), 'occurrence timestamps');
+  assert.equal(invalidReason({ ...result.items[0], seriesId: '' }), 'recurring identity');
+});
+
+test('detail cancellation applies to one session unless the whole program is explicitly cancelled', async () => {
+  const second = event('paper/2026-10-22', '2026-10-22');
+  for (const [message, expected] of [
+    ['This event has been cancelled.', ['cancelled', 'active']],
+    ['All sessions have been cancelled.', ['cancelled', 'cancelled']],
+  ]) {
+    const body = detail.replace('Join a synthetic evening program for families.', message);
+    const result = await collectMuseum(source, now, {
+      pauseMs: 0,
+      fetchImpl: transport([a, second], [], { [a.url]: body }),
+    });
+    assert.deepEqual(
+      result.items.map((e) => e.status),
+      expected,
+    );
+  }
 });

@@ -20,8 +20,6 @@ import {
   directionsUrl,
   isCommunityPost,
   isOuting,
-  latestProgramOccurrence,
-  timeLabel,
   usesPlaceholderImage,
 } from './listing-format';
 
@@ -85,7 +83,7 @@ function ListingDetail({
         <p>
           <CalendarDays />
           {dateLabel(listing)}
-          {timeLabel(listing) ? ' · ' + timeLabel(listing) : ''}
+          {listing.time ? ' · ' + listing.time : ''}
         </p>
         <p>
           <MapPin />
@@ -97,10 +95,10 @@ function ListingDetail({
           {detailPriceLabel(listing.price)}
         </p>
       </div>
-      {listing.schedule === 'series' && (
+      {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
-          {latestProgramOccurrence(listing)
-            ? 'Showing the latest published occurrence collected. This program recurs; check the organizer’s schedule before you go.'
+          {listing.recurring
+            ? 'This is one occurrence of a recurring program. Check the organizer’s schedule before you go.'
             : 'This listing covers select dates. Check the organizer’s schedule before you go.'}
         </p>
       )}
