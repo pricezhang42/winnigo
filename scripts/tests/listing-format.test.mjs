@@ -6,7 +6,7 @@ const { outputText } = ts.transpileModule(
   readFileSync(new URL('../../components/discovery/listing-format.ts', import.meta.url), 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.ESNext } },
 );
-const { dateLabel } = await import(
+const { dateLabel, timeLabel, latestProgramOccurrence } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
@@ -40,4 +40,62 @@ test('closing-month dates show an overall exhibition run without an invented day
   );
   assert.equal(dateLabel({ endMonth: '2027-04', schedule: 'series' }), 'Until Apr 2027');
   assert.equal(dateLabel({ schedule: 'series' }), 'Recurring program · Check dates');
+});
+
+const program = {
+  source: 'manitoba-museum',
+  schedule: 'series',
+  occurrenceSamples: [
+    { start: '2026-11-26T19:00:00-06:00', end: '2026-11-26T20:00:00-06:00', cancelled: false },
+    { start: '2026-10-15T19:00:00-05:00', end: '2026-10-15T20:00:00-05:00', cancelled: false },
+    { start: '2026-11-27T19:00:00-06:00', end: '2026-11-27T20:00:00-06:00', cancelled: true },
+  ],
+};
+
+test('recurring Museum programs show latest published active occurrence and Winnipeg time', () => {
+  assert.equal(dateLabel(program), 'Nov 26, 2026 · Recurring');
+  assert.equal(timeLabel(program), '7:00 p.m. – 8:00 p.m.');
+  assert.equal(latestProgramOccurrence(program).start, '2026-11-26T19:00:00-06:00');
+  // UTC dates/times are converted to local time, not sliced; October uses daylight time.
+  const firstFridays = {
+    ...program,
+    occurrenceSamples: [{ start: '2026-11-06T22:00:00Z', end: '2026-11-07T03:00:00Z' }],
+  };
+  assert.equal(dateLabel(firstFridays), 'Nov 6, 2026 · Recurring');
+  assert.equal(timeLabel(firstFridays), '4:00 p.m. – 9:00 p.m.');
+  assert.equal(
+    timeLabel({ ...program, occurrenceSamples: [program.occurrenceSamples[1]] }),
+    '7:00 p.m. – 8:00 p.m.',
+  );
+  assert.equal(program.start, undefined);
+  assert.equal(program.end, undefined);
+});
+
+test('overall runs and once-only events retain their dates and times', () => {
+  const exhibition = { ...program, start: '2026-05-01', endMonth: '2027-04', time: '' };
+  assert.equal(dateLabel(exhibition), 'May 1, 2026 – Apr 2027');
+  assert.equal(timeLabel(exhibition), '');
+  assert.equal(latestProgramOccurrence(exhibition), undefined);
+  assert.equal(
+    dateLabel({ ...program, start: '2026-09-20', end: '2026-11-29' }),
+    'Sep 20 – Nov 29 · Select dates',
+  );
+  assert.equal(timeLabel({ ...program, schedule: 'event', time: '6–10pm' }), '6–10pm');
+  assert.equal(latestProgramOccurrence({ ...program, source: 'wag' }), undefined);
+});
+
+test('missing, invalid and cancelled samples have a safe fallback; date-only has no invented time', () => {
+  for (const occurrenceSamples of [
+    undefined,
+    [],
+    [{ start: 'bad', end: 'bad' }],
+    [program.occurrenceSamples[2]],
+  ]) {
+    const item = { ...program, occurrenceSamples };
+    assert.equal(dateLabel(item), 'Recurring program · Check dates');
+    assert.equal(timeLabel(item), '');
+  }
+  const dayOnly = { ...program, occurrenceSamples: [{ start: '2026-11-06', end: '2026-11-07' }] };
+  assert.equal(dateLabel(dayOnly), 'Nov 6, 2026 – Nov 7, 2026 · Recurring');
+  assert.equal(timeLabel(dayOnly), '');
 });
