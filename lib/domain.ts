@@ -42,7 +42,14 @@ export type Listing = {
   runDates?: { start?: string; end?: string; endMonth?: string };
   observedFrom?: string;
   observedThrough?: string;
-  occurrenceSamples?: { url: string; start: string; end: string; cancelled: boolean }[];
+  occurrenceSamples?: {
+    url: string;
+    start: string;
+    end: string;
+    cancelled: boolean;
+    publishedStart?: string;
+    publishedEnd?: string;
+  }[];
   time: string;
   image: string;
   url: string;

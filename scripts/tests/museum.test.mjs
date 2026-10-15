@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   collectMuseum,
+  museumTimestamp,
   parseMuseumMonth,
   parseMuseumDetail,
   parseMuseumRun,
@@ -452,4 +453,33 @@ test('detail cancellation applies to one session unless the whole program is exp
       expected,
     );
   }
+});
+
+test('cached calendar offsets use the occurrence date DST and preserve published values', async () => {
+  assert.equal(museumTimestamp('2026-11-26T19:00:00-05:00'), '2026-11-26T19:00:00-06:00');
+  assert.equal(museumTimestamp('2026-10-29T19:00:00-06:00'), '2026-10-29T19:00:00-05:00');
+  assert.equal(museumTimestamp('2026-11-26T01:00:00Z'), '2026-11-26T01:00:00Z');
+  assert.equal(museumTimestamp('2026-11-01T01:30:00-05:00'), '2026-11-01T01:30:00-05:00');
+  assert.equal(museumTimestamp('2026-11-01T01:30:00-06:00'), '2026-11-01T01:30:00-06:00');
+  assert.throws(() => museumTimestamp('2026-03-08T02:30:00-06:00'), /local time/);
+  const e = event('program/2026-11-26', '2026-11-26', '19:00:00', {
+    startDate: '2026-11-26T19:00:00-05:00',
+    endDate: '2026-11-26T20:00:00-05:00',
+  });
+  const result = await collectMuseum(source, now, {
+    pauseMs: 0,
+    fetchImpl: transport([], [e], { [e.url]: detail }),
+  });
+  const item = result.items[0];
+  assert.equal(item.startAt, '2026-11-26T19:00:00-06:00');
+  assert.match(item.time, /7:00/);
+  assert.equal(item.occurrenceSamples[0].publishedStart, e.startDate);
+  const old = { ...item, id: 'old-bad-offset', startAt: e.startDate, endAt: e.endDate };
+  const repeat = await collectMuseum(source, now, {
+    pauseMs: 0,
+    knownListings: new Map([[old.id, old]]),
+    fetchImpl: transport([], [e], { [e.url]: detail }),
+  });
+  assert.deepEqual(repeat.supersededIds, [old.id]);
+  assert.equal(repeat.items[0].id, item.id);
 });
