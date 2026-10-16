@@ -31,6 +31,25 @@ export type Listing = {
   neighbourhood: string;
   start?: string;
   end?: string;
+  /** A source-confirmed closing month when no closing day is published. */
+  endMonth?: string;
+  /** A separate session in a recurring source program. */
+  recurring?: boolean;
+  seriesId?: string;
+  /** Published occurrence timestamps, including timezone offsets (or date-only precision). */
+  startAt?: string;
+  endAt?: string;
+  runDates?: { start?: string; end?: string; endMonth?: string };
+  observedFrom?: string;
+  observedThrough?: string;
+  occurrenceSamples?: {
+    url: string;
+    start: string;
+    end: string;
+    cancelled: boolean;
+    publishedStart?: string;
+    publishedEnd?: string;
+  }[];
   time: string;
   image: string;
   url: string;

@@ -83,7 +83,9 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
           <MapPin size={14} />
           {item.venue}
         </p>
-        {item.source === 'winnipeg-free-swim' && <p className="card-date">{item.time}</p>}
+        {(item.source === 'winnipeg-free-swim' || item.recurring) && item.time && (
+          <p className="card-date">{item.time}</p>
+        )}
         {isCommunityPost(item) && <p className="card-region">{item.neighbourhood}</p>}
         <div className="card-bottom">
           <span>Via {item.sourceName}</span>

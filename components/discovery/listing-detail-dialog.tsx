@@ -95,9 +95,11 @@ function ListingDetail({
           {detailPriceLabel(listing.price)}
         </p>
       </div>
-      {listing.schedule === 'series' && (
+      {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
-          This listing covers select dates. Check the organizer’s schedule before you go.
+          {listing.recurring
+            ? 'This is one occurrence of a recurring program. Check the organizer’s schedule before you go.'
+            : 'This listing covers select dates. Check the organizer’s schedule before you go.'}
         </p>
       )}
       {isOuting(listing) && (

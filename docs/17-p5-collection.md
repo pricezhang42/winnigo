@@ -178,3 +178,7 @@ WAG–Qaumajuq uses a separately configured FlareSolverr service. It is delibera
 scheduled jobs and Refresh all. See [WAG setup and limitations](sources/wag.md) for the dry-run
 command, manual owner refresh, bounded requests, and date-review behavior. Source terms review
 is deferred at the owner's explicit request for issue #16.
+
+### Manual Manitoba Museum collection
+
+The Museum collector reads month-calendar JSON-LD, saves recurring program sessions as separate single events marked Recurring, and retains verified exhibition runs as one listing. Its window covers the full current and following Winnipeg months. It is worker-only/manual-only and does not use FlareSolverr. See [Museum setup and date precision](sources/museum.md) for dry runs, queued imports, photo limits and partial-run handling.

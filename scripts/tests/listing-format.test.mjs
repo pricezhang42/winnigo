@@ -32,3 +32,41 @@ test('dated classes display a concise range without raw schedule details', () =>
   assert.match(label, /Nov 29/);
   assert.doesNotMatch(label, /No classes|Sundays|Ages|unconfirmed/i);
 });
+
+test('closing-month dates show an overall exhibition run without an invented day', () => {
+  assert.equal(
+    dateLabel({ start: '2026-05-01', endMonth: '2027-04', schedule: 'series' }),
+    'May 1, 2026 – Apr 2027',
+  );
+  assert.equal(dateLabel({ endMonth: '2027-04', schedule: 'series' }), 'Until Apr 2027');
+  assert.equal(dateLabel({ schedule: 'series' }), 'Recurring program · Check dates');
+});
+
+test('each recurring session shows its own date, independently of source', () => {
+  for (const source of ['manitoba-museum', 'another-source']) {
+    assert.equal(
+      dateLabel({
+        source,
+        start: '2026-11-06',
+        end: '2026-11-06',
+        schedule: 'event',
+        recurring: true,
+      }),
+      'Nov 6 · Recurring',
+    );
+    assert.equal(
+      dateLabel({
+        source,
+        start: '2026-11-26',
+        end: '2026-11-26',
+        schedule: 'event',
+        recurring: true,
+      }),
+      'Nov 26 · Recurring',
+    );
+  }
+  assert.equal(
+    dateLabel({ start: '2026-11-06', end: '2026-11-07', schedule: 'event', recurring: true }),
+    'Nov 6 – Nov 7 · Recurring',
+  );
+});
