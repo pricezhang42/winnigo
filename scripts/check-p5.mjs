@@ -70,7 +70,8 @@ const runRow = async (jobId) =>
 const report = async (id) =>
   (await pool.query('SELECT report FROM sources WHERE id = $1', [id])).rows[0]?.report;
 const payload = async (id) =>
-  (await pool.query('SELECT payload FROM listings WHERE id = $1', [id])).rows[0]?.payload;
+  (await pool.query('SELECT payload FROM listing_source_records WHERE id = $1', [id])).rows[0]
+    ?.payload;
 const audits = async (action) =>
   (await pool.query('SELECT count(*)::int AS n FROM audit_records WHERE action = $1', [action]))
     .rows[0].n;
@@ -88,6 +89,7 @@ try {
     '0006_event_occurrences.sql',
     '0007_typed_occurrence_schedule.sql',
     '0008_exhibition_visiting_cards.sql',
+    '0009_typed_listing_fields.sql',
   ])
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
   boss = bossFor({ migrate: true });
@@ -357,7 +359,7 @@ try {
   ({ outcome } = await runOnce('park'));
   assert.equal(outcome.counts.merged, 3);
   const rowsFor = async (url) =>
-    (await pool.query("SELECT id FROM listings WHERE payload->>'url' = $1", [url])).rows.map(
+    (await pool.query('SELECT id FROM listings WHERE source_url = $1', [url])).rows.map(
       (row) => row.id,
     );
   assert.deepEqual(await rowsFor(pageUrl), ['park-boo-at-the-zoo-info']);

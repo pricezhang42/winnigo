@@ -93,6 +93,8 @@ docker compose --env-file .env.local --profile app stop
 | `npm run media:cleanup` | Dry-run orphan photo cleanup; add `-- --apply` to delete eligible objects |
 | `npm run check:boundary` | Basic-mode QA regression; use the QA database environment as described in P2/P3 docs |
 
+Shared listing columns and source/effective read views are documented in [Typed listings](docs/19-typed-listings.md).
+
 P3 account setup and verification are in [P3 accounts](docs/16-p3-accounts.md). P2 storage, migration, browser QA and limits are in [P2 evidence](docs/15-p2-storage.md). Historical foundation checks are in [P1 evidence](docs/14-p1-foundation.md). The fixture adapter uses atomic snapshots and a cross-process write lock; it is for single-host development, not production storage. An interrupted write can leave `.winnigo/node/write.lock`; stop all processes before removing that stale lock. Never delete a live writer's lock.
 
 ## Legacy app and collector

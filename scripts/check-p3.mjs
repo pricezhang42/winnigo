@@ -68,6 +68,7 @@ try {
     '0006_event_occurrences.sql',
     '0007_typed_occurrence_schedule.sql',
     '0008_exhibition_visiting_cards.sql',
+    '0009_typed_listing_fields.sql',
   ])
     await pool.query(await readFile('migrations/postgres/' + migration, 'utf8'));
   auth = createAccounts({ pool, env, sendMail: async (m) => mail.push(m) });
