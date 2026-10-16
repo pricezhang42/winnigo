@@ -33,7 +33,7 @@ SELECT l.document->>'title' AS title,
        o.start_date, o.end_date, o.start_at, o.end_at,
        o.time_zone, o.time_label, o.status
 FROM occurrences o
-JOIN listings l ON l.id = o.listing_id
+JOIN listing_records l ON l.id = o.listing_id
 WHERE l.document->>'title' ILIKE '%DOME%'
 ORDER BY o.start_date, o.start_at;
 ```
@@ -101,3 +101,5 @@ removed. Migration `0008_exhibition_visiting_cards.sql` converts existing exhibi
 recurring events without duplicating their details or changing occurrence IDs. Overall run dates
 remain source metadata. Only linked visiting dates produce dated discovery cards; missing dates
 are not expanded from the overall run. Ordinary place cards remain places.
+
+Shared listing columns and computed source/effective views are documented in [Typed listings](19-typed-listings.md).
