@@ -69,6 +69,7 @@ await repository.transaction((state) => {
   // Skip listings already stored, by ID or (for events stored under older IDs) by page URL.
   for (const item of items)
     if (
+      !state.aliases?.[item.id] &&
       !state.listings.some(
         (r) => r.id === item.id || (r.source === item.source && r.payload.url === item.url),
       )

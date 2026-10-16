@@ -95,6 +95,26 @@ function ListingDetail({
           {detailPriceLabel(listing.price)}
         </p>
       </div>
+      {!!listing.occurrences?.length && (
+        <details className="event-schedule">
+          <summary>Dates and times ({listing.occurrences.length})</summary>
+          <ul>
+            {listing.occurrences.map((occurrence) => (
+              <li key={occurrence.id}>
+                <a href={occurrence.url} target="_blank" rel="noreferrer">
+                  {new Date(occurrence.start + 'T12:00:00').toLocaleDateString('en-CA', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                  {occurrence.time ? ' · ' + occurrence.time : ' · Hours unconfirmed'}
+                  {occurrence.status === 'cancelled' ? ' · Cancelled' : ''}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
           {listing.recurring

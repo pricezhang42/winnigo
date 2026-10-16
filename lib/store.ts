@@ -1,4 +1,5 @@
 import 'server-only';
+import { projectEvent } from './event-schedule.mjs';
 import { communitySources } from './social.mjs';
 import officialTrails from '@/lib/data/official-trails.json';
 import { collectionLabel, resolveMapLocation } from '@/lib/trail-locations';
@@ -17,7 +18,8 @@ export async function getCollection(admin = false) {
         (!['hidden', 'cancelled'].includes(i.status) &&
           (!i.end || i.end >= today) &&
           (!i.endMonth || i.endMonth >= today.slice(0, 7))),
-    );
+    )
+    .flatMap((i) => projectEvent(i, { admin, from: admin ? undefined : today }));
   const sorted: Listing[] = (admin ? items : dedupe(items)).sort(
     (a: Listing, b: Listing) =>
       (a.start || today).localeCompare(b.start || today) || a.title.localeCompare(b.title),

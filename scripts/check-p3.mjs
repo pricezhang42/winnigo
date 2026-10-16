@@ -64,6 +64,11 @@ try {
     '0002_discovery.sql',
     '0003_accounts.sql',
     '0004_restrict_community.sql',
+    '0005_collection_runs.sql',
+    '0006_event_occurrences.sql',
+    '0007_typed_occurrence_schedule.sql',
+    '0008_exhibition_visiting_cards.sql',
+    '0009_typed_listing_fields.sql',
   ])
     await pool.query(await readFile('migrations/postgres/' + migration, 'utf8'));
   auth = createAccounts({ pool, env, sendMail: async (m) => mail.push(m) });
@@ -167,6 +172,44 @@ try {
   assert.equal((await repo.search({ principal: member })).total, 2);
   await pool.query('DELETE FROM source_grants WHERE user_id=$1', [userId]);
   assert.equal((await repo.search({ principal: { ...member, role: 'admin' } })).total, 1);
+  // A grant to one restricted session must not reveal sibling dates or coverage.
+  const shared = {
+    ...make('private-program', 'public-source').payload,
+    sourceVisibility: 'private',
+    recurring: true,
+    occurrenceMode: 'sessions',
+    occurrences: [
+      { id: 'private-program-a', start: '2099-06-01', end: '2099-06-01', time: '10am' },
+      { id: 'private-program-b', start: '2099-06-02', end: '2099-06-02', time: '11am' },
+    ],
+    scheduleCoverage: [
+      { from: '2099-06-01', to: '2099-06-30', complete: true, checkedAt: new Date().toISOString() },
+    ],
+  };
+  await repo.applySourceCollection('public-source', [shared], {
+    checkedAt: new Date().toISOString(),
+    preserveHistory: true,
+  });
+  await pool.query(
+    "INSERT INTO occurrence_grants VALUES($1,'private-program','private-program-a')",
+    [userId],
+  );
+  const granted = await repo.search({ principal: member, query: 'private-program' });
+  assert.deepEqual(
+    granted.items.map((i) => i.id),
+    ['private-program-a'],
+  );
+  assert.equal(granted.items[0].occurrences.length, 1);
+  assert.equal(granted.items[0].scheduleCoverage.length, 0);
+  assert.equal(await repo.detail('private-program-b', { principal: member }), null);
+  assert.equal(
+    (await repo.availability('private-program-a', '2099-06-02', { principal: member })).status,
+    'unknown',
+  );
+  assert.equal(
+    (await repo.search({ principal: otherPrincipal, query: 'private-program' })).total,
+    0,
+  );
   const token = await issueCredential({ source: 'facebook', label: 'QA' }, pool);
   assert.ok(
     (await serviceCredential(new Headers({ 'x-winnigo-collector-key': token.token }), pool)).id,

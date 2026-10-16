@@ -1,4 +1,5 @@
 import 'server-only';
+import { availabilityOn } from '../event-schedule.mjs';
 import { repository } from './services';
 import { getCollection } from '../store';
 import { sources, localDay, weekendRange } from '../connectors.mjs';
@@ -60,7 +61,13 @@ export async function searchCollection(filters: Filters, admin = false, principa
   const limit = Number(filters.limit || 24);
   return {
     ...data,
-    items: items.slice(offset, offset + limit),
+    items: items
+      .slice(offset, offset + limit)
+      .map((item) =>
+        filters.date
+          ? { ...item, visitAvailability: availabilityOn(item, String(filters.date)) }
+          : item,
+      ),
     total: items.length,
     nextOffset: offset + limit < items.length ? offset + limit : null,
     areas: [...new Set(data.items.map((item) => item.neighbourhood))].sort(),
@@ -69,14 +76,16 @@ export async function searchCollection(filters: Filters, admin = false, principa
 
 /** In-memory equivalent of the SQL search filters in postgres-repository.mjs. */
 function fixtureMatcher(filters: Filters, admin: boolean, today: string) {
-  const { query, collection, category, area, tab, quick, season, difficulty, distance } = filters;
+  const { query, date, collection, category, area, tab, quick, season, difficulty, distance } =
+    filters;
   const savedIds = (filters.ids as string[]) || [];
   const weekend = weekendRange(today);
   const runsBetween = (item: Listing, first: string, last: string) =>
-    item.schedule === 'event' &&
-    !!item.start &&
-    item.start <= last &&
-    (item.end || item.start) >= first;
+    item.occurrenceId
+      ? !!item.start && item.start <= last && (item.end || item.start) >= first
+      : (item.occurrences || []).some(
+          (o) => !o.hidden && o.status !== 'cancelled' && o.start <= last && o.end >= first,
+        );
 
   const checks: ((item: Listing) => boolean)[] = [
     (item) =>
@@ -99,6 +108,7 @@ function fixtureMatcher(filters: Filters, admin: boolean, today: string) {
     (item) => quick !== 'Free' || item.price === 0,
     (item) => quick !== 'Family-friendly' || !!item.family,
     (item) => quick !== 'Indoors' || !!item.indoor,
+    (item) => !date || runsBetween(item, String(date), String(date)),
     (item) => quick !== 'Today' || runsBetween(item, today, today),
     (item) => quick !== 'This weekend' || runsBetween(item, weekend.first, weekend.last),
     (item) => !season || season === 'Any' || !!item.seasons?.includes(String(season)),

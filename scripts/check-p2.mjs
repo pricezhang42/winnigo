@@ -8,7 +8,7 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serviceConfig } from './check-services.mjs';
-import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { PostgresRepository, documentFor } from '../lib/server/postgres-repository.mjs';
 import { S3Storage, contentHash } from '../lib/server/s3-storage.mjs';
 import { qaImage } from '../lib/server/qa-image.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
@@ -39,8 +39,151 @@ const dir = await mkdtemp(join(tmpdir(), 'winnigo-p2-')),
   objects = [];
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
-  for (const file of ['0001_foundation.sql', '0002_discovery.sql'])
+  const migrationFixtures = [
+    {
+      id: 'typed-full',
+      source: 'typed-fixture',
+      title: 'Source title',
+      description: null,
+      type: 'Activity',
+      category: 'Arts & culture',
+      venue: 'Synthetic Hall',
+      url: 'https://example.test/typed-full',
+      price: 25,
+      family: false,
+      indoor: true,
+      status: 'active',
+      start: '2026-05-01',
+      endMonth: '2027-04',
+      schedule: 'series',
+      uncertainty: { closing: 'month only' },
+      originalWording: 'Until April 2027',
+    },
+    {
+      id: 'typed-minimal',
+      source: 'typed-fixture',
+      title: 'Minimal source',
+      url: 'https://example.test/typed-minimal',
+    },
+  ];
+  const migrationOverride = { title: 'Owner title', description: '', price: null };
+  for (const file of [
+    '0001_foundation.sql',
+    '0002_discovery.sql',
+    '0003_accounts.sql',
+    '0004_restrict_community.sql',
+    '0005_collection_runs.sql',
+    '0006_event_occurrences.sql',
+    '0007_typed_occurrence_schedule.sql',
+    '0008_exhibition_visiting_cards.sql',
+    '0009_typed_listing_fields.sql',
+  ]) {
+    if (file === '0009_typed_listing_fields.sql') {
+      await pool.query("INSERT INTO sources(id,report) VALUES('typed-fixture','{}')");
+      for (const payload of migrationFixtures) {
+        const override = payload.id === 'typed-full' ? migrationOverride : {};
+        await pool.query(
+          'INSERT INTO listings(id,source,payload,document,visibility,dedupe_key) VALUES($1,$2,$3,$4,$5,$1)',
+          [
+            payload.id,
+            payload.source,
+            payload,
+            documentFor({ id: payload.id, payload, override, hidden: false }),
+            'public',
+          ],
+        );
+        await pool.query('INSERT INTO listing_overrides VALUES($1,$2)', [payload.id, override]);
+      }
+    }
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
+  }
+  for (const expected of migrationFixtures) {
+    const row = (
+      await pool.query(
+        'SELECT payload,document,metadata,price,end_date,closing_month FROM listing_records WHERE id=$1',
+        [expected.id],
+      )
+    ).rows[0];
+    assert.deepEqual(row.payload, expected);
+    assert.deepEqual(
+      row.document,
+      JSON.parse(
+        JSON.stringify(
+          documentFor({
+            id: expected.id,
+            payload: expected,
+            override: expected.id === 'typed-full' ? migrationOverride : {},
+            hidden: false,
+          }),
+        ),
+      ),
+    );
+    assert.equal(row.metadata.title, undefined);
+    assert.equal(row.end_date, null);
+    if (expected.id === 'typed-full') {
+      assert.equal(row.price, '25');
+      assert.equal(row.closing_month, '2027-04');
+      assert.equal(row.document.price, null);
+      assert.equal(row.document.description, '');
+    } else {
+      assert.equal('price' in row.payload, false);
+      assert.equal('description' in row.payload, false);
+    }
+  }
+  assert.equal(
+    (
+      await pool.query(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema=$1 AND table_name='listings' AND column_name IN ('payload','document')",
+        [schema],
+      )
+    ).rowCount,
+    0,
+  );
+  await pool.query(
+    'UPDATE listing_overrides SET fields=fields||\'{"title":"Live correction","price":0}\'::jsonb WHERE listing_id=\'typed-full\'',
+  );
+  assert.equal((await repo.detail('typed-full', { admin: true })).title, 'Live correction');
+  assert.equal(
+    (await repo.search({ query: 'Live correction', quick: 'Free', admin: true })).total,
+    1,
+  );
+  assert.equal(
+    (await pool.query("SELECT title FROM listings WHERE id='typed-full'")).rows[0].title,
+    'Source title',
+  );
+  await assert.rejects(
+    pool.query("UPDATE listings SET price=-1 WHERE id='typed-full'"),
+    /listing_price_valid/,
+  );
+  await assert.rejects(
+    pool.query("UPDATE listings SET closing_month='2027-13' WHERE id='typed-full'"),
+    /listing_month_valid/,
+  );
+  await assert.rejects(
+    pool.query("UPDATE listings SET end_date='2026-04-30' WHERE id='typed-full'"),
+    /listing_dates_order/,
+  );
+  const roundTrip = {
+    ...migrationFixtures[1],
+    id: 'typed-roundtrip',
+    venue: 'Synthetic Hall',
+    price: null,
+    constructor: 'source metadata',
+  };
+  await repo.importRecords([
+    { id: roundTrip.id, source: roundTrip.source, payload: roundTrip, hidden: false, override: {} },
+  ]);
+  const roundTripRow = (
+    await pool.query('SELECT payload,metadata FROM listing_source_records WHERE id=$1', [
+      roundTrip.id,
+    ])
+  ).rows[0];
+  assert.equal(roundTripRow.payload.price, null);
+  assert.equal('description' in roundTripRow.payload, false);
+  assert.equal(roundTripRow.metadata.constructor, 'source metadata');
+  await pool.query("DELETE FROM source_identities WHERE source='typed-fixture'");
+  await pool.query("DELETE FROM listings WHERE source='typed-fixture'");
+  await pool.query("DELETE FROM sources WHERE id='typed-fixture'");
   const photos = [qaImage([11, 22, 33]), qaImage([44, 55, 66])];
   for (const bytes of photos) {
     const id = contentHash(bytes);
@@ -247,7 +390,7 @@ c.commit();c.close()`,
   assert.equal((await storage.cleanup({ apply: true })).deleted, 1);
   assert.equal(await storage.get(orphanId), null);
   console.log(
-    'P2 integration passed: SQL rollback/concurrency, identity/editorial preservation, pagination/filtering, private S3 integrity/reuse, migration dry-run/restart/checksum, safe cleanup.',
+    'P2 integration passed: typed listing backfill/null precision/live overrides, SQL rollback/concurrency, identity/editorial preservation, pagination/filtering, private S3 integrity/reuse, migration dry-run/restart/checksum, safe cleanup.',
   );
 } finally {
   for (const id of objects)

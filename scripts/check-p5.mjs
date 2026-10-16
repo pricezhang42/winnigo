@@ -70,7 +70,8 @@ const runRow = async (jobId) =>
 const report = async (id) =>
   (await pool.query('SELECT report FROM sources WHERE id = $1', [id])).rows[0]?.report;
 const payload = async (id) =>
-  (await pool.query('SELECT payload FROM listings WHERE id = $1', [id])).rows[0]?.payload;
+  (await pool.query('SELECT payload FROM listing_source_records WHERE id = $1', [id])).rows[0]
+    ?.payload;
 const audits = async (action) =>
   (await pool.query('SELECT count(*)::int AS n FROM audit_records WHERE action = $1', [action]))
     .rows[0].n;
@@ -85,6 +86,10 @@ try {
     '0003_accounts.sql',
     '0004_restrict_community.sql',
     '0005_collection_runs.sql',
+    '0006_event_occurrences.sql',
+    '0007_typed_occurrence_schedule.sql',
+    '0008_exhibition_visiting_cards.sql',
+    '0009_typed_listing_fields.sql',
   ])
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
   boss = bossFor({ migrate: true });
@@ -354,7 +359,7 @@ try {
   ({ outcome } = await runOnce('park'));
   assert.equal(outcome.counts.merged, 3);
   const rowsFor = async (url) =>
-    (await pool.query("SELECT id FROM listings WHERE payload->>'url' = $1", [url])).rows.map(
+    (await pool.query('SELECT id FROM listings WHERE source_url = $1', [url])).rows.map(
       (row) => row.id,
     );
   assert.deepEqual(await rowsFor(pageUrl), ['park-boo-at-the-zoo-info']);
@@ -504,10 +509,17 @@ try {
   assert.equal((await payload(museumId)).endMonth, '2027-04');
   assert.equal((await payload(museumId)).end, undefined);
   const museumOccurrence = (
-    await pool.query('SELECT details FROM occurrences WHERE listing_id=$1', [museumId])
-  ).rows[0].details;
-  assert.equal(museumOccurrence.end, undefined);
-  assert.equal(museumOccurrence.endMonth, '2027-04');
+    await pool.query(
+      'SELECT start_date::text,end_date::text,start_at,end_at,time_zone,status,source_url,details FROM occurrences WHERE listing_id=$1',
+      [museumId],
+    )
+  ).rows[0];
+  assert.equal(museumOccurrence.end_date, '2026-10-15');
+  assert.equal(museumOccurrence.details.endMonth, undefined);
+  assert.equal(museumOccurrence.start_at.toISOString(), '2026-10-15T15:00:00.000Z');
+  assert.equal(museumOccurrence.time_zone, 'America/Winnipeg');
+  assert.equal(museumOccurrence.details.publishedStart, '2026-10-15T10:00:00-05:00');
+  assert.equal(museumOccurrence.details.startAt, undefined);
   assert.equal(
     (await repo.knownSourceListings('manitoba-museum')).get(museumId).runDates.endMonth,
     '2027-04',
@@ -595,20 +607,25 @@ try {
   assert.equal(programResult.items.length, 3);
   responses['manitoba-museum'] = programResult;
   ({ outcome } = await runOnce('manitoba-museum'));
-  assert.equal(outcome.counts.added, 3);
+  assert.equal(outcome.counts.added, 0);
+  assert.equal(outcome.counts.found, 1);
   assert.equal(outcome.counts.merged, 0);
   const oldSummary = await repo.detail(summary.id, { admin: true, principal: owner });
-  assert.equal(oldSummary.status, 'hidden');
+  assert.equal(oldSummary.status, 'active');
+  assert.equal(oldSummary.occurrences.length, 3);
   assert.equal(oldSummary.title, 'Owner summary note');
   for (const item of programResult.items) {
-    assert.ok(await payload(item.id));
+    assert.equal(await payload(item.id), undefined);
     const session = (
-      await pool.query('SELECT details FROM occurrences WHERE listing_id=$1', [item.id])
-    ).rows[0].details;
-    assert.equal(session.recurring, true);
-    assert.equal(session.seriesId, summary.id);
-    assert.equal(session.startAt, item.startAt);
-    assert.equal(session.endAt, item.endAt);
+      await pool.query(
+        'SELECT start_at,end_at,details FROM occurrences WHERE listing_id=$1 AND occurrence_id=$2',
+        [summary.id, item.id],
+      )
+    ).rows[0];
+    assert.equal(session.details.title, undefined);
+    assert.equal(session.details.description, undefined);
+    assert.equal(session.start_at.toISOString(), new Date(item.startAt).toISOString());
+    assert.equal(session.end_at.toISOString(), new Date(item.endAt).toISOString());
   }
   const sessionId = programResult.items[1].id;
   await applyAction(
@@ -632,14 +649,148 @@ try {
   };
   ({ outcome } = await runOnce('manitoba-museum'));
   assert.equal(outcome.status, 'partial');
-  assert.equal((await payload(programResult.items[2].id)).status, 'active');
   assert.equal(
     (await repo.detail(programResult.items[2].id, { admin: true, principal: owner })).status,
     'active',
   );
-  assert.equal((await payload(programResult.items[1].id)).recurring, true);
+  assert.equal(
+    (await repo.detail(programResult.items[2].id, { admin: true, principal: owner })).status,
+    'active',
+  );
+  assert.equal(
+    (await repo.detail(programResult.items[1].id, { admin: true, principal: owner })).recurring,
+    true,
+  );
   checks.push(
-    'Museum recurring sessions persist individually with timestamps; summaries retire safely and partial reads preserve edits and sessions',
+    'Museum stores shared event details with lightweight occurrences; session edits and dates survive partial reads',
+  );
+
+  // Verified visiting hours use the same persisted intervals as calendar events.
+  const hoursId = 'p5-visiting-hours';
+  const visitingSchedule = {
+    timeZone: 'America/Winnipeg',
+    sourceUrl: 'https://example.test/hours',
+    checkedAt: '2026-10-16T12:00:00Z',
+    periods: [
+      {
+        from: '2026-10-01',
+        to: '2026-11-30',
+        weekly: [{ weekdays: [0, 2, 3, 4, 5, 6], opens: '10:00', closes: '16:00' }],
+      },
+    ],
+    exceptions: [
+      { from: '2026-10-19', to: '2026-10-19', intervals: [{ opens: '12:00', closes: '17:00' }] },
+      { from: '2026-11-11', to: '2026-11-11', closed: true },
+    ],
+  };
+  await repo.applySourceCollection(
+    'attractions',
+    [
+      listing('attractions', hoursId, {
+        type: 'Place',
+        start: undefined,
+        visitingSchedule,
+      }),
+    ],
+    { checkedAt: visitingSchedule.checkedAt },
+  );
+  for (const [date, status] of [
+    ['2026-10-26', 'unavailable'],
+    ['2026-10-19', 'available'],
+    ['2026-11-11', 'unavailable'],
+    ['2026-12-01', 'unknown'],
+  ]) {
+    assert.equal((await repo.availability(hoursId, date, { principal: owner })).status, status);
+    const matches = await repo.search({ query: hoursId, date, principal: owner });
+    assert.equal(matches.total, status === 'available' ? 1 : 0);
+  }
+  const visiting = await repo.detail(hoursId, { principal: owner });
+  assert.equal(
+    visiting.occurrences.find((o) => o.start === '2026-11-03').startAt,
+    '2026-11-03T16:00:00.000Z',
+  );
+  await applyAction({ action: 'update', id: hoursId, visitingSchedule: null }, repo, owner);
+  assert.equal(
+    (await repo.availability(hoursId, '2026-10-19', { principal: owner })).status,
+    'unknown',
+  );
+  assert.ok(
+    (await repo.detail(hoursId, { principal: owner })).occurrences.some(
+      (o) => o.status === 'superseded',
+    ),
+  );
+  checks.push(
+    'Persisted visiting hours respect closures, exceptional openings, DST, unknown dates and removed rules',
+  );
+
+  // Date-only events stay date-only; constraints reject invalid persisted schedules.
+  const dateOnly = (
+    await pool.query(
+      "SELECT start_at,end_at,start_date::text FROM occurrences WHERE listing_id='p5-a'",
+    )
+  ).rows[0];
+  assert.equal(dateOnly.start_at, null);
+  assert.equal(dateOnly.end_at, null);
+  assert.equal(dateOnly.start_date, '2099-06-01');
+  await assert.rejects(
+    pool.query("UPDATE occurrences SET end_date=start_date-1 WHERE listing_id='p5-a'"),
+    /occurrence_date_order/,
+  );
+  await assert.rejects(
+    pool.query("UPDATE occurrences SET status='invalid' WHERE listing_id='p5-a'"),
+    /occurrence_status/,
+  );
+  await assert.rejects(
+    pool.query("UPDATE occurrences SET start_at=now() WHERE listing_id='p5-a'"),
+    /occurrence_timestamp_pair/,
+  );
+  await assert.rejects(
+    pool.query("UPDATE occurrences SET end_at=start_at-interval '1 minute' WHERE listing_id=$1", [
+      summary.id,
+    ]),
+    /occurrence_timestamp_order/,
+  );
+  checks.push(
+    'Typed schedule columns preserve date-only events and enforce valid dates, timestamp pairs/order and status',
+  );
+
+  const exhibition = listing('attractions', 'p5-daily-exhibition', {
+    schedule: 'series',
+    start: '2099-05-01',
+    end: undefined,
+    endMonth: '2100-04',
+    runDates: { start: '2099-05-01', endMonth: '2100-04' },
+    occurrenceSamples: [
+      { start: '2099-06-01T10:00:00-05:00', end: '2099-06-01T16:00:00-05:00' },
+      { start: '2099-06-02T10:00:00-05:00', end: '2099-06-02T16:00:00-05:00' },
+    ],
+  });
+  await repo.applySourceCollection('attractions', [exhibition], {
+    checkedAt: new Date().toISOString(),
+    preserveHistory: true,
+  });
+  const dailyCards = await repo.search({ query: 'p5-daily-exhibition', principal: owner });
+  assert.equal(dailyCards.total, 2);
+  assert.deepEqual(dailyCards.items.map((i) => i.start).sort(), ['2099-06-01', '2099-06-02']);
+  assert.ok(
+    dailyCards.items.every((i) => i.recurring && i.eventId === exhibition.id && i.start === i.end),
+  );
+  assert.equal(
+    (await repo.search({ query: 'p5-daily-exhibition', date: '2099-06-02', principal: owner }))
+      .total,
+    1,
+  );
+  assert.equal(
+    (await repo.search({ query: 'p5-daily-exhibition', date: '2099-06-03', principal: owner }))
+      .total,
+    0,
+  );
+  assert.equal(
+    (await repo.knownSourceListings('attractions')).get(exhibition.id).runDates.endMonth,
+    '2100-04',
+  );
+  checks.push(
+    'Exhibitions project separate visiting-day cards from one shared event, preserving overall run bounds',
   );
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.

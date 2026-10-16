@@ -15,6 +15,7 @@ export type MapFilters = { season: string; difficulty: string; distance: string 
 
 export type DiscoveryRequest = {
   query: string;
+  date?: string;
   tab: string;
   quick: string;
   category: string;
@@ -39,7 +40,7 @@ export function useDiscoveryResults(
   request: DiscoveryRequest,
   setNotice: (notice: string) => void,
 ) {
-  const { query, tab, quick, category, area, collection, offset, saved, today, mapFilters } =
+  const { query, date, tab, quick, category, area, collection, offset, saved, today, mapFilters } =
     request;
   const [items, setItems] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
@@ -52,6 +53,7 @@ export function useDiscoveryResults(
     setLoading(true);
     const params = new URLSearchParams({
       query,
+      ...(date ? { date } : {}),
       tab,
       quick,
       category,
@@ -101,7 +103,7 @@ export function useDiscoveryResults(
     };
     // setNotice is a state setter, which React keeps stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, tab, quick, category, area, collection, offset, saved, today, mapFilters]);
+  }, [query, date, tab, quick, category, area, collection, offset, saved, today, mapFilters]);
 
   return { items, total, areas, reports, loading };
 }
