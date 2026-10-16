@@ -1,5 +1,59 @@
 import type { MapLocation } from './trail-locations';
+export type Occurrence = {
+  id: string;
+  basis?: string;
+  start: string;
+  end: string;
+  startAt?: string;
+  endAt?: string;
+  time: string;
+  timeZone: string;
+  url: string;
+  status: string;
+  publishedStart?: string;
+  publishedEnd?: string;
+  hidden?: boolean;
+  override?: Partial<Listing>;
+};
+export type ScheduleCoverage = {
+  basis?: string;
+  from: string;
+  to: string;
+  complete: boolean;
+  checkedAt: string;
+  sourceUrl?: string;
+};
+export type VisitingSchedule = {
+  timeZone: string;
+  sourceUrl: string;
+  checkedAt: string;
+  periods: {
+    from: string;
+    to: string;
+    weekly: { weekdays: number[]; opens: string; closes: string }[];
+  }[];
+  exceptions?: {
+    from: string;
+    to: string;
+    closed?: boolean;
+    intervals?: { opens: string; closes: string }[];
+  }[];
+};
 export type Listing = {
+  eventId?: string;
+  occurrenceId?: string;
+  eventUrl?: string;
+  occurrences?: Occurrence[];
+  scheduleCoverage?: ScheduleCoverage[];
+  visitingSchedule?: VisitingSchedule;
+  visitAvailability?: {
+    status: string;
+    date: string;
+    intervals: Occurrence[];
+    hoursKnown?: boolean;
+    reason?: string;
+  };
+
   facilityUrl?: string;
   /** Registration or ticket page, when the source publishes one. */
   ticketUrl?: string;

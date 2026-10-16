@@ -16,6 +16,7 @@ export type SourceReport = {
 };
 export type RepositoryState = {
   version: number;
+  aliases?: Record<string, { eventId: string; occurrenceId?: string }>;
   listings: ListingRecord[];
   sources: SourceReport[];
 };
@@ -30,6 +31,11 @@ export interface DiscoveryRepository {
     areas: string[];
     reports: SourceReport[];
   }>;
+  availability?(
+    id: string,
+    date: string,
+    options?: { principal?: { userId: string; role: string } },
+  ): Promise<unknown>;
   detail?(
     id: string,
     options?: { admin?: boolean; principal?: { userId: string; role: string } },

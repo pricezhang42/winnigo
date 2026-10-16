@@ -81,6 +81,7 @@ const DEFAULT_FILTERS = {
 export default function Winnigo() {
   const [tab, setTab] = useState('Explore');
   const [query, setQuery] = useState(DEFAULT_FILTERS.query);
+  const [visitDate, setVisitDate] = useState('');
   const [quick, setQuick] = useState(DEFAULT_FILTERS.quick);
   const [category, setCategory] = useState(DEFAULT_FILTERS.category);
   const [area, setArea] = useState(DEFAULT_FILTERS.area);
@@ -110,6 +111,7 @@ export default function Winnigo() {
   const { items, total, areas, reports, loading } = useDiscoveryResults(
     {
       query,
+      date: visitDate || undefined,
       tab,
       quick,
       category,
@@ -144,6 +146,7 @@ export default function Winnigo() {
     setOffset(0);
     setQuery(DEFAULT_FILTERS.query);
     setQuick(DEFAULT_FILTERS.quick);
+    setVisitDate('');
     setCategory(DEFAULT_FILTERS.category);
     setArea(DEFAULT_FILTERS.area);
     setCollection(DEFAULT_FILTERS.collection);
@@ -152,6 +155,7 @@ export default function Winnigo() {
   const showFeatures =
     tab === 'Explore' &&
     !query &&
+    !visitDate &&
     quick === DEFAULT_FILTERS.quick &&
     category === DEFAULT_FILTERS.category &&
     collection === DEFAULT_FILTERS.collection;
@@ -224,6 +228,18 @@ export default function Winnigo() {
             </Button>
           </div>
           <div className="quick-filters">
+            <label className="visit-date-filter">
+              <CalendarDays size={16} /> Visit date
+              <Input
+                type="date"
+                aria-label="Visit date"
+                value={visitDate}
+                onChange={(event) => {
+                  setQuick('Anytime');
+                  update(setVisitDate, event.target.value);
+                }}
+              />
+            </label>
             {QUICK_FILTERS.map((name) => {
               const Icon = QUICK_FILTER_ICONS[name];
               return (
@@ -231,7 +247,10 @@ export default function Winnigo() {
                   key={name}
                   variant="ghost"
                   className={'chip ' + (quick === name ? 'chosen' : '')}
-                  onClick={() => update(setQuick, name)}
+                  onClick={() => {
+                    setVisitDate('');
+                    update(setQuick, name);
+                  }}
                 >
                   {Icon ? <Icon /> : null}
                   {name}

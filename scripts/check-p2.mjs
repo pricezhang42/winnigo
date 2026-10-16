@@ -39,7 +39,16 @@ const dir = await mkdtemp(join(tmpdir(), 'winnigo-p2-')),
   objects = [];
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
-  for (const file of ['0001_foundation.sql', '0002_discovery.sql'])
+  for (const file of [
+    '0001_foundation.sql',
+    '0002_discovery.sql',
+    '0003_accounts.sql',
+    '0004_restrict_community.sql',
+    '0005_collection_runs.sql',
+    '0006_event_occurrences.sql',
+    '0007_typed_occurrence_schedule.sql',
+    '0008_exhibition_visiting_cards.sql',
+  ])
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
   const photos = [qaImage([11, 22, 33]), qaImage([44, 55, 66])];
   for (const bytes of photos) {

@@ -25,6 +25,14 @@ export const usesPlaceholderImage = (item: Listing) =>
 
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
 export function dateLabel(item: Listing) {
+  if (item.visitAvailability?.status === 'available' && item.type === 'Place') {
+    const day = new Date(item.visitAvailability.date + 'T12:00:00').toLocaleDateString('en-CA', {
+      month: 'short',
+      day: 'numeric',
+    });
+    const times = [...new Set(item.visitAvailability.intervals.map((o) => o.time).filter(Boolean))];
+    return day + ' · ' + (times.join(', ') || 'Hours unconfirmed');
+  }
   if (item.endMonth && !item.end) {
     const end = new Date(item.endMonth + '-01T12:00:00').toLocaleDateString('en-CA', {
       month: 'short',
