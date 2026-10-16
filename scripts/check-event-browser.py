@@ -193,6 +193,40 @@ with tempfile.TemporaryDirectory(prefix='winnigo-event-browser-') as profile:
                     not in d.find_element(By.CSS_SELECTOR, '.result-count').text
                 )
             )
+            visit_date('')
+            search_for('Canada Life Centre')
+            wait.until(
+                lambda d: any(
+                    'Via Canada Life Centre' in c.text
+                    for c in d.find_elements(By.CSS_SELECTOR, '.listing-card')
+                )
+            )
+            clc = api('/api/listings?query=Canada%20Life%20Centre&limit=100')['body']['items']
+            clc = [e for e in clc if e['source'] == 'canada-life-centre']
+            assert len(clc) > 1 and all(
+                e['start'] <= '2026-11-30' and e['price'] is None for e in clc
+            )
+            card = next(
+                c
+                for c in driver.find_elements(By.CSS_SELECTOR, '.listing-card')
+                if 'Via Canada Life Centre' in c.text
+            )
+            assert 'a.m.' in card.text or 'p.m.' in card.text, card.text
+            assert card.find_elements(By.CSS_SELECTOR, '.social-placeholder')
+            assert (
+                'Canada Life Centre'
+                in card.find_element(By.CSS_SELECTOR, '.social-placeholder').text
+            )
+            card.find_element(By.CSS_SELECTOR, '.card-title').click()
+            wait.until(
+                lambda d: (
+                    'Canada Life Centre' in d.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+                )
+            )
+            assert (
+                'See the event page' in driver.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+            )
+            screenshot_ready(evidence / f'canada-life-centre-{parsed.port}.png')
             errors = [entry for entry in driver.get_log('browser') if entry['level'] == 'SEVERE']
             assert not errors, errors
             print(
@@ -204,6 +238,7 @@ with tempfile.TemporaryDirectory(prefix='winnigo-event-browser-') as profile:
                         'unknownOutsideCoverage': True,
                         'sharedRecurringEvent': True,
                         'exhibitionVisitingDayCards': True,
+                        'canadaLifeCentreCardsAndTimes': len(clc),
                         'photosLoaded': True,
                         'consoleErrors': 0,
                     }

@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { collectWag } from '../lib/server/wag.mjs';
+import { parseClcFeed } from '../lib/server/canada-life-centre.mjs';
 import { collectMuseum } from '../lib/server/museum.mjs';
 import { placeholderDescription } from '../lib/connectors.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
@@ -791,6 +792,76 @@ try {
   );
   checks.push(
     'Exhibitions project separate visiting-day cards from one shared event, preserving overall run bounds',
+  );
+
+  // ICS UID identity and per-instance overrides use the same queue and domain tables.
+  const clcText = await readFile('scripts/fixtures/clc/calendar.ics', 'utf8');
+  const clcResult = parseClcFeed(clcText, '2026-10-16T12:00:00Z');
+  responses['canada-life-centre'] = clcResult;
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.status, 'ok');
+  assert.equal(outcome.counts.added, 6);
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.counts.unchanged, 6);
+  assert.equal((await repo.search({ query: 'Same-day show', principal: owner })).total, 2);
+  const moved = await repo.search({ query: 'Rescheduled concert', principal: owner });
+  assert.equal(moved.total, 1);
+  const series = clcResult.items.find((e) => e.title === 'Concert series');
+  await applyAction({ action: 'update', id: series.id, title: 'Owner CLC series' }, repo, owner);
+  assert.equal(
+    (await repo.detail(moved.items[0].id, { principal: owner })).title,
+    'Owner CLC series',
+  );
+  await applyAction(
+    { action: 'update', id: moved.items[0].id, title: 'Owner CLC session', hidden: true },
+    repo,
+    owner,
+  );
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.counts.added, 0);
+  assert.equal(
+    (await repo.detail(moved.items[0].id, { admin: true, principal: owner })).title,
+    'Owner CLC session',
+  );
+  assert.equal(await repo.detail(moved.items[0].id, { principal: owner }), null);
+  // Explicit UID rescheduling supersedes only that event's previous date, preserving history.
+  responses['canada-life-centre'] = parseClcFeed(
+    clcText
+      .replace('20261020T190000', '20261021T190000')
+      .replace('20261020T200000', '20261021T200000'),
+    '2026-10-16T12:00:00Z',
+  );
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.status, 'ok');
+  assert.equal(
+    (await repo.search({ query: 'Same-day show', date: '2026-10-20', principal: owner })).total,
+    1,
+  );
+  const firstShow = clcResult.items.find((e) => e.title === 'Same-day show');
+  assert.equal(
+    (
+      await pool.query('SELECT status FROM occurrences WHERE listing_id=$1 AND occurrence_id=$2', [
+        firstShow.id,
+        firstShow.occurrences[0].id,
+      ])
+    ).rows[0].status,
+    'superseded',
+  );
+  responses['canada-life-centre'] = {
+    ...clcResult,
+    items: [clcResult.items[1]],
+    failedPages: [{ url: 'https://www.canadalifecentre.ca/', error: 'Synthetic partial feed' }],
+  };
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.status, 'partial');
+  assert.equal((await repo.search({ query: 'Same-day show', principal: owner })).total, 2);
+  responses['canada-life-centre'] = Error('Incomplete or invalid ICS calendar');
+  ({ outcome } = await runOnce('canada-life-centre'));
+  assert.equal(outcome.status, 'error');
+  assert.equal((await repo.search({ query: 'Same-day show', principal: owner })).total, 2);
+  assert.equal(SCHEDULES['canada-life-centre'], undefined);
+  checks.push(
+    'ICS collection preserves UID performances, parent/session edits, moved/excluded dates and partial/failed history; no schedule enabled',
   );
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.

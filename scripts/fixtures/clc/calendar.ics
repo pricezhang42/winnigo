@@ -1,0 +1,78 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-TIMEZONE:America/Winnipeg
+BEGIN:VEVENT
+UID:weekly@example.test
+DTSTART;TZID=America/Winnipeg:20261025T190000
+DTEND;TZID=America/Winnipeg:20261025T210000
+RRULE:FREQ=WEEKLY;COUNT=4
+RDATE;TZID=America/Winnipeg:20261029T190000
+EXDATE;TZID=America/Winnipeg:20261101T190000
+SUMMARY:Concert series
+DESCRIPTION:Synthetic concert\, with a folded
+  description.
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-series/
+LOCATION:Canada Life Centre
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly@example.test
+RECURRENCE-ID;TZID=America/Winnipeg:20261108T190000
+DTSTART;TZID=America/Winnipeg:20261109T200000
+DTEND;TZID=America/Winnipeg:20261109T220000
+SUMMARY:Rescheduled concert
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly@example.test
+RECURRENCE-ID;TZID=America/Winnipeg:20261115T190000
+DTSTART;TZID=America/Winnipeg:20261115T190000
+DTEND;TZID=America/Winnipeg:20261115T210000
+STATUS:CANCELLED
+END:VEVENT
+BEGIN:VEVENT
+UID:performance-a@example.test
+DTSTART;TZID=America/Winnipeg:20261020T190000
+DTEND;TZID=America/Winnipeg:20261020T200000
+SUMMARY:Same-day show
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-show/
+END:VEVENT
+BEGIN:VEVENT
+UID:performance-b@example.test
+DTSTART;TZID=America/Winnipeg:20261020T210000
+DTEND;TZID=America/Winnipeg:20261020T220000
+SUMMARY:Same-day show
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-show/
+END:VEVENT
+BEGIN:VEVENT
+UID:all-day@example.test
+DTSTART;VALUE=DATE:20261019
+DTEND;VALUE=DATE:20261021
+SUMMARY:Synthetic all-day event
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-all-day/
+END:VEVENT
+BEGIN:VEVENT
+UID:utc@example.test
+DTSTART:20261101T010000Z
+DTEND:20261101T020000Z
+SUMMARY:Synthetic UTC event
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-utc/
+END:VEVENT
+BEGIN:VEVENT
+UID:floating@example.test
+DTSTART:20261022T190000
+SUMMARY:Synthetic floating event
+URL:https://www.canadalifecentre.ca/calendar-events/synthetic-floating/
+END:VEVENT
+BEGIN:VEVENT
+UID:historic@example.test
+DTSTART;TZID=America/Winnipeg:20160130T190000
+DTEND;TZID=America/Winnipeg:20160130T000000
+RRULE:FREQ=DAILY;UNTIL=20160201T055959Z
+RDATE;TZID=America/Winnipeg:20160131T190000
+SUMMARY:Historical invalid-end event outside horizon
+END:VEVENT
+BEGIN:VEVENT
+UID:future@example.test
+DTSTART;TZID=America/Winnipeg:20261201T190000
+SUMMARY:Outside requested horizon
+END:VEVENT
+END:VCALENDAR
