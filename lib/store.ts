@@ -10,7 +10,12 @@ export async function getCollection(admin = false) {
   const state = await repository().read();
   const today = localDay();
   const items = state.listings
-    .map((r) => ({ ...r.payload, ...r.override, status: r.hidden ? 'hidden' : r.payload.status }))
+    .map((r) => ({
+      ...r.payload,
+      ...r.override,
+      parentOverride: r.override,
+      status: r.hidden ? 'hidden' : r.payload.status,
+    }))
     .map((i) => ({ ...i, collection: collectionLabel(i), mapLocation: resolveMapLocation(i) }))
     .filter(
       (i) =>
@@ -19,7 +24,9 @@ export async function getCollection(admin = false) {
           (!i.end || i.end >= today) &&
           (!i.endMonth || i.endMonth >= today.slice(0, 7))),
     )
-    .flatMap((i) => projectEvent(i, { admin, from: admin ? undefined : today }));
+    .flatMap(({ parentOverride, ...i }) =>
+      projectEvent(i, { admin, from: admin ? undefined : today, parentOverride }),
+    );
   const sorted: Listing[] = (admin ? items : dedupe(items)).sort(
     (a: Listing, b: Listing) =>
       (a.start || today).localeCompare(b.start || today) || a.title.localeCompare(b.title),

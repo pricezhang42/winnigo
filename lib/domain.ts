@@ -1,5 +1,7 @@
 import type { MapLocation } from './trail-locations';
 export type Occurrence = {
+  endTimeKnown?: boolean;
+  sourceOverrides?: { title?: string; description?: string; venue?: string };
   id: string;
   basis?: string;
   start: string;

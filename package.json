@@ -37,7 +37,8 @@
     "accounts:manage": "node scripts/manage-accounts.mjs",
     "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
     "collect:wag": "node scripts/collect-wag.mjs",
-    "collect:museum": "node scripts/collect-museum.mjs"
+    "collect:museum": "node scripts/collect-museum.mjs",
+    "collect:clc": "node scripts/collect-clc.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1137.0",
@@ -59,6 +60,7 @@
     "lucide-react": "^1.31.0",
     "next": "16.3.5",
     "next-themes": "^0.4.6",
+    "node-ical": "0.27.3",
     "nodemailer": "10.0.10",
     "pg": "8.23.0",
     "pg-boss": "12.33.4",

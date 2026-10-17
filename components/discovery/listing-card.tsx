@@ -33,7 +33,7 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
                 {collection ||
                   (item.provenance === 'municipal'
                     ? 'City of Winnipeg'
-                    : 'From the local community')}
+                    : item.sourceName || 'From the local community')}
               </small>
             </div>
           ) : (
@@ -83,7 +83,7 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
           <MapPin size={14} />
           {item.venue}
         </p>
-        {(item.source === 'winnipeg-free-swim' || item.recurring) && item.time && (
+        {(item.schedule === 'event' || item.recurring) && item.time && (
           <p className="card-date">{item.time}</p>
         )}
         {isCommunityPost(item) && <p className="card-region">{item.neighbourhood}</p>}
