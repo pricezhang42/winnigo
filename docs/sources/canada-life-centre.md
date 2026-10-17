@@ -43,10 +43,16 @@ relevant dates are demonstrably outside the horizon. Malformed in-window groups 
 partial; a truncated or non-calendar response fails without imports. Response/event/occurrence
 limits bound processing.
 
-The initial feed has no descriptions, prices or event photos for the sampled events. Cards show
-source summary text, unknown admission and a labeled source placeholder. No stock venue photo is
-presented as the event's photo. No photo downloads are performed; future enrichment must use the
-shared private-media boundary and at most three verified event images.
+The ICS feed has no event photos. The collector enriches it from the venue's bounded public
+calendar JSON, matching canonical event URL and start instant. It prefers `image_full` over
+thumbnail variants and stores at most three distinct event images per shared listing through the
+common private-media pipeline. Downloads accept only the venue's upload origins, reject redirects,
+limit bytes and verify JPEG/PNG/WebP signatures. Repeated images reuse stored private references.
+Dry runs verify source image metadata without downloading or writing photos.
+
+Calendar or image failures make collection partial while preserving previously stored photos and
+refreshed event dates. Admission remains unknown and descriptions retain source summary text;
+no event-detail pages are crawled. Events without published images retain the labeled placeholder.
 
 ## Commands
 
@@ -80,7 +86,13 @@ A manual pg-boss job saved 38 shared event records and 38 typed occurrence rows 
 new records or cancellations. Past October performances remain stored but are hidden from normal
 upcoming discovery. The original QA database and production are unchanged.
 
-Synthetic fixtures cover same-day/same-URL performances, DST, UTC and floating times, all-day
+Photo enrichment updated all 38 QA events with one event-specific image each (24 distinct stored
+images shared where appropriate). Authenticated photo reads return image bytes; anonymous reads
+return 401. Chrome checks confirm loaded card images on both built and development QA apps.
+
+Synthetic fixtures cover verified image selection, private-reference reuse, download caching,
+three-photo limits, foreign media rejection and previous-photo retention on enrichment failures.
+They also cover same-day/same-URL performances, DST, UTC and floating times, all-day
 exclusive ends, RRULE/RDATE/PERIOD, exact exclusions, moved/cancelled overrides, bounded historical
 malformations, truncated responses and unsafe links. P5 checks cover queue integration, repeat
 imports, parent/session owner edits, rescheduling history, partial/failed reads and disabled schedules.

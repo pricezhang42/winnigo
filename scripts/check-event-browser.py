@@ -212,10 +212,13 @@ with tempfile.TemporaryDirectory(prefix='winnigo-event-browser-') as profile:
                 if 'Via Canada Life Centre' in c.text
             )
             assert 'a.m.' in card.text or 'p.m.' in card.text, card.text
-            assert card.find_elements(By.CSS_SELECTOR, '.social-placeholder')
-            assert (
-                'Canada Life Centre'
-                in card.find_element(By.CSS_SELECTOR, '.social-placeholder').text
+            assert all(1 <= len(e['images']) <= 3 for e in clc)
+            assert all(e['image'].startswith('/api/photos/') for e in clc)
+            wait.until(
+                lambda d: driver.execute_script(
+                    'return arguments[0].complete && arguments[0].naturalWidth > 0',
+                    card.find_element(By.CSS_SELECTOR, 'img'),
+                )
             )
             card.find_element(By.CSS_SELECTOR, '.card-title').click()
             wait.until(
