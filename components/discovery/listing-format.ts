@@ -20,7 +20,7 @@ export const isOuting = (item: Listing) =>
  */
 export const usesPlaceholderImage = (item: Listing) =>
   (item.source === 'manitoba-museum' ||
-    ['manual', 'browser', 'official', 'municipal'].includes(item.provenance || '')) &&
+    ['manual', 'browser', 'official', 'municipal', 'ical'].includes(item.provenance || '')) &&
   !item.image;
 
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
