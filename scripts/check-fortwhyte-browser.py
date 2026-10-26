@@ -124,57 +124,60 @@ with tempfile.TemporaryDirectory(prefix='winnigo-fortwhyte-browser-') as profile
             assert (
                 'Listings could not be loaded' not in driver.find_element(By.TAG_NAME, 'body').text
             )
-            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
-            bison = driver.execute_async_script(
-                "const done=arguments[0];fetch('/api/listings?query=Bison%20Bus%20Tour&limit=100').then(r=>r.json()).then(done)"
-            )
-            bison = [e for e in bison['items'] if e['source'] == 'fortwhyte']
-            assert bison and all(e.get('image', '').startswith('/api/photos/') for e in bison)
-            target = next((e for e in bison if e['start'] == '2026-10-31'), bison[0])
-            search = driver.find_element(
-                By.CSS_SELECTOR, 'input[aria-label="Search events, places, or activities"]'
-            )
-            search.send_keys(Keys.COMMAND + 'a')
-            search.send_keys(Keys.BACKSPACE)
-            search.send_keys('Bison Bus Tour')
-            visit = driver.find_element(By.CSS_SELECTOR, 'input[aria-label="Visit date"]')
-            driver.execute_script(
-                "const e=arguments[0];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,arguments[1]);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));",
-                visit,
-                target['start'],
-            )
-            wait.until(
-                lambda d: any(
-                    'Bison Bus Tour' in c.text and 'Via FortWhyte Alive' in c.text
-                    for c in d.find_elements(By.CSS_SELECTOR, '.listing-card')
+            for term, slug in [
+                ('Bison Bus Tour', 'bison-bus-tour'),
+                ('Bison Walk for World Bison Day', 'world-bison-day'),
+            ]:
+                driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+                bison = driver.execute_async_script(
+                    'const done=arguments[arguments.length-1];fetch(arguments[0]).then(r=>r.json()).then(done)',
+                    '/api/listings?query=' + quote(term) + '&limit=100',
                 )
-            )
-            card = next(
-                c
-                for c in driver.find_elements(By.CSS_SELECTOR, '.listing-card')
-                if 'Bison Bus Tour' in c.text and 'Via FortWhyte Alive' in c.text
-            )
-            wait.until(
-                lambda d: d.execute_script(
-                    'return arguments[0].complete && arguments[0].naturalWidth > 0',
-                    card.find_element(By.CSS_SELECTOR, 'img'),
+                bison = [e for e in bison['items'] if e['source'] == 'fortwhyte']
+                assert bison and all(e.get('image', '').startswith('/api/photos/') for e in bison)
+                target = next((e for e in bison if e['start'] == '2026-10-31'), bison[0])
+                search = driver.find_element(
+                    By.CSS_SELECTOR, 'input[aria-label="Search events, places, or activities"]'
                 )
-            )
-            card.find_element(By.CSS_SELECTOR, '.card-title').click()
-            wait.until(
-                lambda d: 'Bison Bus Tour' in d.find_element(By.CSS_SELECTOR, '.detail-dialog').text
-            )
-            wait.until(
-                lambda d: d.execute_script(
-                    'return [...document.querySelectorAll(".detail-dialog img")].some(i=>i.complete&&i.naturalWidth>0)'
+                search.send_keys(Keys.COMMAND + 'a')
+                search.send_keys(Keys.BACKSPACE)
+                search.send_keys(term)
+                visit = driver.find_element(By.CSS_SELECTOR, 'input[aria-label="Visit date"]')
+                driver.execute_script(
+                    "const e=arguments[0];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,arguments[1]);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));",
+                    visit,
+                    target['start'],
                 )
-            )
-            wait.until(
-                lambda d: d.execute_script(
-                    'return document.querySelector(".detail-dialog").getAnimations({subtree:true}).every(a=>a.playState!=="running")'
+                wait.until(
+                    lambda d: any(
+                        term in c.text and 'Via FortWhyte Alive' in c.text
+                        for c in d.find_elements(By.CSS_SELECTOR, '.listing-card')
+                    )
                 )
-            )
-            driver.save_screenshot(str(evidence / f'bison-bus-tour-{parsed.port}.png'))
+                card = next(
+                    c
+                    for c in driver.find_elements(By.CSS_SELECTOR, '.listing-card')
+                    if term in c.text and 'Via FortWhyte Alive' in c.text
+                )
+                wait.until(
+                    lambda d: d.execute_script(
+                        'return arguments[0].complete && arguments[0].naturalWidth > 0',
+                        card.find_element(By.CSS_SELECTOR, 'img'),
+                    )
+                )
+                card.find_element(By.CSS_SELECTOR, '.card-title').click()
+                wait.until(lambda d: term in d.find_element(By.CSS_SELECTOR, '.detail-dialog').text)
+                wait.until(
+                    lambda d: d.execute_script(
+                        'return [...document.querySelectorAll(".detail-dialog img")].some(i=>i.complete&&i.naturalWidth>0)'
+                    )
+                )
+                wait.until(
+                    lambda d: d.execute_script(
+                        'return document.querySelector(".detail-dialog").getAnimations({subtree:true}).every(a=>a.playState!=="running")'
+                    )
+                )
+                driver.save_screenshot(str(evidence / f'{slug}-{parsed.port}.png'))
             errors = [e for e in driver.get_log('browser') if e['level'] == 'SEVERE']
             assert not errors, errors
             print(
@@ -185,6 +188,7 @@ with tempfile.TemporaryDirectory(prefix='winnigo-fortwhyte-browser-') as profile
                         'grid': True,
                         'datedRecurringCards': True,
                         'privatePhotosLoaded': True,
+                        'worldBisonDayPhotoLoaded': True,
                         'consoleErrors': 0,
                     }
                 )

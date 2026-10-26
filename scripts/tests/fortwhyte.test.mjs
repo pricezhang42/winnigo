@@ -263,3 +263,68 @@ test('FortWhyte featured duplicates retain richer image metadata and reject conf
     /disagree/,
   );
 });
+
+test('FortWhyte reuses verified image URLs across different shared events before downloading', async () => {
+  const initial = await collect({ storePhoto: async () => stored });
+  const series = initial.items.find((e) => e.recurring);
+  const graph = JSON.parse(
+    oct.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1],
+  );
+  const reordered = oct.replace(
+    /(<script type="application\/ld\+json">)[\s\S]*?(<\/script>)/,
+    '$1' + JSON.stringify({ '@graph': graph['@graph'].toReversed() }) + '$2',
+  );
+  const result = await collect({
+    enrichDetails: true,
+    knownListings: new Map([[series.id, series]]),
+    storePhoto: async () => {
+      throw Error('Must reuse private media');
+    },
+    fetchImpl: async (u) => {
+      assert.notEqual(
+        u,
+        photo,
+        'An image already saved for another event must not be downloaded again',
+      );
+      return new Response(u === detailUrl ? detail : u.includes('2026-10/') ? reordered : nov);
+    },
+  });
+  assert.equal(result.failedPages.length, 0);
+  assert.deepEqual(result.items.find((e) => !e.recurring).images, [stored]);
+});
+
+test('FortWhyte caches a checked event page with no published image without inventing a photo', async () => {
+  let reads = 0;
+  const empty = detail.replace(/<div class="t-b fw-image">[\s\S]*?<\/div>/, '');
+  const options = {
+    enrichDetails: true,
+    storePhoto: async () => stored,
+    fetchImpl: async (u, o) => {
+      if (u === detailUrl) {
+        reads++;
+        return new Response(empty);
+      }
+      return fetchImpl(u, o);
+    },
+  };
+  const initial = await collect(options),
+    once = initial.items.find((e) => !e.recurring);
+  assert.equal(initial.failedPages.length, 0);
+  assert.deepEqual(once.images, []);
+  assert.equal(reads, 1);
+  const repeated = await collect({
+    ...options,
+    knownListings: new Map(initial.items.map((e) => [e.id, e])),
+  });
+  assert.equal(repeated.failedPages.length, 0);
+  assert.deepEqual(repeated.items.find((e) => !e.recurring).images, []);
+  assert.equal(reads, 1);
+});
+
+test('FortWhyte excludes sponsor logo files even when they use ordinary event image markup', () => {
+  const html = detail.replace(
+    '</p>',
+    '</p><div class="t-b fw-image"><img src="https://www.fortwhyte.org/wp-content/uploads/2020/02/Maxim-Logo_Medium-2.png"></div>',
+  );
+  assert.deepEqual(parseFortwhyteDetailPhotos(html, detailUrl), [photo]);
+});
