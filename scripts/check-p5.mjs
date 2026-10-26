@@ -915,6 +915,25 @@ try {
     true,
   );
   assert.equal(await repo.detail(musicId, { principal: owner }), null);
+  const completeMusic = {
+    ...musicResult.items.find((e) => e.id === musicId),
+    occurrencesComplete: true,
+  };
+  const removedMusicDate = completeMusic.occurrences[0].id;
+  completeMusic.occurrences = completeMusic.occurrences.slice(1);
+  responses['manitoba-music'] = {
+    ...musicResult,
+    items: [completeMusic],
+    completeSchedules: true,
+    failedPages: [{ url: completeMusic.url, error: 'Photo unavailable' }],
+  };
+  musicRun = await runOnce('manitoba-music');
+  assert.equal(musicRun.outcome.status, 'partial');
+  assert.equal(
+    (await pool.query('SELECT status FROM occurrences WHERE occurrence_id=$1', [removedMusicDate]))
+      .rows[0].status,
+    'superseded',
+  );
   responses['manitoba-music'] = {
     ...musicResult,
     items: [],

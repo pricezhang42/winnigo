@@ -16,4 +16,4 @@ The October 26 QA collection read all 12 pages and reconciled all 471 advertised
 
 Cross-source titles are not sufficient evidence of identity: Manitoba Music cards do not supply a common direct-venue event URL. Same-title matches with Travel Manitoba, Tourism Winnipeg and direct venues require review until a shared URL or equally precise performance identity is available. Automatic cross-source merging remains conservative to preserve separate showtimes; this is a coverage limitation.
 
-Terms/access review remains deferred as requested. Source links and uncertainty remain in the typed source metadata. Collection runs, manual refresh, owner edits and partial history use the existing common queue/repository pipeline.
+Terms/access review remains deferred as requested. Source links and uncertainty remain in the typed source metadata. Collection runs, manual refresh, owner edits and partial history use the existing common queue/repository pipeline. A fully verified calendar may replace its own dates even if photo enrichment fails; incomplete calendars never do.
