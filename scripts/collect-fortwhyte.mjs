@@ -35,7 +35,7 @@ try {
           window: { from: result.observedFrom, to: result.observedThrough },
           pagesRead: result.pagesRead,
           failedPages: result.failedPages,
-          eventsWithSourcePhotos: result.items.filter((e) => e.sourceImages.length).length,
+          eventsWithCalendarPhotos: result.items.filter((e) => e.sourceImages.length).length,
         },
         null,
         2,

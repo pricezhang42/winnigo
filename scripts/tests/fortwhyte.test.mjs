@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   collectFortwhyte,
   parseFortwhyteMonth,
+  parseFortwhyteDetailPhotos,
   fortwhyteUrl,
   FORTWHYTE_ID,
 } from '../../lib/server/fortwhyte.mjs';
@@ -22,7 +23,7 @@ const fetchImpl = async (u, options) => {
   return new Response(u === photo ? png : u.includes('2026-10/') ? oct : nov);
 };
 const collect = (options = {}) =>
-  collectFortwhyte(source, now, { pauseMs: 0, fetchImpl, ...options });
+  collectFortwhyte(source, now, { pauseMs: 0, fetchImpl, enrichDetails: false, ...options });
 test('FortWhyte shares event details, preserves separate performances and corrects cached DST offsets', async () => {
   const r = await collect();
   assert.equal(r.failedPages.length, 0);
@@ -173,4 +174,92 @@ test('FortWhyte caps gallery downloads and rejects oversized or non-image photo 
     },
   });
   assert.deepEqual(partial.items[0].images, prior.images);
+});
+
+const detail = await readFile('scripts/fixtures/fortwhyte/detail.html', 'utf8');
+const detailUrl = 'https://www.fortwhyte.org/event/evening-test/';
+test('FortWhyte finds description images on matching event pages, excluding site and sponsor images', () => {
+  assert.deepEqual(parseFortwhyteDetailPhotos(detail, detailUrl), [photo]);
+  assert.throws(
+    () => parseFortwhyteDetailPhotos(detail, 'https://www.fortwhyte.org/event/other/'),
+    /different event/,
+  );
+  assert.throws(
+    () =>
+      parseFortwhyteDetailPhotos(
+        detail.replace('class="tribe-events-single-event-description"', 'class="other"'),
+        detailUrl,
+      ),
+    /layout/,
+  );
+  assert.throws(
+    () => parseFortwhyteDetailPhotos(detail.replace(photo, 'https://evil.test/a.png'), detailUrl),
+    /Refused/,
+  );
+});
+test('FortWhyte fallback enrichment stores images once and caches event-page checks across refreshes', async () => {
+  let details = 0,
+    writes = 0;
+  const transport = async (u, options) => {
+    if (u === detailUrl) {
+      details++;
+      return new Response(detail);
+    }
+    return fetchImpl(u, options);
+  };
+  const options = {
+    enrichDetails: true,
+    fetchImpl: transport,
+    storePhoto: async () => {
+      writes++;
+      return stored;
+    },
+  };
+  const first = await collect(options);
+  assert.equal(first.failedPages.length, 0);
+  assert.equal(first.eventPagesRead, 1);
+  assert.equal(details, 1);
+  assert.equal(writes, 1);
+  const once = first.items.find((e) => !e.recurring);
+  assert.deepEqual(once.images, [stored]);
+  assert.equal(once.photoPage.url, detailUrl);
+  const knownListings = new Map(first.items.map((e) => [e.id, e]));
+  const repeat = await collect({ ...options, knownListings });
+  assert.equal(repeat.failedPages.length, 0);
+  assert.equal(details, 1);
+  assert.equal(writes, 1);
+  const old = knownListings.get(once.id);
+  old.photoPage.checkedAt = '2026-10-01T12:00:00Z';
+  const failed = await collect({
+    ...options,
+    knownListings,
+    fetchImpl: async (u, o) =>
+      u === detailUrl ? new Response('Down', { status: 503 }) : transport(u, o),
+  });
+  assert.equal(failed.eventPageFailures, 1);
+  assert.equal(failed.failedPages.length, 1);
+  assert.deepEqual(failed.items.find((e) => e.id === once.id).images, [stored]);
+  assert.equal(failed.occurrencesFound, 5);
+});
+test('FortWhyte featured duplicates retain richer image metadata and reject conflicting dates', () => {
+  const doc = JSON.parse(oct.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  const duplicate = { ...doc['@graph'][0] };
+  delete duplicate.image;
+  const json = JSON.stringify({ ...doc, '@graph': [...doc['@graph'], duplicate] });
+  const html = oct.replace(
+    /(<script type="application\/ld\+json">)[\s\S]*?(<\/script>)/,
+    '$1' + json + '$2',
+  );
+  assert.equal(parseFortwhyteMonth(html, '2026-10').events[0].image.contentUrl, photo);
+  assert.throws(
+    () =>
+      parseFortwhyteMonth(
+        html.replace(
+          '"endDate":"2026-10-31T11:30:00-05:00"',
+          '"endDate":"2026-10-31T12:30:00-05:00"',
+        ),
+        '2026-10',
+      ),
+    /disagree/,
+  );
 });

@@ -7,6 +7,7 @@ import tempfile
 from urllib.parse import quote, urlparse
 
 from selenium import webdriver
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -32,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='winnigo-fortwhyte-browser-') as profile
         options.add_argument(arg)
     options.set_capability('goog:loggingPrefs', {'browser': 'ALL'})
     driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, 40)
+    wait = WebDriverWait(driver, 40, ignored_exceptions=(StaleElementReferenceException,))
     try:
         for origin in args.origins:
             parsed = urlparse(origin)
@@ -123,6 +124,57 @@ with tempfile.TemporaryDirectory(prefix='winnigo-fortwhyte-browser-') as profile
             assert (
                 'Listings could not be loaded' not in driver.find_element(By.TAG_NAME, 'body').text
             )
+            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+            bison = driver.execute_async_script(
+                "const done=arguments[0];fetch('/api/listings?query=Bison%20Bus%20Tour&limit=100').then(r=>r.json()).then(done)"
+            )
+            bison = [e for e in bison['items'] if e['source'] == 'fortwhyte']
+            assert bison and all(e.get('image', '').startswith('/api/photos/') for e in bison)
+            target = next((e for e in bison if e['start'] == '2026-10-31'), bison[0])
+            search = driver.find_element(
+                By.CSS_SELECTOR, 'input[aria-label="Search events, places, or activities"]'
+            )
+            search.send_keys(Keys.COMMAND + 'a')
+            search.send_keys(Keys.BACKSPACE)
+            search.send_keys('Bison Bus Tour')
+            visit = driver.find_element(By.CSS_SELECTOR, 'input[aria-label="Visit date"]')
+            driver.execute_script(
+                "const e=arguments[0];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,arguments[1]);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));",
+                visit,
+                target['start'],
+            )
+            wait.until(
+                lambda d: any(
+                    'Bison Bus Tour' in c.text and 'Via FortWhyte Alive' in c.text
+                    for c in d.find_elements(By.CSS_SELECTOR, '.listing-card')
+                )
+            )
+            card = next(
+                c
+                for c in driver.find_elements(By.CSS_SELECTOR, '.listing-card')
+                if 'Bison Bus Tour' in c.text and 'Via FortWhyte Alive' in c.text
+            )
+            wait.until(
+                lambda d: d.execute_script(
+                    'return arguments[0].complete && arguments[0].naturalWidth > 0',
+                    card.find_element(By.CSS_SELECTOR, 'img'),
+                )
+            )
+            card.find_element(By.CSS_SELECTOR, '.card-title').click()
+            wait.until(
+                lambda d: 'Bison Bus Tour' in d.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+            )
+            wait.until(
+                lambda d: d.execute_script(
+                    'return [...document.querySelectorAll(".detail-dialog img")].some(i=>i.complete&&i.naturalWidth>0)'
+                )
+            )
+            wait.until(
+                lambda d: d.execute_script(
+                    'return document.querySelector(".detail-dialog").getAnimations({subtree:true}).every(a=>a.playState!=="running")'
+                )
+            )
+            driver.save_screenshot(str(evidence / f'bison-bus-tour-{parsed.port}.png'))
             errors = [e for e in driver.get_log('browser') if e['level'] == 'SEVERE']
             assert not errors, errors
             print(

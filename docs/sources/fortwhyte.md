@@ -10,7 +10,7 @@ The default ICS export is truncated; it is not used to claim complete month cove
 with Manitoba Museum. `lib/server/fortwhyte.mjs` supplies source URLs, grid coverage checks and
 mapping to the common typed listing and occurrence tables. No separate database schema is added.
 
-Only the two month pages are read. Their JSON-LD includes occurrences hidden behind the grid's
+The two month pages establish dates. Their JSON-LD includes occurrences hidden behind the grid's
 “more events” links. Counts are checked against published per-day grid totals, including overflow.
 Adjacent-grid overlap and duplicate featured entries merge by occurrence URL and start, retaining
 richer metadata. Conflicting dates/titles make collection partial. Month navigation and response
@@ -27,12 +27,18 @@ published Winnipeg wall times and resolves their actual DST offset. Original pub
 remain on each occurrence. Explicit UTC instants are preserved. This uses the Museum's existing
 logic, now in the shared adapter.
 
-Only explicit Event image/ImageObject metadata supplies event photos; the collector does not
-substitute generic venue pictures or crawl detail pages to find more images. Up to three unique
-images per shared event are downloaded, signature/size checked and stored through the shared
-private media boundary. Repeated source URLs reuse stored photos. Failed enrichment retains
-previous photos and the newly read dates, with partial reporting. Dry runs verify metadata and
-write nothing. Records with no verified photo use a source placeholder.
+Event image/ImageObject metadata supplies photos first. When it is missing, saved collection reads
+one representative event page per shared event and checks its matching Event identity before
+extracting images from the main event description or featured-image area. Header, footer and
+sponsor images are excluded. This finds body images such as Bison Bus Tour’s BisonSafari photo,
+which is omitted from both month JSON-LD and the public event API.
+
+Up to three unique images per shared event are downloaded, signature/size checked and stored
+through the shared private-media boundary. Shared occurrences reuse the same photos. Detail-page
+checks are cached for seven days, including confirmed pages without an image; failures preserve
+previous photos and dates and produce partial reporting. Existing time/request limits also bound
+detail enrichment; later manual refreshes can finish deferred pages. Dry runs read calendars only
+and write nothing. Records with no verified photo use a source placeholder.
 
 Requests are serial with 60-second spacing, including photos. One run is bounded to 26 requests,
 28 minutes, 2 MB per calendar and 8 MB per image; each request has a 30-second timeout. Redirects
@@ -84,3 +90,15 @@ or production listings were collected for this verification.
 passed on built and dev QA servers; focused checks confirmed dated recurring cards, loaded private
 photos and no console errors. Asset and Basic access checks passed on the QA apps. QA snapshots
 and browser evidence remain ignored under `.winnigo`.
+
+### Event-body photo correction
+
+The calendar and public event API omit Bison Bus Tour's image, but its own event description
+contains `BisonSafari-1.png`. The fallback now reads that content once per shared event rather
+than once per occurrence. A targeted QA enrichment updated one shared Bison Bus Tour record and
+its 23 date cards while leaving the other 29 events unchanged. Images remain private. Regression
+fixtures cover detail identity/scoping, cached reuse, failed refresh retention and duplicate
+featured records that otherwise discard richer image metadata.
+
+The correction passes 123 unit tests, P5 integration, typecheck/build and Bison-specific Chrome
+checks on built/dev QA apps, including the October 31 card and loaded private detail image.
