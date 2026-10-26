@@ -125,6 +125,10 @@ test('Tourism confirms edition ranges without default years or impossible dates'
     start: '2025-11-28',
     end: '2026-01-03',
   });
+  assert.deepEqual(annualDates('The parade returns November 14, 2026.'), {
+    start: '2026-11-14',
+    end: '2026-11-14',
+  });
   assert.equal(annualDates('February 30–31, 2026'), null);
   assert.equal(annualDates('October 30–31'), null);
   assert.equal(annualDates('September 2026'), null);
