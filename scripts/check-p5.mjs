@@ -1,3 +1,4 @@
+import { collectMusic } from '../lib/server/manitoba-music.mjs';
 // P5 integration check (npm run check:p5): collection jobs against a temporary PostgreSQL schema
 // and a temporary pg-boss schema. Sources are faked, so no live website is contacted.
 import assert from 'node:assert/strict';
@@ -474,7 +475,7 @@ try {
   ({ outcome, row: guarded } = await runOnce('wag'));
   assert.equal(outcome.status, 'partial');
   assert.equal(outcome.counts.reviewRequired, 1);
-  assert.match(guarded.error, /withheld for date review/);
+  assert.match(guarded.error, /withheld for verification/);
   responses.wag = Error('WAG calendar layout changed');
   ({ outcome } = await runOnce('wag'));
   assert.equal(outcome.status, 'error');
@@ -794,9 +795,14 @@ try {
     'Exhibitions project separate visiting-day cards from one shared event, preserving overall run bounds',
   );
 
+  // Fix the collection clock for synthetic schedules; discovery fixtures stay in the future.
+  deps.now = () => '2099-10-16T12:00:00Z';
   // ICS UID identity and per-instance overrides use the same queue and domain tables.
-  const clcText = await readFile('scripts/fixtures/clc/calendar.ics', 'utf8');
-  const clcResult = parseClcFeed(clcText, '2026-10-16T12:00:00Z');
+  const clcText = (await readFile('scripts/fixtures/clc/calendar.ics', 'utf8')).replaceAll(
+    '2026',
+    '2099',
+  );
+  const clcResult = parseClcFeed(clcText, '2099-10-16T12:00:00Z');
   responses['canada-life-centre'] = clcResult;
   ({ outcome } = await runOnce('canada-life-centre'));
   assert.equal(outcome.status, 'ok');
@@ -827,14 +833,14 @@ try {
   // Explicit UID rescheduling supersedes only that event's previous date, preserving history.
   responses['canada-life-centre'] = parseClcFeed(
     clcText
-      .replace('20261020T190000', '20261021T190000')
-      .replace('20261020T200000', '20261021T200000'),
-    '2026-10-16T12:00:00Z',
+      .replace('20991020T190000', '20991021T190000')
+      .replace('20991020T200000', '20991021T200000'),
+    '2099-10-16T12:00:00Z',
   );
   ({ outcome } = await runOnce('canada-life-centre'));
   assert.equal(outcome.status, 'ok');
   assert.equal(
-    (await repo.search({ query: 'Same-day show', date: '2026-10-20', principal: owner })).total,
+    (await repo.search({ query: 'Same-day show', date: '2099-10-20', principal: owner })).total,
     1,
   );
   const firstShow = clcResult.items.find((e) => e.title === 'Same-day show');
@@ -863,6 +869,71 @@ try {
   checks.push(
     'ICS collection preserves UID performances, parent/session edits, moved/excluded dates and partial/failed history; no schedule enabled',
   );
+
+  const musicFixture = (await readFile('scripts/fixtures/music/calendar.html', 'utf8')).replaceAll(
+    '2026',
+    '2099',
+  );
+  const musicResult = await collectMusic({}, '2099-10-26T12:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async () => new Response(musicFixture),
+  });
+  const reviewMusic = {
+    ...musicResult.items[0],
+    id: 'music-location-review',
+    sourceIdentity: 'music:location-review',
+    eventUrl: 'https://www.manitobamusic.com/livemusic/display,event/999',
+    url: 'https://www.manitobamusic.com/livemusic/display,event/999',
+    status: 'hidden',
+    recurring: true,
+    occurrences: musicResult.items[0].occurrences.map((o) => ({ ...o, id: o.id + '-review' })),
+  };
+  await repo.applySourceCollection('manitoba-music', [reviewMusic], {
+    checkedAt: '2099-10-26T12:00:00Z',
+  });
+  assert.equal((await repo.search({ query: reviewMusic.title, principal: owner })).total, 0);
+  responses['manitoba-music'] = musicResult;
+  let musicRun = await runOnce('manitoba-music');
+  assert.equal(musicRun.outcome.status, 'ok');
+  const musicId = musicResult.items.find((e) => e.recurring).id;
+  assert.equal(
+    (await pool.query('SELECT count(*)::int AS n FROM occurrences WHERE listing_id=$1', [musicId]))
+      .rows[0].n,
+    2,
+  );
+  await applyAction(
+    { action: 'update', id: musicId, title: 'Owner music title', hidden: true },
+    repo,
+    owner,
+  );
+  musicRun = await runOnce('manitoba-music');
+  assert.equal(musicRun.outcome.counts.added, 0);
+  const musicEdited = await repo.detail(musicId, { admin: true, principal: owner });
+  assert.equal(musicEdited.title, 'Owner music title');
+  assert.equal(
+    (await pool.query('SELECT hidden FROM listings WHERE id=$1', [musicId])).rows[0].hidden,
+    true,
+  );
+  assert.equal(await repo.detail(musicId, { principal: owner }), null);
+  responses['manitoba-music'] = {
+    ...musicResult,
+    items: [],
+    allowEmpty: true,
+    failedPages: [{ url: 'https://www.manitobamusic.com/livemusic', error: 'partial' }],
+  };
+  musicRun = await runOnce('manitoba-music');
+  assert.equal(musicRun.outcome.status, 'partial');
+  assert.equal(
+    (await pool.query('SELECT count(*)::int AS n FROM occurrences WHERE listing_id=$1', [musicId]))
+      .rows[0].n,
+    2,
+  );
+  assert.equal(SCHEDULES['manitoba-music'], undefined);
+  checks.push(
+    'Manitoba Music linked dates persist without duplicates; owner edits and partial history survive; manual only',
+  );
+
+  delete deps.now;
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
   responses.attractions = [listing('attractions', 'p5-place', { type: 'Place' })];

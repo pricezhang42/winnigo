@@ -78,6 +78,7 @@ docker compose --env-file .env.local --profile app stop
 | `npm run dev` | Standard Next.js development server |
 | `npm run build` / `npm start` | Assemble and run standalone Node app |
 | `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
+| `npm run collect:music` | Preview Manitoba Music for this and next month; `-- --enqueue` explicitly imports via worker |
 | `npm run collect:clc -- --compare` | Dry-run the current/next-month Canada Life Centre feed and compare its calendar |
 | `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites) |
 | `npm run worker:check` | Validate the selected store and exit |

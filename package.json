@@ -38,7 +38,8 @@
     "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
     "collect:wag": "node scripts/collect-wag.mjs",
     "collect:museum": "node scripts/collect-museum.mjs",
-    "collect:clc": "node scripts/collect-clc.mjs"
+    "collect:clc": "node scripts/collect-clc.mjs",
+    "collect:music": "node scripts/collect-music.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1137.0",
