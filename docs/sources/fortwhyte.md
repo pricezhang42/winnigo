@@ -102,3 +102,17 @@ featured records that otherwise discard richer image metadata.
 
 The correction passes 123 unit tests, P5 integration, typecheck/build and Bison-specific Chrome
 checks on built/dev QA apps, including the October 31 card and loaded private detail image.
+
+### Full event photo verification, October 26, 2026
+
+The complete QA enrichment checked all 30 shared FortWhyte events. All 30 now have privately
+stored event photos, capped at three per event. World Bison Day and Forest Frolics are included.
+One temporary image-stream failure succeeded on retry. Shared image URLs were reused across
+parents, and a sponsor logo was excluded from the Annual Bird Seed Sale photos.
+
+The pass preserved all 105 occurrence rows, including dates, times, owner visibility and
+editorial overrides. Only the separate loopback QA database/private test media were updated.
+Requests retained the currently published 60-second crawl delay; cached pages/images avoided
+repeat requests. Chrome verified dated cards, recurring details and loaded private photos,
+including World Bison Day, with no JavaScript errors. Unit tests, typecheck/build and P5 checks
+passed for the photo collector changes. No collection schedule or production destination changed.
