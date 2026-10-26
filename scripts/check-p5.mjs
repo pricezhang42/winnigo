@@ -1,3 +1,15 @@
+import {
+  collectTourism,
+  TOURISM_CALENDAR,
+  TOURISM_ANNUAL,
+} from '../lib/server/tourism-winnipeg.mjs';
+import {
+  entry as tourismEntry,
+  calendar as tourismCalendar,
+  directory as tourismDirectory,
+  detail as tourismDetail,
+  festival as tourismFestival,
+} from './fixtures/tourism/pages.mjs';
 import { collectMusic } from '../lib/server/manitoba-music.mjs';
 // P5 integration check (npm run check:p5): collection jobs against a temporary PostgreSQL schema
 // and a temporary pg-boss schema. Sources are faked, so no live website is contacted.
@@ -950,6 +962,61 @@ try {
   assert.equal(SCHEDULES['manitoba-music'], undefined);
   checks.push(
     'Manitoba Music linked dates persist without duplicates; owner edits and partial history survive; manual only',
+  );
+
+  const tourismFixture = tourismCalendar([tourismEntry('2026-10-28', '2026-10-30')]);
+  const tourismResult = await collectTourism({}, '2099-10-26T12:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (u) =>
+      new Response(
+        (u === TOURISM_CALENDAR
+          ? tourismFixture
+          : u === TOURISM_ANNUAL
+            ? tourismDirectory
+            : tourismDetail(
+                u === tourismFestival,
+                u === tourismFestival ? 'Dates TBD' : 'October 28, 2026',
+              )
+        ).replaceAll('2026', '2099'),
+      ),
+  });
+  responses['tourism-winnipeg'] = tourismResult;
+  let tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'ok');
+  const tourismId = tourismResult.items[0].id;
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM occurrences WHERE listing_id=$1', [tourismId]))
+      .rows[0].n,
+    3,
+  );
+  await applyAction(
+    { action: 'update', id: tourismId, title: 'Owner tourism correction', hidden: true },
+    repo,
+    owner,
+  );
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.counts.added, 0);
+  assert.equal(
+    (await repo.detail(tourismId, { admin: true, principal: owner })).title,
+    'Owner tourism correction',
+  );
+  assert.equal(await repo.detail(tourismId, { principal: owner }), null);
+  responses['tourism-winnipeg'] = {
+    ...tourismResult,
+    items: [],
+    allowEmpty: true,
+    failedPages: [{ url: TOURISM_CALENDAR, error: 'Synthetic partial calendar' }],
+  };
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'partial');
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM occurrences WHERE listing_id=$1', [tourismId]))
+      .rows[0].n,
+    3,
+  );
+  assert.equal(SCHEDULES['tourism-winnipeg'], undefined);
+  checks.push(
+    'Tourism Winnipeg visiting dates, annual date review and owner corrections persist across repeat and partial imports; manual only',
   );
 
   delete deps.now;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  annualDates,
   collectTourism,
   parseTourismDetail,
   parseTourismCalendar,
@@ -113,4 +114,41 @@ test('Tourism private photos are cached across entries and retained when enrichm
   });
   assert.ok(fail.failedPages.length);
   assert.equal(fail.items[0].image, stored);
+});
+
+test('Tourism confirms edition ranges without default years or impossible dates', () => {
+  assert.deepEqual(annualDates('Join us from October 30 to November 1, 2026, in Winnipeg.'), {
+    start: '2026-10-30',
+    end: '2026-11-01',
+  });
+  assert.deepEqual(annualDates('November 28, 2025 – January 3, 2026'), {
+    start: '2025-11-28',
+    end: '2026-01-03',
+  });
+  assert.equal(annualDates('February 30–31, 2026'), null);
+  assert.equal(annualDates('October 30–31'), null);
+  assert.equal(annualDates('September 2026'), null);
+});
+test('Tourism merges only an unambiguous matching annual edition and keeps unknown times unknown', async () => {
+  const e = entry('2026-10-30', '2026-10-31', {
+    name: 'Annual Festival',
+    description: 'A festival.',
+  });
+  const r = await collect([e], {
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([e])
+          : u === A
+            ? directory
+            : detail(u === festival, 'October 30–31, 2026', 'Festival details.').replace(
+                'Test exhibition',
+                'Annual Festival',
+              ),
+      ),
+  });
+  assert.equal(r.annualMatched, 1);
+  assert.equal(r.items.length, 1);
+  assert.equal(r.items[0].occurrences.length, 1);
+  assert.equal(r.items[0].occurrences[0].time, '');
 });
