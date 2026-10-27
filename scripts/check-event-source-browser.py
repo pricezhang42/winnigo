@@ -118,8 +118,10 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
             card.find_element(By.CSS_SELECTOR, '.card-title').click()
             wait.until(lambda d: d.find_element(By.CSS_SELECTOR, '.detail-dialog'))
             if a.image_caption:
-                assert (
-                    a.image_caption in driver.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+                wait.until(
+                    lambda d: (
+                        a.image_caption in d.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+                    )
                 )
             wait.until(
                 lambda d: d.execute_script(
