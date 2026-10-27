@@ -871,10 +871,9 @@ try {
     'ICS collection preserves UID performances, parent/session edits, moved/excluded dates and partial/failed history; no schedule enabled',
   );
 
-  const musicFixture = (await readFile('scripts/fixtures/music/calendar.html', 'utf8')).replaceAll(
-    '2026',
-    '2099',
-  );
+  const musicFixture = (await readFile('scripts/fixtures/music/calendar.html', 'utf8'))
+    .replaceAll('uploads/event/test.png', 'uploads/organization/venue.png')
+    .replaceAll('2026', '2099');
   const musicResult = await collectMusic({}, '2099-10-26T12:00:00Z', {
     pauseMs: 0,
     fetchImpl: async () => new Response(musicFixture),
@@ -911,6 +910,11 @@ try {
   assert.equal(musicRun.outcome.counts.added, 0);
   const musicEdited = await repo.detail(musicId, { admin: true, principal: owner });
   assert.equal(musicEdited.title, 'Owner music title');
+  assert.equal(
+    musicEdited.imageCaption,
+    'Includes a venue or artist photo supplied by Manitoba Music.',
+  );
+  assert.equal((await payload(musicId)).imageCaption, musicEdited.imageCaption);
   assert.equal(
     (await pool.query('SELECT hidden FROM listings WHERE id=$1', [musicId])).rows[0].hidden,
     true,
@@ -951,6 +955,7 @@ try {
   assert.equal(SCHEDULES['manitoba-music'], undefined);
   checks.push(
     'Manitoba Music linked dates persist without duplicates; owner edits and partial history survive; manual only',
+  );
   // FortWhyte uses shared listings/occurrences, with a bounded longer lease for request spacing.
   const fortOct = (await readFile('scripts/fixtures/fortwhyte/october.html', 'utf8')).replaceAll(
     '2026',
