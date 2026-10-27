@@ -1,4 +1,5 @@
 import { collectMusic } from '../lib/server/manitoba-music.mjs';
+import { collectFortwhyte } from '../lib/server/fortwhyte.mjs';
 // P5 integration check (npm run check:p5): collection jobs against a temporary PostgreSQL schema
 // and a temporary pg-boss schema. Sources are faked, so no live website is contacted.
 import assert from 'node:assert/strict';
@@ -950,6 +951,89 @@ try {
   assert.equal(SCHEDULES['manitoba-music'], undefined);
   checks.push(
     'Manitoba Music linked dates persist without duplicates; owner edits and partial history survive; manual only',
+  // FortWhyte uses shared listings/occurrences, with a bounded longer lease for request spacing.
+  const fortOct = (await readFile('scripts/fixtures/fortwhyte/october.html', 'utf8')).replaceAll(
+    '2026',
+    '2099',
+  );
+  const fortNov = (await readFile('scripts/fixtures/fortwhyte/november.html', 'utf8')).replaceAll(
+    '2026',
+    '2099',
+  );
+  const fortResult = await collectFortwhyte({}, '2099-10-26T12:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (url) => new Response(url.includes('2099-10/') ? fortOct : fortNov),
+  });
+  responses.fortwhyte = fortResult;
+  const [fortQueued] = await enqueueCollection(boss, pool, ['fortwhyte'], 'manual');
+  const [fortJob] = await boss.fetch(COLLECTION_QUEUE, { includeMetadata: true });
+  assert.equal(fortJob.id, fortQueued.jobId);
+  assert.equal(fortJob.expireInSeconds, 1800);
+  const fortOutcome = await runCollection('fortwhyte', fortJob, deps);
+  await boss.complete(COLLECTION_QUEUE, fortJob.id);
+  assert.equal(fortOutcome.status, 'ok');
+  assert.equal(fortOutcome.counts.added, 2);
+  const fortSeries = fortResult.items.find((e) => e.recurring);
+  const fortRows = (
+    await pool.query('SELECT *,start_date::text AS day FROM occurrences WHERE listing_id=$1', [
+      fortSeries.id,
+    ])
+  ).rows;
+  assert.equal(fortRows.length, 4);
+  assert.equal(
+    fortRows.find((o) => o.day === '2099-11-01').start_at.toISOString(),
+    '2099-11-01T16:30:00.000Z',
+  );
+  await applyAction(
+    { action: 'update', id: fortSeries.id, title: 'Owner FortWhyte note' },
+    repo,
+    owner,
+  );
+  const fortSession = fortSeries.occurrences[0].id;
+  await applyAction(
+    { action: 'update', id: fortSession, title: 'Owner FortWhyte session', hidden: true },
+    repo,
+    owner,
+  );
+  ({ outcome } = await runOnce('fortwhyte'));
+  assert.equal(outcome.counts.unchanged, 2);
+  assert.equal(
+    (await repo.detail(fortSeries.id, { admin: true, principal: owner })).title,
+    'Owner FortWhyte note',
+  );
+  assert.equal(
+    (await repo.detail(fortSession, { admin: true, principal: owner })).title,
+    'Owner FortWhyte session',
+  );
+  assert.equal(await repo.detail(fortSession, { principal: owner }), null);
+  responses.fortwhyte = {
+    ...fortResult,
+    items: [
+      { ...fortSeries, occurrences: [fortSeries.occurrences[1]], occurrencesComplete: false },
+    ],
+    failedPages: [{ url: 'https://www.fortwhyte.org/events/month/2099-11/', error: 'Unavailable' }],
+  };
+  ({ outcome } = await runOnce('fortwhyte'));
+  assert.equal(outcome.status, 'partial');
+  assert.equal(
+    (
+      await pool.query('SELECT count(*)::int AS n FROM occurrences WHERE listing_id=$1', [
+        fortSeries.id,
+      ])
+    ).rows[0].n,
+    4,
+  );
+  assert.equal(
+    (await repo.detail(fortSession, { admin: true, principal: owner })).status,
+    'hidden',
+  );
+  responses.fortwhyte = new Error('FortWhyte calendar unavailable');
+  ({ outcome } = await runOnce('fortwhyte'));
+  assert.equal(outcome.status, 'error');
+  assert.ok(await payload(fortSeries.id));
+  assert.equal(SCHEDULES.fortwhyte, undefined);
+  checks.push(
+    'FortWhyte shared event/time/DST imports preserve owner/session edits through repeated, partial and failed reads; manual lease covers spacing',
   );
 
   delete deps.now;
