@@ -1,0 +1,19 @@
+# Manitoba Music live music
+
+Issue #29. Manual worker source `manitoba-music`; `npm run collect:music` previews and `npm run collect:music -- --enqueue` explicitly queues an import into the configured database. No schedule is enabled.
+
+The server-rendered calendar accepts a published `from:Oct+1+2026` filter and `/page:N` pagination. The collector calculates the first day of this Winnipeg month and the last day of next month, verifies the response's selected date filter, reads every advertised page (maximum 40), and filters dates locally. A missing page, inconsistent advertised total, changed layout, unsafe link or exhausted request budget makes the result partial/error. Missing shows never imply cancellation.
+
+The linked iCalendar export was unsuitable: on October 26 it omitted earlier October shows despite the October 1 filter, and encoded displayed evening performances as midnight-to-midnight events. HTML cards provide actual published dates, displayed times, venue, address, region, lineup and event image. No showtime, end time or admission price is guessed. Unconfirmed times stay date-only. A known start without an end retains `endTimeKnown:false`. Winnipeg DST conversion uses the common schedule module.
+
+Numeric event IDs establish shared identity. Multiple explicit dates for the same ID link to the common occurrence table and project separate recurring cards. Different IDs remain separate, including same-title shows on the same day. Outside-Manitoba locations are excluded; explicitly online shows are allowed. Unknown or conflicting locations remain hidden for review. Repeated artists alone do not establish recurrence.
+
+At most three images explicitly attached to event cards are stored through the common private-media pipeline. Published event posters take priority over the source's venue/artist images under `/uploads/organization/`. A caption identifies those venue/artist photos in event details and the photo viewer. Unrelated page images and SVG placeholders are excluded. Verified existing photos are reused across events; failed enrichment retains earlier photos and reports partial status. Requests are serial with one-second start spacing, 30-second individual timeouts, a nine-minute budget and 600-request limit; pages cap at 2 MB and images at 8 MB. Redirects are rejected.
+
+## Verified October–November 2026 coverage
+
+The October 26 QA collection read all 12 pages and reconciled all 471 advertised calendar records before window filtering. It produced 322 shared events with 357 linked dates, including four dates needing location review; 197 events initially had event-specific photos. Dates cover October 1–November 30. The October 27 photo refresh reused those calendar snapshots, fetched 45 additional unique venue/artist images and added private photos to 113 existing events, including Bleeker (113156). Photo coverage is now 310 of 322 events; all 12 remaining calendar cards show the source's SVG placeholder. Database comparisons verified identical occurrence records and owner edits before and after this photo-only update. Collection wrote only to the separate loopback `winnigo_p2_qa` database and private test storage.
+
+Cross-source titles are not sufficient evidence of identity: Manitoba Music cards do not supply a common direct-venue event URL. Same-title matches with Travel Manitoba, Tourism Winnipeg and direct venues require review until a shared URL or equally precise performance identity is available. Automatic cross-source merging remains conservative to preserve separate showtimes; this is a coverage limitation.
+
+Terms/access review remains deferred as requested. Source links and uncertainty remain in the typed source metadata. Collection runs, manual refresh, owner edits and partial history use the existing common queue/repository pipeline. A fully verified calendar may replace its own dates even if photo enrichment fails; incomplete calendars never do.
