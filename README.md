@@ -80,6 +80,7 @@ docker compose --env-file .env.local --profile app stop
 | `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
 | `npm run collect:tourism` | Preview Tourism Winnipeg calendar and annual editions; `-- --enqueue` queues a manual import |
 | `npm run collect:music` | Preview Manitoba Music for this and next month; `-- --enqueue` explicitly imports via worker |
+| `npm run collect:fortwhyte` | Dry-run current/next-month FortWhyte calendars with 60-second request spacing |
 | `npm run collect:clc -- --compare` | Dry-run the current/next-month Canada Life Centre feed and compare its calendar |
 | `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites) |
 | `npm run worker:check` | Validate the selected store and exit |

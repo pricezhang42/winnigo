@@ -13,6 +13,7 @@ Facebook collector is separate — see [05](05-social-collector.md).
 | `forks` | The Forks | theforks.com/events/calendar-of-events | `parseSource('forks')` |
 | `park` | Assiniboine Park | assiniboinepark.ca/events | `parseSource('park')` |
 | `attractions` | The Forks · places | theforks.com/attractions | `parsePlaces` |
+| `fortwhyte` | FortWhyte Alive | fortwhyte.org/events | Worker-only month JSON-LD; manual refresh, current/next month |
 | `manitoba` | Travel Manitoba | travelmanitoba.com/events | `parseSource('manitoba')` (Winnipeg-only) |
 | `winnipeg-rotary` | Rotary Club of Winnipeg | winnipegrotary.org | [`collectRotary`](../lib/server/rotary.mjs), worker only (see [17](17-p5-collection.md)) |
 

@@ -38,9 +38,82 @@ test('Music validates response filters, layout, dates and safe links', () => {
   assert.throws(() => parseMusicPage(html.replace('2026-10-31T', '2026-02-30T'), url), /invalid/);
   assert.throws(() => musicUrl('https://evil.test/livemusic/from:Oct+1+2026'), /Refused/);
   assert.throws(
-    () => musicUrl('https://www.manitobamusic.com/uploads/organization/logo.png', 'photo'),
+    () => musicUrl('https://www.manitobamusic.com/uploads/document/sponsor.png', 'photo'),
     /Refused/,
   );
+});
+test('Music collects card-associated venue/artist images, excluding unrelated page images and placeholders', async () => {
+  const organization =
+    'https://www.manitobamusic.com/uploads/organization/organization_primary_photo_127.jpg?t=1702441191';
+  const venueHtml =
+    html
+      .replace('https://www.manitobamusic.com/uploads/event/test.png?t=123', organization)
+      .replace(
+        '</article>',
+        '<img src="https://www.manitobamusic.com/uploads/organization/unrelated.png"></article>',
+      ) +
+    '<footer><img src="https://www.manitobamusic.com/uploads/organization/sponsor.png"></footer>';
+  let writes = 0;
+  const options = {
+    fetchImpl: async (u) => new Response(u.includes('/uploads/') ? png : venueHtml),
+    storePhoto: async () => {
+      writes++;
+      return stored;
+    },
+  };
+  const r = await collect(options);
+  const item = r.items[0];
+  assert.deepEqual(item.sourceImages, [organization]);
+  assert.deepEqual(item.images, [stored]);
+  assert.match(item.imageCaption, /venue or artist/);
+  assert.equal(writes, 1);
+  const repeated = await collect({
+    ...options,
+    knownListings: new Map(r.items.map((e) => [e.id, e])),
+    storePhoto: () => {
+      throw Error('Must reuse');
+    },
+  });
+  assert.equal(repeated.failedPages.length, 0);
+  const failed = await collect({
+    ...options,
+    knownListings: new Map(r.items.map((e) => [e.id, e])),
+    fetchImpl: async () => new Response(venueHtml.replaceAll('photo_127', 'photo_128')),
+    storePhoto: () => {
+      throw Error('Storage down');
+    },
+  });
+  assert.equal(failed.failedPages.length, 1);
+  assert.deepEqual(failed.items[0].sourceImages, [organization]);
+  assert.equal(failed.items[0].imageCaption, item.imageCaption);
+  const placeholder = await collect({
+    fetchImpl: async () => new Response(venueHtml.replaceAll('photo_127.jpg', 'placeholder.svg')),
+  });
+  assert.deepEqual(placeholder.items[0].sourceImages, []);
+});
+test('Music prioritizes event posters, caps photos at three and reuses venue images between events', async () => {
+  const figure = (name) =>
+    `<figure class="event-item-image"><img src="https://www.manitobamusic.com/uploads/${name}"></figure>`;
+  let page = html
+    .replaceAll('</article>', figure('organization/venue.jpg') + '</article>')
+    .replace('</article>', figure('event/second.png') + figure('event/third.png') + '</article>');
+  page += page.match(/<article class="event-item">[^]*?<\/article>/g)[2].replace('/101/', '/102/');
+  page = page.replace('found 3', 'found 4');
+  let writes = 0;
+  const r = await collect({
+    fetchImpl: async (u) => new Response(u.includes('/uploads/') ? png : page),
+    storePhoto: async () => {
+      writes++;
+      return stored;
+    },
+  });
+  assert.equal(r.items[0].sourceImages.length, 3);
+  assert.ok(r.items[0].sourceImages.every((u) => u.includes('/uploads/event/')));
+  assert.equal(r.items[0].imageCaption, undefined);
+  assert.match(r.items[1].imageCaption, /venue or artist/);
+  assert.deepEqual(r.items[2].images, r.items[1].images);
+  assert.equal(r.items[2].sourceImages[0], r.items[1].sourceImages[0]);
+  assert.equal(writes, 4);
 });
 test('Music geography is explicit and unknown locations stay hidden for review', async () => {
   const r = await collect({

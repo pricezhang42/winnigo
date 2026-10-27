@@ -18,6 +18,8 @@ p.add_argument('--evidence', required=True)
 p.add_argument('--env', default='.winnigo/p2-qa.env')
 p.add_argument('--run-start')
 p.add_argument('--run-end')
+p.add_argument('--single-event', action='store_true')
+p.add_argument('--image-caption')
 a = p.parse_args()
 values = {}
 for filename in ['.env.local', a.env]:
@@ -74,7 +76,6 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
             items = [e for e in result['items'] if e['source'] == a.source]
             assert items and all(e.get('start') for e in items), result
             assert len({e['id'] for e in items}) == len(items)
-            assert any(e.get('recurring') for e in items)
             if a.run_start:
                 assert all(
                     e.get('runDates', {}).get('start') == a.run_start
@@ -83,6 +84,12 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
                 )
                 assert len({e.get('eventId', e['id']) for e in items}) == 1
                 assert all(e['start'] == e['end'] for e in items)
+            if a.single_event:
+                assert len(items) == 1 and not items[0].get('recurring'), items
+            else:
+                assert any(e.get('recurring') for e in items)
+            if a.image_caption:
+                assert all(e.get('imageCaption') == a.image_caption for e in items)
             assert all(len(e.get('images', [])) <= 3 for e in items)
             card = wait.until(
                 lambda d: next(
@@ -110,6 +117,10 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
             driver.save_screenshot(str(evidence / f'cards-{parsed.port}.png'))
             card.find_element(By.CSS_SELECTOR, '.card-title').click()
             wait.until(lambda d: d.find_element(By.CSS_SELECTOR, '.detail-dialog'))
+            if a.image_caption:
+                assert (
+                    a.image_caption in driver.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+                )
             wait.until(
                 lambda d: d.execute_script(
                     'return [...document.querySelectorAll(".detail-dialog img")].some(i=>i.complete&&i.naturalWidth>0)'
@@ -143,7 +154,8 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
                         'origin': origin,
                         'source': a.source,
                         'datedCards': len(items),
-                        'recurring': True,
+                        'recurring': any(e.get('recurring') for e in items),
+                        'imageCaption': a.image_caption,
                         'privatePhotosLoaded': True,
                         'grid': True,
                         'javascriptErrors': len(errors),

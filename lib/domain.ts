@@ -125,5 +125,6 @@ export type Listing = {
   difficulty?: string;
   provenance?: string;
   images?: string[];
+  imageCaption?: string;
   commentNotes?: { text: string; url: string }[];
 };
