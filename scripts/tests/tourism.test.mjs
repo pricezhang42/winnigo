@@ -156,3 +156,185 @@ test('Tourism merges only an unambiguous matching annual edition and keeps unkno
   assert.equal(r.items[0].occurrences.length, 1);
   assert.equal(r.items[0].occurrences[0].time, '');
 });
+
+test('Tourism detects exhibitions in full bilingual descriptions and ignores venue names', () => {
+  const page = detail(
+    false,
+    'October 27, 2026 to November 20, 2026',
+    'Texte français. '.repeat(150) + ' This exhibition runs from August 27 to November 20.',
+  );
+  const parsed = parseTourismDetail(page, event);
+  assert.equal(parsed.isExhibition, true);
+  assert.ok(!parsed.description.includes('This exhibition'));
+  assert.equal(parsed.runDates, null); // A published structured end date is required as year evidence.
+  assert.equal(
+    parseTourismDetail(
+      detail(false, 'October 31, 2026', 'Racing at Exhibition Park.').replace(
+        'Test exhibition',
+        'Racing',
+      ),
+      event,
+    ).isExhibition,
+    false,
+  );
+});
+
+test('Tourism preserves organizer run dates and date-only daily cards for continuous all-day exhibitions', async () => {
+  const organizer = 'https://ccfm.mb.ca/en/events/test-portraits/';
+  const { readFile } = await import('node:fs/promises');
+  const official = await readFile('scripts/fixtures/tourism/organizer.html', 'utf8');
+  const title = 'Exposition Test Portraits',
+    listing = entry('2026-10-01', '2026-11-20', { name: title });
+  const page = detail(
+    false,
+    'October 27, 2026 to November 20, 2026',
+    'Texte. '.repeat(200) + ' A photography exhibition.',
+  )
+    .replace('Test exhibition', title)
+    .replace(
+      '<div class="body">',
+      '<div class="contact-details">Venue: Test Art Gallery<br>URL: <a href="' +
+        organizer +
+        '">Visit Website</a></div><div class="body">',
+    );
+  const r = await collect([listing], {
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([listing])
+          : u === A
+            ? directory
+            : u === festival
+              ? detail(true, 'TBD')
+              : u === organizer
+                ? official
+                : page,
+      ),
+  });
+  assert.equal(r.failedPages.length, 0);
+  const item = r.items.find((e) => e.sourceIdentity === 'tourism:event:100');
+  assert.equal(item.start, '2026-08-27');
+  assert.equal(item.end, '2026-11-20');
+  assert.equal(item.runDates.sourceUrl, organizer);
+  assert.equal(item.occurrences.length, 51);
+  assert.equal(item.occurrences[0].start, '2026-10-01');
+  assert.equal(item.occurrences.at(-1).start, '2026-11-20');
+  assert.ok(item.occurrences.every((o) => o.start === o.end && !o.startAt && !o.endAt && !o.time));
+  const failed = await collect([listing], {
+    knownListings: new Map([[item.id, item]]),
+    fetchImpl: async (u) =>
+      u === organizer
+        ? new Response('Unavailable', { status: 503 })
+        : new Response(
+            u === C
+              ? calendar([listing])
+              : u === A
+                ? directory
+                : u === festival
+                  ? detail(true, 'TBD')
+                  : page,
+          ),
+  });
+  assert.ok(failed.failedPages.length);
+  assert.equal(failed.completeSchedules, false);
+  assert.equal(failed.items[0].runDates.start, '2026-08-27');
+  assert.equal(failed.items[0].occurrences.length, 51);
+});
+
+test('Tourism rejects mismatched or unsafe organizer pages and recovers only consistent narrative bounds', async () => {
+  const { tourismRunDates, parseTourismOrganizer } =
+    await import('../../lib/server/tourism-winnipeg.mjs');
+  assert.deepEqual(
+    tourismRunDates(
+      'New exhibition from August 27 to November 20. Opening August 27.',
+      '2026-11-20',
+    ),
+    { start: '2026-08-27', end: '2026-11-20' },
+  );
+  assert.equal(tourismRunDates('From August 27 to November 19.', '2026-11-20'), null);
+  assert.equal(tourismRunDates('From August 27, 2025 to November 20.', '2026-11-20'), null);
+  assert.equal(
+    tourismRunDates('From August 27 to November 20. From August 28 to November 20.', '2026-11-20'),
+    null,
+  );
+  assert.throws(
+    () => tourismUrl('https://evil.test/en/events/test-portraits/', 'organizer'),
+    /Refused/,
+  );
+  assert.throws(
+    () =>
+      parseTourismOrganizer(
+        '<h1>Different event</h1>',
+        'https://ccfm.mb.ca/en/events/test-portraits/',
+        'Test Portraits',
+      ),
+    /title does not match/,
+  );
+});
+
+test('Tourism combines a verified organizer exhibition with its homepage alias without duplicate days', async () => {
+  const { readFile } = await import('node:fs/promises'),
+    official = await readFile('scripts/fixtures/tourism/organizer.html', 'utf8');
+  const organizer = 'https://ccfm.mb.ca/en/events/test-portraits/',
+    title = 'Exposition Test Portraits',
+    aliasUrl = event.replace('/100/', '/101/');
+  const primary = entry('2026-10-01', '2026-11-20', { name: title }),
+    alias = entry('2026-10-01', '2026-11-20', {
+      name: 'Exhibition Test Portraits - Artist',
+      url: aliasUrl,
+    });
+  const contact = (href) =>
+    '<div class="contact-details">Venue: Test Art Gallery<br>Address: Test street<br>URL: <a href="' +
+    href +
+    '">Visit Website</a></div><div class="body">';
+  const primaryPage = detail(false, 'October 27, 2026 to November 20, 2026', 'An exhibition.')
+    .replace('Test exhibition', title)
+    .replace('<div class="body">', contact(organizer));
+  const aliasPage = detail(
+    false,
+    'October 27, 2026 to November 20, 2026 All day',
+    'A new exhibition from August 27 to November 20.',
+  )
+    .replace('Test exhibition', alias.name)
+    .replace('<div class="body">', contact('https://ccfm.mb.ca/'))
+    .replace(
+      '</div></div></div>',
+      '</div></div>' +
+        '<script type="application/ld+json">' +
+        JSON.stringify(alias) +
+        '</script></div>',
+    );
+  const r = await collect([primary, alias], {
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([primary, alias])
+          : u === A
+            ? directory
+            : u === festival
+              ? detail(true, 'TBD')
+              : u === organizer
+                ? official
+                : u === aliasUrl
+                  ? aliasPage
+                  : primaryPage,
+      ),
+  });
+  assert.equal(r.organizerAliases, 1);
+  const shows = r.items.filter((e) => e.type === 'Event');
+  assert.equal(shows.length, 1);
+  assert.equal(shows[0].occurrences.length, 51);
+  assert.deepEqual(shows[0].sourceLinks, [aliasUrl]);
+  assert.ok(r.supersededIds.some((id) => id.endsWith('101')));
+  assert.equal(shows[0].venue, 'Test Art Gallery');
+});
+
+test('Tourism recognizes gallery collections without an English exhibition keyword', () => {
+  const page = detail(false, 'October 28, 2026', 'A collection of works by an artist.')
+    .replace('Test exhibition', 'Carvings')
+    .replace(
+      '<div class="body">',
+      '<div class="contact-details">Venue: Art Gallery<br>URL: example</div><div class="body">',
+    );
+  assert.equal(parseTourismDetail(page, event).isExhibition, true);
+});

@@ -1019,6 +1019,62 @@ try {
     'Tourism Winnipeg visiting dates, annual date review and owner corrections persist across repeat and partial imports; manual only',
   );
 
+  const portraitTitle = 'Exposition Test Portraits',
+    portraitOrganizer = 'https://ccfm.mb.ca/en/events/test-portraits/';
+  const portraitCalendar = tourismCalendar([
+    tourismEntry('2026-10-01', '2026-11-20', { name: portraitTitle }),
+  ]);
+  const portraitDetail = tourismDetail(
+    false,
+    'October 27, 2026 to November 20, 2026',
+    'Une exposition.',
+  )
+    .replace('Test exhibition', portraitTitle)
+    .replace(
+      '<div class="body">',
+      '<div class="contact-details">Venue: Test Art Gallery<br>URL: <a href="' +
+        portraitOrganizer +
+        '">Visit Website</a></div><div class="body">',
+    );
+  const portraitOfficial = await readFile('scripts/fixtures/tourism/organizer.html', 'utf8');
+  const portraitResult = await collectTourism({}, '2099-10-27T16:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (u) =>
+      new Response(
+        (u === TOURISM_CALENDAR
+          ? portraitCalendar
+          : u === TOURISM_ANNUAL
+            ? tourismDirectory
+            : u === tourismFestival
+              ? tourismDetail(true, 'TBD')
+              : u === portraitOrganizer
+                ? portraitOfficial
+                : portraitDetail
+        ).replaceAll('2026', '2099'),
+      ),
+  });
+  responses['tourism-winnipeg'] = portraitResult;
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'ok');
+  assert.equal((await payload(tourismId)).runDates.start, '2099-08-27');
+  const portraitRows = (
+    await pool.query(
+      `SELECT start_date::text AS day,end_date::text AS finish,start_at,end_at FROM occurrences WHERE listing_id=$1 AND status='active' ORDER BY start_date`,
+      [tourismId],
+    )
+  ).rows;
+  assert.equal(portraitRows.length, 51);
+  assert.equal(portraitRows[0].day, '2099-10-01');
+  assert.equal(portraitRows.at(-1).day, '2099-11-20');
+  assert.ok(portraitRows.every((o) => o.day === o.finish && !o.start_at && !o.end_at));
+  assert.equal(
+    (await repo.detail(tourismId, { admin: true, principal: owner })).title,
+    'Owner tourism correction',
+  );
+  checks.push(
+    'Organizer run bounds survive typed storage while bounded exhibition cards stay date-only and owner corrections persist',
+  );
+
   delete deps.now;
 
   // 8. A worker that dies mid-run loses its lease; the job is picked up again and finishes once.
