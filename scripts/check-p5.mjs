@@ -1,3 +1,15 @@
+import {
+  collectTourism,
+  TOURISM_CALENDAR,
+  TOURISM_ANNUAL,
+} from '../lib/server/tourism-winnipeg.mjs';
+import {
+  entry as tourismEntry,
+  calendar as tourismCalendar,
+  directory as tourismDirectory,
+  detail as tourismDetail,
+  festival as tourismFestival,
+} from './fixtures/tourism/pages.mjs';
 import { collectMusic } from '../lib/server/manitoba-music.mjs';
 import { collectFortwhyte } from '../lib/server/fortwhyte.mjs';
 // P5 integration check (npm run check:p5): collection jobs against a temporary PostgreSQL schema
@@ -1039,6 +1051,117 @@ try {
   assert.equal(SCHEDULES.fortwhyte, undefined);
   checks.push(
     'FortWhyte shared event/time/DST imports preserve owner/session edits through repeated, partial and failed reads; manual lease covers spacing',
+  );
+
+  const tourismFixture = tourismCalendar([tourismEntry('2026-10-28', '2026-10-30')]);
+  const tourismResult = await collectTourism({}, '2099-10-26T12:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (u) =>
+      new Response(
+        (u === TOURISM_CALENDAR
+          ? tourismFixture
+          : u === TOURISM_ANNUAL
+            ? tourismDirectory
+            : tourismDetail(
+                u === tourismFestival,
+                u === tourismFestival ? 'Dates TBD' : 'October 28, 2026',
+              )
+        ).replaceAll('2026', '2099'),
+      ),
+  });
+  responses['tourism-winnipeg'] = tourismResult;
+  let tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'ok');
+  const tourismId = tourismResult.items[0].id;
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM occurrences WHERE listing_id=$1', [tourismId]))
+      .rows[0].n,
+    3,
+  );
+  await applyAction(
+    { action: 'update', id: tourismId, title: 'Owner tourism correction', hidden: true },
+    repo,
+    owner,
+  );
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.counts.added, 0);
+  assert.equal(
+    (await repo.detail(tourismId, { admin: true, principal: owner })).title,
+    'Owner tourism correction',
+  );
+  assert.equal(await repo.detail(tourismId, { principal: owner }), null);
+  responses['tourism-winnipeg'] = {
+    ...tourismResult,
+    items: [],
+    allowEmpty: true,
+    failedPages: [{ url: TOURISM_CALENDAR, error: 'Synthetic partial calendar' }],
+  };
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'partial');
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM occurrences WHERE listing_id=$1', [tourismId]))
+      .rows[0].n,
+    3,
+  );
+  assert.equal(SCHEDULES['tourism-winnipeg'], undefined);
+  checks.push(
+    'Tourism Winnipeg visiting dates, annual date review and owner corrections persist across repeat and partial imports; manual only',
+  );
+
+  const portraitTitle = 'Exposition Test Portraits',
+    portraitOrganizer = 'https://ccfm.mb.ca/en/events/test-portraits/';
+  const portraitCalendar = tourismCalendar([
+    tourismEntry('2026-10-01', '2026-11-20', { name: portraitTitle }),
+  ]);
+  const portraitDetail = tourismDetail(
+    false,
+    'October 27, 2026 to November 20, 2026',
+    'Une exposition.',
+  )
+    .replace('Test exhibition', portraitTitle)
+    .replace(
+      '<div class="body">',
+      '<div class="contact-details">Venue: Test Art Gallery<br>URL: <a href="' +
+        portraitOrganizer +
+        '">Visit Website</a></div><div class="body">',
+    );
+  const portraitOfficial = await readFile('scripts/fixtures/tourism/organizer.html', 'utf8');
+  const portraitResult = await collectTourism({}, '2099-10-27T16:00:00Z', {
+    pauseMs: 0,
+    fetchImpl: async (u) =>
+      new Response(
+        (u === TOURISM_CALENDAR
+          ? portraitCalendar
+          : u === TOURISM_ANNUAL
+            ? tourismDirectory
+            : u === tourismFestival
+              ? tourismDetail(true, 'TBD')
+              : u === portraitOrganizer
+                ? portraitOfficial
+                : portraitDetail
+        ).replaceAll('2026', '2099'),
+      ),
+  });
+  responses['tourism-winnipeg'] = portraitResult;
+  tourismRun = await runOnce('tourism-winnipeg');
+  assert.equal(tourismRun.outcome.status, 'ok');
+  assert.equal((await payload(tourismId)).runDates.start, '2099-08-27');
+  const portraitRows = (
+    await pool.query(
+      `SELECT start_date::text AS day,end_date::text AS finish,start_at,end_at FROM occurrences WHERE listing_id=$1 AND status='active' ORDER BY start_date`,
+      [tourismId],
+    )
+  ).rows;
+  assert.equal(portraitRows.length, 51);
+  assert.equal(portraitRows[0].day, '2099-10-01');
+  assert.equal(portraitRows.at(-1).day, '2099-11-20');
+  assert.ok(portraitRows.every((o) => o.day === o.finish && !o.start_at && !o.end_at));
+  assert.equal(
+    (await repo.detail(tourismId, { admin: true, principal: owner })).title,
+    'Owner tourism correction',
+  );
+  checks.push(
+    'Organizer run bounds survive typed storage while bounded exhibition cards stay date-only and owner corrections persist',
   );
 
   delete deps.now;

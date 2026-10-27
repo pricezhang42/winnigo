@@ -16,6 +16,8 @@ p.add_argument('--source', required=True)
 p.add_argument('--query', required=True)
 p.add_argument('--evidence', required=True)
 p.add_argument('--env', default='.winnigo/p2-qa.env')
+p.add_argument('--run-start')
+p.add_argument('--run-end')
 p.add_argument('--single-event', action='store_true')
 p.add_argument('--image-caption')
 a = p.parse_args()
@@ -74,6 +76,14 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
             items = [e for e in result['items'] if e['source'] == a.source]
             assert items and all(e.get('start') for e in items), result
             assert len({e['id'] for e in items}) == len(items)
+            if a.run_start:
+                assert all(
+                    e.get('runDates', {}).get('start') == a.run_start
+                    and e.get('runDates', {}).get('end') == a.run_end
+                    for e in items
+                )
+                assert len({e.get('eventId', e['id']) for e in items}) == 1
+                assert all(e['start'] == e['end'] for e in items)
             if a.single_event:
                 assert len(items) == 1 and not items[0].get('recurring'), items
             else:
@@ -123,6 +133,13 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
                     'return document.querySelector(".detail-dialog").getAnimations({subtree:true}).every(a=>a.playState!=="running")'
                 )
             )
+            if a.run_start:
+                text = driver.find_element(By.CSS_SELECTOR, '.detail-dialog').text
+                assert 'Full run:' in text
+                import datetime
+
+                assert datetime.date.fromisoformat(a.run_start).strftime('%b %-d') in text
+                assert datetime.date.fromisoformat(a.run_end).strftime('%b %-d') in text
             driver.save_screenshot(str(evidence / f'detail-{parsed.port}.png'))
             assert (
                 'Listings could not be loaded' not in driver.find_element(By.TAG_NAME, 'body').text
