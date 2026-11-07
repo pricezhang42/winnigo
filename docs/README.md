@@ -35,6 +35,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [15 — P2 storage](15-p2-storage.md) | PostgreSQL/S3 implementation and migration rehearsal. |
 | [16 — P3 accounts](16-p3-accounts.md) | Accounts, grants, provider setup and acceptance evidence. |
 | [17 — P5 collection jobs](17-p5-collection.md) | Job queue, schedules, run history, failure handling and evidence. |
+| [20 — Event extraction contract](20-event-extraction-contract.md) | Shared JSON Schema, types, evidence, schedule facts and mapping for LLM-assisted extraction. |
 
 ## Fastest path to running it
 
