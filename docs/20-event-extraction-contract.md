@@ -36,6 +36,8 @@ URLs before summaries discard them. It must keep exhibition run bounds separate 
 calendar filter's bounds. It must not include secrets or private social data. Page text remains
 untrusted data, including any instructions embedded in it.
 
+See [page preparation](21-event-page-preparation.md) for the HTML-to-context implementation.
+
 ## Output and uncertainty
 
 The envelope is `{schemaVersion: "1", events: [...]}`. All object fields are required and
