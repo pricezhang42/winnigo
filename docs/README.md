@@ -37,6 +37,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [17 — P5 collection jobs](17-p5-collection.md) | Job queue, schedules, run history, failure handling and evidence. |
 | [20 — Event extraction contract](20-event-extraction-contract.md) | Shared JSON Schema, types, evidence, schedule facts and mapping for LLM-assisted extraction. |
 | [21 — Event page preparation](21-event-page-preparation.md) | Prepare public HTML, schedules and source links for the extraction contract. |
+| [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
 
 ## Fastest path to running it
 
