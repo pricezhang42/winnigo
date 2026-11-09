@@ -97,6 +97,8 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
 
   const schema = counted.text.format.schema;
   assert.equal(schema.type, 'object');
+  assert.equal(schema.properties.events.maxItems, 1);
+  assert.match(counted.instructions, /at most one event/);
   assert.deepEqual(schema.properties.schemaVersion.enum, ['1']);
   const supported = new Set([
     'type',
@@ -139,6 +141,70 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
   assert.equal(result.countedInputTokens, 1000);
   assert.equal(result.model, 'mock-model');
   assert.equal(service.budget().accountedUsd, 0.0011);
+});
+
+test('accepts zero or one main event and rejects extra events even if the provider returns them', async () => {
+  const empty = { ...single, events: [] };
+  assert.deepEqual(
+    (
+      await mockProvider({ generate: () => Response.json(response(empty)) }).service.extract(
+        context,
+      )
+    ).result,
+    empty,
+  );
+  const extra = { ...single, events: [...single.events, ...single.events] };
+  const { calls, service } = mockProvider({ generate: () => Response.json(response(extra)) });
+  await assert.rejects(service.extract(context), isError('invalid_extraction'));
+  assert.equal(calls.length, 2);
+});
+
+test('retries a known end time with missing offset once, counting and billing both attempts', async () => {
+  const valid = structuredClone(single);
+  const slot = valid.events[0].schedule.dates[0];
+  const input = structuredClone(context);
+  const quote = 'November 20, 2026 at 7 PM, ending at 9 PM the same day.';
+  input.documents[0].text += ' ' + quote;
+  valid.events[0].evidence.push({ fields: ['/schedule/dates/0'], sourceUrl: input.pageUrl, quote });
+  Object.assign(slot, { endTime: '21:00', endDayOffset: 0 });
+  const missing = structuredClone(valid);
+  missing.events[0].schedule.dates[0].endDayOffset = null;
+  let generations = 0;
+  const { calls, service } = mockProvider({
+    generate: () => Response.json(response(generations++ === 0 ? missing : valid)),
+  });
+  const result = await service.extract(input);
+  assert.deepEqual(result.result, valid);
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].payload.instructions, calls[1].payload.instructions);
+  assert.equal(calls[2].payload.instructions, calls[3].payload.instructions);
+  assert.doesNotMatch(calls[1].payload.instructions, /Validation found/);
+  assert.match(calls[3].payload.instructions, /Validation found a known endTime/);
+  assert.equal(calls[1].payload.input, calls[3].payload.input);
+  assert.equal(result.countedInputTokens, 2000);
+  assert.deepEqual(result.usage, {
+    inputTokens: 2000,
+    outputTokens: 100,
+    cachedInputTokens: 300,
+    reasoningTokens: 20,
+  });
+  assert.equal(result.estimatedCostUsd, 0.0022);
+  assert.equal(service.budget().accountedUsd, 0.0022);
+
+  const uncorrected = mockProvider({ generate: () => Response.json(response(missing)) });
+  await assert.rejects(
+    uncorrected.service.extract(input),
+    isError('invalid_extraction', (error) => assert.match(error.message, /end day offset/)),
+  );
+  assert.equal(uncorrected.calls.length, 4);
+
+  const tight = mockProvider({
+    options: { budgetUsd: 0.0024 },
+    generate: () => Response.json(response(missing)),
+  });
+  await assert.rejects(tight.service.extract(input), isError('budget_exceeded'));
+  assert.equal(tight.calls.filter((call) => call.url === endpoint).length, 1);
+  assert.equal(tight.service.budget().accountedUsd, 0.0011);
 });
 
 test('invalid context, invalid counts and excess input never dispatch generation', async () => {
