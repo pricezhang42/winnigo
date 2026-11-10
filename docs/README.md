@@ -40,6 +40,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
 | [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
 | [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
+| [25 — Event extraction pilot](25-event-extraction-pilot.md) | Compare reviewed public pages with model and parser results. |
 
 ## Fastest path to running it
 
