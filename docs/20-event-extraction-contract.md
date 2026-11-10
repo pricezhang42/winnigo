@@ -1,4 +1,7 @@
-# Event extraction contract, version 1
+# Event extraction contract
+
+Context version 1, model output version 2. Version 2 (issue #44) removes fields the app knows
+or derives and replaces per-field evidence paths with one quote per fact.
 
 Issue #34, step 1 of Epic #33. This is an intermediate public-event format, independent of
 the LLM provider and the database. Fetching, model calls and repository integration come later.
@@ -40,25 +43,38 @@ See [page preparation](21-event-page-preparation.md) for the HTML-to-context imp
 
 ## Output and uncertainty
 
-The envelope is `{schemaVersion: "1", events: [...]}`. All object fields are required and
-unknown keys are rejected. Unknown facts use `null`; an empty array explicitly reports no facts
-of that kind in the supplied material. Neither implies complete collection or verified closure.
-An empty event list is a valid extraction result, not permission to delete previous listings.
+The model returns `{event: {...} | null}`: one main event, or null when the page has none.
+All object fields are required and unknown keys are rejected. Unknown facts use `null`; an
+empty array reports no facts of that kind. Neither implies complete collection or verified
+closure. A null event is a valid result, not permission to delete previous listings.
 
-An event includes `sourceUrl`, nullable `title`, `description`, `category`, `status`, `venue`,
-`price`, `organizerUrl`, `ticketUrl`, `images`, plus `schedule`, `evidence` and `reviewReasons`.
-Missing price is null, never free. Price preserves source wording and any known amount/currency;
-do not reduce a variable admission policy to its lowest price. Category and status are source
-facts, not owner overrides. `reviewReasons` name an existing field path and a short explanation.
-Conflicting dates can leave `schedule.dates` null with both alternatives in source evidence.
+The event has `title` and `titleQuote`; `venue {name, address, online, quote}`; `price {amount,
+text, quote}`; `ticketUrl`, `organizerUrl`, up to three `imageUrls`; `schedule`; and
+`reviewReasons` (short strings). Missing price is null, never free.
 
-Every positive fact needs an evidence entry covering its field or a parent object. An entry
-contains field paths relative to the event (for example `/schedule/dates/0`), the document URL
-and an exact source quote. Quotes must appear in the supplied document. Source and image/link
-URLs must exactly match a document URL or its preparer's URL list; arbitrary invented URLs and
-credentials are rejected. This checks provenance and evidence presence, **not that the model
-interpreted the quote correctly**. Validation is not a publication decision or a confidence score.
-The application still needs source URL allowlists before making any subsequent request.
+The model does **not** return: the source URL, timezone, schedule kind, end-day offsets,
+currency, description, category, event status, image kind or caption, or evidence field paths.
+`parseEventExtraction(value, context)` derives them and returns an internal event:
+
+- `sourceUrl` is the context page URL; `timeZone` stays null (the app applies Winnipeg).
+- `kind` is exhibition (run plus hours/exceptions), recurring, multiple or single.
+- `endDayOffset` is 1 when the end time is not after the start time, the day difference when an
+  end date is given, otherwise 0 for a known end time and null for an unknown one.
+- A date's `cancelled` flag becomes its status; the event is cancelled only when every date is.
+- `currency` is CAD when an amount is present. The description comes from the prepared page
+  text; category is left to existing source/owner rules.
+- Evidence entries are built from the quotes, attributed to the document that contains them.
+
+Quotes are matched after NFKC and whitespace normalization against any supplied document.
+
+- **Core facts** (title, run, each date, rule, hours period and exception): an unsupported or
+  invalid entry is dropped and recorded as a review reason, so the event is held for review.
+- **Optional facts** (venue, address, price): an unsupported value becomes null and is recorded
+  as an `issue`; the event is not held. Link and image URLs absent from the documents are dropped.
+
+The parser throws only for structural problems (wrong types, unknown keys, size limits).
+This checks provenance, **not that the model interpreted the quote correctly**. Validation is
+not a publication decision or a confidence score.
 
 ## Schedule facts
 
@@ -81,11 +97,9 @@ Winnipeg year and returns `{value, precision, yearAssumed}` without changing the
 assumed date is rejected rather than rolled into another day/year. No year rollover is guessed:
 an unqualified December–January range needs review if the current-year default reverses it.
 
-Times are local `HH:mm` values. Unknown start/end times stay null. A known end time requires
-`endDayOffset` (0 for same day, 1 for overnight; at most 366 for an explicit multi-day interval).
-If an end date is supplied it must agree with that offset. A rule's `from`/`through` delimit the
-recurrence, not an individual performance's duration. A null schedule timezone means none was
-published; later normalization may apply the application's explicit Winnipeg context. Shared
+Times are local `HH:mm` values. Unknown start/end times stay null; the app derives day offsets
+(see above). An end date before its start date is held for review. A rule's `from`/`through` delimit the
+recurrence, not an individual performance's duration. Shared
 code expands verified rules and converts local times through DST; the contract never invents
 UTC offsets or treats an unknown time as midnight. Ambiguous DST wall times need review later.
 
@@ -100,8 +114,8 @@ UTC offsets or treats an unknown time as midnight. Ambiguous DST wall times need
 | Explicit dates and recurrence | Shared `occurrences`, `recurring`, timestamps, `endTimeKnown`, and session status after deterministic normalization/filtering |
 | Visiting hours and exceptions | Verified `visitingSchedule.periods/weekly/exceptions` and daily cards through shared schedule logic |
 | Missing-year resolution | `yearAssumed` plus original date components/evidence; review impossible or reversed assumed dates |
-| Up to three image URLs, event/venue/artist/unknown kind, caption | Verified source URLs → private media pipeline → `sourceImages`, `images`, cover and fallback caption |
-| Evidence and review reasons | Bounded source metadata/review records; unknown required facts withhold publication |
+| Up to three image URLs | Published source URLs → private media pipeline → `sourceImages` and `images`; an existing stored cover is kept |
+| Quotes and review reasons | Bounded source metadata/review records; unknown required facts withhold publication |
 
 Schedule completeness, source identities, deduplication, grants, hidden state, owner overrides,
 photo storage IDs and SQL are not model fields. Only collector/application code may set them.
@@ -112,13 +126,13 @@ and review before mapping to the existing materializer; no implicit 24-hour open
 ## Limits and verification
 
 UTF-8 JSON caps are 128 KiB context and 256 KiB result. Maximums: 10 documents, 40,000 characters
-and 200 URLs per document, 50 events, 200 explicit dates/event, 24 recurrence/hour periods,
-100 exceptions, 3 images, 40 evidence entries and 20 review reasons. Quotes cap at 600 characters;
-descriptions at 6,000. Limits reject the request/result instead of silently clipping evidence.
+and 200 URLs per document, 200 explicit dates, 24 recurrence/hour periods, 100 exceptions,
+3 images and 20 review reasons. Quotes cap at 600 characters. Limits reject the result instead
+of silently clipping it.
 
 `scripts/fixtures/event-extraction.mjs` contains eight synthetic examples: a single event,
 multiple showtimes/dates, a DST-crossing weekly program, first Fridays, an exhibition with
 Monday/holiday closures and month-precision closing date, missing year/time, conflicting dates,
-and a venue-photo fallback. Unit tests exercise validation and the existing visiting-hour/DST
+and photo/ticket links. Unit tests exercise validation and the existing visiting-hour/DST
 boundaries; compile-time checks confirm the inferred types retain nullable facts and reject
 repository fields. These examples verify the contract, not real-source accuracy or model quality.

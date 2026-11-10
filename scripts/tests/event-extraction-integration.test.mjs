@@ -16,7 +16,7 @@ const preview = (value = single, input = context, extra = {}) =>
 const example = (prefix) => structuredClone(examples.find((e) => e.name.startsWith(prefix)));
 const changed = (change) => {
   const value = structuredClone(single);
-  change(value.events[0], value);
+  change(value.event, value);
   return value;
 };
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -47,14 +47,18 @@ test('maps one event using source identity, provenance and an unknown end time, 
   assert.equal(item.occurrencesComplete, false);
   assert.equal(item.occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
   assert.equal(item.occurrences[0].endTimeKnown, false);
-  assert.deepEqual(item.extraction.evidence, single.events[0].evidence);
+  assert.equal(item.extraction.schemaVersion, '2');
+  assert.deepEqual(
+    item.extraction.evidence.map((e) => e.quote),
+    ['QA Concert', 'QA Hall', 'November 20, 2026 at 7 PM'],
+  );
   assert.deepEqual((await preview()).items, result.items);
 });
 
 test('separates same-day showtimes, clips occurrences and records missing-year assumptions', async () => {
   const multiple = example('multiple');
-  multiple.result.events[0].schedule.dates.push({
-    ...multiple.result.events[0].schedule.dates[0],
+  multiple.result.event.schedule.dates.push({
+    ...multiple.result.event.schedule.dates[0],
     start: date(1, 1, 2027),
   });
   const [item] = (await preview(multiple.result, multiple.context)).items;
@@ -83,7 +87,7 @@ test('expands weekly and first-Friday rules with Winnipeg DST and shared identit
     fridays.occurrences.map((o) => o.start),
     ['2026-11-06', '2026-12-04'],
   );
-  monthly.result.events[0].schedule.recurrence[0].interval = 2;
+  monthly.result.event.schedule.recurrence[0].interval = 2;
   assert.equal(
     (await preview(monthly.result, monthly.context)).review[0].reason,
     'missing-recurrence-anchor',
@@ -100,8 +104,7 @@ test('uses one exhibition card per visiting day and retains closing-month precis
   assert.equal(new Set(item.occurrences.map((o) => o.start)).size, item.occurrences.length);
   assert.deepEqual(item.scheduleCoverage, []);
   assert.equal(item.visitingSchedule, undefined);
-  e.result.events[0].schedule.hours[0].weekly[0].endTime = null;
-  e.result.events[0].schedule.hours[0].weekly[0].endDayOffset = null;
+  e.result.event.schedule.hours[0].weekly[0].endTime = null;
   assert.equal((await preview(e.result, e.context)).review[0].reason, 'unconfirmed-visiting-hours');
 });
 
@@ -122,7 +125,7 @@ test('does not invent a timestamp for a repeated or missing DST wall time', asyn
 
 test('preserves overnight times and uses no timed interval for an unknown multi-day boundary', async () => {
   const overnight = changed((e) =>
-    Object.assign(e.schedule.dates[0], { startTime: '23:00', endTime: '01:00', endDayOffset: 1 }),
+    Object.assign(e.schedule.dates[0], { startTime: '23:00', endTime: '01:00' }),
   );
   const [item] = (await preview(overnight)).items;
   assert.deepEqual([item.start, item.end], ['2026-11-20', '2026-11-21']);
@@ -141,7 +144,7 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
   for (const [result, reason] of [
     [await preview(conflict.result, conflict.context), 'source-facts-need-review'],
     [await preview(null), 'invalid-extraction'],
-    [await preview({ schemaVersion: '1', events: [] }), 'no-event-candidates'],
+    [await preview({ event: null }), 'no-event-candidates'],
     [await preview(single, context, { identifyEvent: () => null }), 'unapproved-event-url'],
     [
       await preview(
@@ -154,11 +157,10 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
     [
       await preview(
         changed((e) => {
-          e.price = { amount: 10, currency: 'USD', text: null };
-          e.evidence[0].fields.push('/price');
+          e.titleQuote = 'Invented title';
         }),
       ),
-      'unsupported-admission-currency',
+      'source-facts-need-review',
     ],
   ]) {
     assert.equal(result.status, 'partial');
@@ -176,7 +178,9 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
 });
 
 test('withholds a context with more than one event before looking up its source identity', async () => {
-  const multiple = changed((event, value) => value.events.push(structuredClone(event)));
+  const multiple = changed((event, value) => {
+    value.events = [event, structuredClone(event)];
+  });
   const result = await preview(multiple, context, {
     identifyEvent: () => assert.fail('Only a single event can reach the source adapter'),
   });
@@ -222,21 +226,33 @@ test('withholds candidates that contradict a known identity or exhibition run', 
   assert.deepEqual(outside.items, []);
 });
 
-test('uses trusted private photo storage and keeps a verified cover on fallback or failure', async () => {
-  const e = example('venue photo');
+test('stores up to three published photos and keeps a stored cover on later runs', async () => {
+  const e = example('photo and ticket links');
   const [withoutPhotos] = (await preview(e.result, e.context)).items;
   assert.deepEqual(withoutPhotos.images, []);
+  assert.equal(withoutPhotos.ticketUrl, e.result.event.ticketUrl);
   const [stored] = (await preview(e.result, e.context, { photos: photoPolicy() })).items;
   assert.deepEqual(stored.images, [photo]);
-  assert.match(stored.imageCaption, /venue photo/);
-  assert.deepEqual(stored.sourceImages, [e.result.events[0].images[0].url]);
+  assert.equal(stored.imageCaption, undefined);
+  assert.deepEqual(stored.sourceImages, [e.result.event.imageUrls[0]]);
   const knownListings = new Map([[stored.id, stored]]);
   const next = structuredClone(e);
-  const newUrl = 'https://events.example.test/photos/poster.png';
+  const newUrl = 'https://events.example.test/photos/other.png';
   next.context.documents[0].urls.push(newUrl);
-  next.result.events[0].images.unshift({ url: newUrl, kind: 'event', caption: null });
-  const broken = await preview(next.result, next.context, {
+  next.result.event.imageUrls.unshift(newUrl);
+  let read = false;
+  const kept = await preview(next.result, next.context, {
     knownListings,
+    photos: photoPolicy({
+      read: async () => {
+        read = true;
+        return png;
+      },
+    }),
+  });
+  assert.equal(read, false);
+  assert.deepEqual(kept.items[0].images, [photo]);
+  const broken = await preview(next.result, next.context, {
     photos: photoPolicy({
       read: async () => {
         throw Error('Unavailable');
@@ -244,11 +260,9 @@ test('uses trusted private photo storage and keeps a verified cover on fallback 
     }),
   });
   assert.equal(broken.status, 'partial');
-  assert.deepEqual(broken.items[0].images, [photo]);
-  assert.equal(broken.items[0].imageCaption, stored.imageCaption);
+  assert.equal(broken.failedPages[0].error, 'photo-enrichment-failed');
   let downloaded = false;
   const unsafe = await preview(next.result, next.context, {
-    knownListings,
     photos: photoPolicy({
       validateUrl: () => 'http://127.0.0.1/',
       read: async () => {

@@ -141,17 +141,10 @@ try {
   const extractionContext = extractionFixture.context;
   extractionContext.source = extractionSource.id;
   const extractionValue = extractionFixture.result;
-  const extractionEvent = extractionValue.events[0];
+  const extractionEvent = extractionValue.event;
   const imageUrl = 'https://events.example.test/photos/poster.png';
-  const imageQuote = 'Event poster: ' + imageUrl;
   extractionContext.documents[0].urls.push(imageUrl);
-  extractionContext.documents[0].text += ' ' + imageQuote;
-  extractionEvent.images = [{ url: imageUrl, kind: 'event', caption: null }];
-  extractionEvent.evidence.push({
-    fields: ['/images/0'],
-    sourceUrl: extractionContext.pageUrl,
-    quote: imageQuote,
-  });
+  extractionEvent.imageUrls = [imageUrl];
   const mediaId = 'e'.repeat(64);
   const options = {
     source: extractionSource,
@@ -219,7 +212,7 @@ try {
   const before = await occurrenceRows();
   assert.equal(before.length, extracted.occurrences.length);
   const partialValue = structuredClone(extractionValue);
-  partialValue.events[0].schedule.dates.length = 1;
+  partialValue.event.schedule.dates.length = 1;
   for (let attempt = 0; attempt < 2; attempt++) {
     const partial = await prepareExtractedCollection(partialValue, extractionContext, {
       source: extractionSource,

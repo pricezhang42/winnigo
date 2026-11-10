@@ -48,7 +48,8 @@ The adapter uses the official [Responses Structured Outputs](https://developers.
 and [input token count endpoint](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens/methods/count).
 It sends prepared context as text, with separate extraction instructions. The provider projection
 omits JSON Schema metadata/unsupported string keywords and converts literals to enums. The
-canonical schema still enforces all fields, sizes, URLs and source evidence locally.
+canonical schema still enforces all fields and sizes locally. The service returns the raw
+version 2 model output; consumers derive facts with `parseEventExtraction` (doc 20).
 
 Requests use the fixed OpenAI API endpoint, reject redirects, supply no tools, request
 `store: false`, and disable truncation. The caller must supply public pages only; the service
@@ -56,7 +57,7 @@ cannot identify private information from arbitrary text. Page instructions stay 
 
 Errors carry a stable code and safe metrics, without raw request/response text. Refusals,
 incomplete outputs, invalid JSON and unsupported facts never return candidate events. There are
-no automatic retries for provider failures. Usage and cost cover both attempts if a correction runs.
+no automatic retries; version 2 removed the end-day-offset correction attempt.
 When reported usage is incomplete, the estimate includes the retained reservation.
 
 Tests mock the HTTP transport and verify the request contract, size limits, usage accounting,
