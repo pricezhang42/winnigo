@@ -175,13 +175,13 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
   );
 });
 
-test('deduplicates identical event facts and withholds conflicting candidates with one identity', async () => {
-  const duplicates = changed((e, v) => v.events.push(structuredClone(e)));
-  assert.equal((await preview(duplicates)).items.length, 1);
-  duplicates.events[1].schedule.dates[0].startTime = '20:00';
-  const conflict = await preview(duplicates);
-  assert.equal(conflict.items.length, 0);
-  assert.equal(conflict.review[0].reason, 'conflicting-event-candidates');
+test('withholds a context with more than one event before looking up its source identity', async () => {
+  const multiple = changed((event, value) => value.events.push(structuredClone(event)));
+  const result = await preview(multiple, context, {
+    identifyEvent: () => assert.fail('Only a single event can reach the source adapter'),
+  });
+  assert.deepEqual(result.items, []);
+  assert.equal(result.review[0].reason, 'invalid-extraction');
 });
 
 test('reuses verified parent and occurrence IDs and withholds a conflicting same-day change', async () => {

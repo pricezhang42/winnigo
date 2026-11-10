@@ -1,7 +1,7 @@
 # Event extraction integration
 
 `prepareExtractedCollection(result, context, options)` validates the extraction and prepares
-candidates in Winnigo's existing listing and occurrence formats. The source adapter supplies
+at most one main event in Winnigo's existing listing and occurrence formats. The source adapter supplies
 `source: { id, name }`, an `identifyEvent(url)` callback that approves URLs and resolves
 canonical identity, and any existing listings from `repository.knownSourceListings(source.id)`.
 The adapter can supply an established listing ID or external identity. The mapper reuses a known
