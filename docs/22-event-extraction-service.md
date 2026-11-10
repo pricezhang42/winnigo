@@ -1,7 +1,8 @@
 # Event extraction service
 
 Issue #38, step 3 of Epic #33. The service accepts an already prepared **public** event context
-and returns validated candidate facts plus usage. It does not fetch source URLs, save listings,
+and returns validated facts for at most one main event plus usage. Related events mentioned on
+the page are outside this extraction scope. It does not fetch source URLs, save listings,
 enable collection schedules, or run at app startup. The first provider is OpenAI; the service's
 validation and budget logic is separate from the API adapter.
 
@@ -9,8 +10,10 @@ validation and budget logic is separate from the API adapter.
 2. Ask the provider to count input tokens for the same model, instructions, text and schema
    that generation will receive. Reject an oversized input before generation.
 3. Reserve the estimated full input and maximum output cost against the remaining run budget.
-4. Make one structured generation request. Reconcile the reservation with reported usage.
+4. Make a structured generation request. Reconcile the reservation with reported usage.
 5. Validate the returned JSON with the [shared event contract](20-event-extraction-contract.md).
+   If a known end time is missing its day offset, count and reserve one correction request
+   within the same deadline and budget. Return a validation failure if the correction still fails.
 
 ## Configuration
 
@@ -24,7 +27,7 @@ Set the following in a private environment only for an intentional pilot run:
 | `WINNIGO_EXTRACTION_MODEL` | Explicit API model ID that supports Responses Structured Outputs and input token counting. |
 | `WINNIGO_EXTRACTION_MAX_INPUT_TOKENS` | Default 12,000; checked using the provider's count. |
 | `WINNIGO_EXTRACTION_MAX_OUTPUT_TOKENS` | Default 4,096, including reasoning tokens. |
-| `WINNIGO_EXTRACTION_TIMEOUT_MS` | Default 30,000 ms for counting and generation together. |
+| `WINNIGO_EXTRACTION_TIMEOUT_MS` | Default 30,000 ms for counting and generation, including any correction. |
 | `WINNIGO_EXTRACTION_RUN_BUDGET_USD` | Required positive per-instance generation budget estimate. |
 | `WINNIGO_EXTRACTION_INPUT_USD_PER_MILLION` / `WINNIGO_EXTRACTION_OUTPUT_USD_PER_MILLION` | Required standard USD rates for the configured model and input size. |
 
@@ -53,9 +56,8 @@ cannot identify private information from arbitrary text. Page instructions stay 
 
 Errors carry a stable code and safe metrics, without raw request/response text. Refusals,
 incomplete outputs, invalid JSON and unsupported facts never return candidate events. There are
-no automatic retries; the caller can decide how to handle an unsuccessful batch without repeating
-a possibly billed request. Usage records distinguish reported tokens from a retained reservation.
+no automatic retries for provider failures. Usage and cost cover both attempts if a correction runs.
+When reported usage is incomplete, the estimate includes the retained reservation.
 
 Tests mock the HTTP transport and verify the request contract, size limits, usage accounting,
-concurrent budget reservations, timeouts, cancellation, refusals and local validation. No paid
-requests are part of verification; live model compatibility and extraction quality are pilot work.
+concurrent budget reservations, timeouts, cancellation, refusals and local validation. The test suite makes no paid requests.

@@ -38,6 +38,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [20 — Event extraction contract](20-event-extraction-contract.md) | Shared JSON Schema, types, evidence, schedule facts and mapping for LLM-assisted extraction. |
 | [21 — Event page preparation](21-event-page-preparation.md) | Prepare public HTML, schedules and source links for the extraction contract. |
 | [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
+| [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
 
 ## Fastest path to running it
 

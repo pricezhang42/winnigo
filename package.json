@@ -34,6 +34,7 @@
     "media:cleanup": "node scripts/cleanup-media.mjs",
     "check:p3": "node scripts/check-p3.mjs",
     "check:p5": "node scripts/check-p5.mjs",
+    "check:event-extraction": "node scripts/check-event-extraction.mjs",
     "accounts:manage": "node scripts/manage-accounts.mjs",
     "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
     "collect:wag": "node scripts/collect-wag.mjs",
