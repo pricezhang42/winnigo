@@ -40,7 +40,7 @@ costs up to microdollars, charges cached input at the full input rate for the es
 reasoning within output. When trustworthy usage is missing or a request times out after dispatch,
 the full reservation stays in the ledger. This is a generation estimate, not a provider billing
 limit; it does not account for separate charges, taxes, pricing changes or other processes.
-Persistent accounting and caching are later steps.
+The optional [PostgreSQL cache](24-event-extraction-cache.md) keeps results and usage across runs.
 
 ## Provider boundary
 

@@ -198,6 +198,18 @@ test('retries a known end time with missing offset once, counting and billing bo
   );
   assert.equal(uncorrected.calls.length, 4);
 
+  let attempts = 0;
+  const partialUsage = mockProvider({
+    generate: () =>
+      Response.json(attempts++ === 0 ? response(missing) : { ...response(valid), usage: null }),
+  });
+  const corrected = await partialUsage.service.extract(input);
+  assert.equal(corrected.usage, null);
+  assert.equal(corrected.costBasis, 'reservation');
+  assert.equal(corrected.attempts[0].usage.reasoningTokens, 10);
+  assert.equal(corrected.attempts[1].usage, null);
+  assert.equal(corrected.estimatedCostUsd, 0.0025);
+
   const tight = mockProvider({
     options: { budgetUsd: 0.0024 },
     generate: () => Response.json(response(missing)),

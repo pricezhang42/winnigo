@@ -39,6 +39,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [21 — Event page preparation](21-event-page-preparation.md) | Prepare public HTML, schedules and source links for the extraction contract. |
 | [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
 | [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
+| [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
 
 ## Fastest path to running it
 
