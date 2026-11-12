@@ -49,7 +49,7 @@ and [input token count endpoint](https://developers.openai.com/api/reference/res
 It sends prepared context as text, with separate extraction instructions. The provider projection
 omits JSON Schema metadata/unsupported string keywords and converts literals to enums. The
 canonical schema still enforces all fields and sizes locally. The service returns the raw
-version 2 model output; consumers derive facts with `parseEventExtraction` (doc 20).
+versioned model output; consumers derive facts with `parseEventExtraction` (doc 20).
 
 Requests use the fixed OpenAI API endpoint, reject redirects, supply no tools, request
 `store: false`, and disable truncation. The caller must supply public pages only; the service

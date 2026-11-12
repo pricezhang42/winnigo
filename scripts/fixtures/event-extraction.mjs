@@ -149,7 +149,12 @@ export const examples = [
     'QA Concert at QA Hall. Header says November 20, 2026; booking section says November 21, 2026. Date unconfirmed.',
     (event) => {
       event.schedule.dates = [];
-      event.reviewReasons = ['Header and booking dates disagree: November 20 versus November 21.'];
+      event.reviewReasons = [
+        {
+          field: 'schedule',
+          reason: 'Header and booking dates disagree: November 20 versus November 21.',
+        },
+      ];
     },
   ),
   example(

@@ -23,7 +23,7 @@ test('examples validate without mutation; app supplies source URL, timezone and 
   for (const example of examples) {
     const before = structuredClone(example);
     const result = parseEventExtraction(example.result, example.context);
-    assert.equal(result.schemaVersion, '2');
+    assert.equal(result.schemaVersion, '3');
     assert.deepEqual(result.issues, [], example.name);
     assert.equal(event(result).sourceUrl, example.context.pageUrl);
     assert.equal(event(result).schedule.timeZone, null);
@@ -134,10 +134,40 @@ test('unsupported core facts hold the event for review', () => {
     e.schedule.dates[0].quote = '  November 20,\n2026   at 7 PM ';
   });
   assert.equal(event(spaced).reviewReasons.length, 0);
+  const apart = structuredClone(context);
+  apart.documents[0].text = 'QA Concert at QA Hall.\nNovember 20, 2026\nDoors open early.\n7 PM';
+  const split = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n7 PM';
+  }, apart);
+  assert.equal(event(split).reviewReasons.length, 0);
+  const elided = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026 … 7 PM';
+  }, apart);
+  assert.equal(event(elided).reviewReasons.length, 0);
+  const halfInvented = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n9 PM';
+  }, apart);
+  assert.match(halfInvented.issues[0], /unsupported schedule entry \(quote:/);
   const model = parse((e) => {
-    e.reviewReasons = ['Dates disagree.'];
+    e.reviewReasons = [
+      { field: 'schedule', reason: 'Dates disagree.' },
+      { field: 'venue', reason: 'Two postal codes are printed.' },
+      { field: 'price', reason: 'Two prices are printed.' },
+    ];
   });
-  assert.equal(event(model).reviewReasons[0].reason, 'Dates disagree.');
+  assert.deepEqual(event(model).reviewReasons, [{ field: '/schedule', reason: 'Dates disagree.' }]);
+  assert.deepEqual(model.issues, [
+    '/venue: Two postal codes are printed.',
+    '/price: Two prices are printed.',
+  ]);
+  for (const field of ['title', 'other'])
+    assert.equal(
+      event(parse((e) => (e.reviewReasons = [{ field, reason: 'Conflict.' }]))).reviewReasons[0]
+        .field,
+      '/' + field,
+    );
+  assert.throws(() => parse((e) => (e.reviewReasons = ['Dates disagree.'])));
+  assert.throws(() => parse((e) => (e.reviewReasons = [{ field: 'address', reason: 'x' }])));
 });
 
 test('calendar errors hold the entry for review; impossible dates do not become listings', () => {
@@ -262,7 +292,7 @@ test('request context and result limits fail closed without clipping content', (
     assert.throws(() => parseExtractionContext(input));
   }
   const huge = copy();
-  huge.event.reviewReasons = Array(20).fill('a'.repeat(500));
+  huge.event.reviewReasons = Array(20).fill({ field: 'other', reason: 'a'.repeat(500) });
   huge.event.schedule.dates = Array(200).fill(huge.event.schedule.dates[0]);
   huge.event.schedule.dates[0] = { ...huge.event.schedule.dates[0], quote: 'a'.repeat(600) };
   assert.ok(JSON.stringify(huge).length < EXTRACTION_LIMITS.resultBytes);

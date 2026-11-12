@@ -120,3 +120,95 @@ conflicts concern an optional fact and should not hold an event; see issue #44.
 
 Usage was 178,321 input and 41,405 output tokens, estimated US$0.0386, plus US$0.0126 for
 the held-page rerun.
+
+### Version 3: field-named review reasons
+
+Model review reasons now name the fact they affect. Title, schedule and unclassified conflicts
+hold an event; venue, price and link conflicts become issues. The prompt says that structured
+data splitting a printed range is not a conflict. A quote may also be several excerpts on
+separate lines when they all appear in the same document, such as a date and a time printed
+apart. The same 50 pages were rerun on GPT-6 Luna with two non-event controls added.
+
+| Measure | v2 | v3 |
+| --- | ---: | ---: |
+| Usable event results | 50/50 | 50/50 |
+| Held for review | 14 | 4 |
+| Exact date, time and venue checks | 165/176 (93.8%) | 167/176 (94.9%) |
+| All scored fields | 307/321 | 311/321 |
+
+All four holds are model-reported schedule conflicts: the Egoportraits start date (the reference
+review), a ticket URL dated two days earlier, DOME@HOME's "next show" note, and a First Fridays
+program labelled with another month. The five Museum postal-code conflicts are now issues.
+Remaining misses: three start times, two end times, two dates, two venue labels and one
+recurrence flag. The 95% gate needs one more correct check.
+
+Both non-event controls, Tourism Winnipeg "Upcoming Events" listing pages, returned no event.
+A third candidate was dropped: its page title said "Annual Festivals & Events" but the page is
+the Culture Days detail page, which the model correctly extracted. FortWhyte month calendars
+exceed the preparation limits because of their page-wide JSON-LD, so production would not send
+them. Two controls cannot establish a false-positive rate.
+
+Usage was 204,014 input and 38,930 output tokens, estimated US$0.040 per full run. Development
+runs for this version (a first v3 run and a five-page quote diagnosis) cost about US$0.045.
+
+#### Time misses
+
+The remaining time misses came from three pages, and the saved raw outputs showed two causes.
+
+- Times printed as a rule. "Second Sunday of the month, from 11am-5pm" and "open weekdays from
+  12:00 to 4:00 pm" were extracted on the recurrence rule and the visiting hours, while the
+  listed dates carried no time. The scorer read the time from the first date, which was null.
+  The mapper published the exhibition correctly but withheld the monthly program as
+  `ambiguous-date-only-occurrence`. A date-only entry now adds no card when a rule or visiting
+  hours give that day a timed occurrence, as exhibitions already did. The scorer takes an
+  untimed date's time from the rule or hours, matching what the mapper publishes.
+- A date inside a ticket URL (`10-24-2026`) was sometimes reported as a schedule conflict. The
+  prompt now says dates in URLs are not published dates.
+
+Two full reruns after these changes:
+
+| Measure | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| Exact date, time and venue checks | 172/176 (97.7%) | 173/176 (98.3%) |
+| All scored fields | 314/321 | 317/321 |
+| Held for review | 2 | 2 |
+| Non-event controls returning an event | 0/2 | 0/2 |
+
+Both holds are the Egoportraits start-date conflict (the reference review) and DOME@HOME's
+"next show" note. Run 2's misses are two venue labels, the PseudoScience date and one recurrence
+flag. The parser baseline is 143/176. Both runs pass the 95% date, time and venue gate; the
+false-positive measure rests on only two controls. Each full run cost about US$0.04.
+
+#### Non-event controls
+
+Eleven public non-event pages were fetched on 2026-11-12 from sources Winnigo already collects
+and added to the two earlier listing pages, for 13 controls:
+
+- Tourism Winnipeg: two "Upcoming Events" pages, Live Music and Performing Arts listings, a
+  food truck guide, a nightlife venue and a shop.
+- Manitoba Museum: What's On listing, Plan Your Visit (hours and admission), Planetarium and the
+  visitor code of conduct.
+- FortWhyte Alive: Plan Your Visit. Canada Life Centre: home page.
+
+The FortWhyte home page and the Canada Life Centre calendar render their content with
+JavaScript, so their prepared text was nearly empty; they were dropped as trivial.
+
+With the earlier prompt, two controls returned an event that would have published: Plan Your
+Visit returned its Sensory Sundays section, and the Canada Life Centre home page returned the
+Disney On Ice carousel entry. The prompt now returns an event only when the primary page is
+that event's own page, and null for home, visit, venue, business, guide and listing pages that
+feature events among other content.
+
+| Measure | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| Event pages with a usable result | 50/50 | 50/50 |
+| Exact date, time and venue checks | 171/176 (97.2%) | 171/176 (97.2%) |
+| All scored fields | 313/321 | 315/321 |
+| Held for review | 2 | 2 |
+| Controls returning an event | 0/13 | 0/13 |
+
+The tighter prompt caused no missed events. Each run of 63 pages used about 269,000 input and
+39,000 output tokens (about 21,500 reasoning), estimated US$0.047. Median latency was 7.0–7.7
+seconds per page and the 90th percentile 13.2–15.3 seconds. Thirteen controls is still a small
+sample; collectors only send pages their source adapter identifies as event pages, and the
+integration rejects unapproved event URLs, so these controls test the model's own boundary.

@@ -1,7 +1,8 @@
 # Event extraction contract
 
-Context version 1, model output version 2. Version 2 (issue #44) removes fields the app knows
-or derives and replaces per-field evidence paths with one quote per fact.
+Context version 1, model output version 3. Version 2 (issue #44) removes fields the app knows
+or derives and replaces per-field evidence paths with one quote per fact. Version 3 makes each
+model review reason name the fact it affects.
 
 Issue #34, step 1 of Epic #33. This is an intermediate public-event format, independent of
 the LLM provider and the database. Fetching, model calls and repository integration come later.
@@ -50,7 +51,8 @@ closure. A null event is a valid result, not permission to delete previous listi
 
 The event has `title` and `titleQuote`; `venue {name, address, online, quote}`; `price {amount,
 text, quote}`; `ticketUrl`, `organizerUrl`, up to three `imageUrls`; `schedule`; and
-`reviewReasons` (short strings). Missing price is null, never free.
+`reviewReasons`, each `{field, reason}` where field is title, schedule, venue, price, links or
+other. Missing price is null, never free.
 
 The model does **not** return: the source URL, timezone, schedule kind, end-day offsets,
 currency, description, category, event status, image kind or caption, or evidence field paths.
@@ -71,6 +73,8 @@ Quotes are matched after NFKC and whitespace normalization against any supplied 
   invalid entry is dropped and recorded as a review reason, so the event is held for review.
 - **Optional facts** (venue, address, price): an unsupported value becomes null and is recorded
   as an `issue`; the event is not held. Link and image URLs absent from the documents are dropped.
+- **Model-reported conflicts** hold the event when they name title, schedule or other. Venue,
+  price and link conflicts are recorded as issues; the model leaves those values unknown.
 
 The parser throws only for structural problems (wrong types, unknown keys, size limits).
 This checks provenance, **not that the model interpreted the quote correctly**. Validation is
