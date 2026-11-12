@@ -41,6 +41,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
 | [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
 | [25 — Event extraction pilot](25-event-extraction-pilot.md) | Compare reviewed public pages with model and parser results. |
+| [26 — Event extraction rollout](26-event-extraction-rollout.md) | Enable shadow extraction per source, review comparisons and add a source. |
 
 ## Fastest path to running it
 

@@ -8,6 +8,7 @@ import { readConfig } from '../lib/server/config.mjs';
 import { getRepository } from '../lib/server/adapters.mjs';
 import { database } from '../lib/server/postgres.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
+import { readExtractionRollout } from '../lib/server/extraction-rollout.mjs';
 import {
   COLLECTION_QUEUE,
   createBoss,
@@ -19,6 +20,14 @@ loadLocalEnv();
 const config = readConfig();
 const once = process.argv.includes('--once');
 const repository = getRepository();
+// Fail fast on a mistyped extraction rollout rather than at the first collection.
+let extractionRollout;
+try {
+  extractionRollout = readExtractionRollout();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 await repository.health();
 
 let boss;
@@ -51,6 +60,11 @@ if (boss) {
     return result;
   });
   await syncSchedules(boss);
+  if (extractionRollout.size)
+    console.log(
+      'Extraction shadow mode: ' +
+        [...extractionRollout].map(([id, mode]) => `${id} (${mode})`).join(', '),
+    );
   console.log(
     schedulesEnabled()
       ? 'Winnigo worker ready. Source schedules are enabled (America/Winnipeg).'
