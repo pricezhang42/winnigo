@@ -1,6 +1,6 @@
 // Read a local reference manifest and compare a live extraction with a parser snapshot.
 import { open, readFile } from 'node:fs/promises';
-import { resolveExtractionDate } from '../lib/contracts/event-extraction.mjs';
+import { parseEventExtraction, resolveExtractionDate } from '../lib/contracts/event-extraction.mjs';
 import { createConfiguredEventExtractionService } from '../lib/server/openai-event-extraction.mjs';
 
 const fields = new Set([
@@ -135,11 +135,16 @@ async function evaluate({ id, context, expected, baseline }) {
   let facts = null;
   let metrics;
   let errorCode;
+  let issues = [];
+  let reviewReasons = [];
   let httpStatus;
   try {
     const { result, ...usage } = await service.extract(context);
     metrics = usage;
-    facts = modelFacts(result.events[0], context);
+    const parsed = parseEventExtraction(result, context);
+    facts = modelFacts(parsed.events[0], context);
+    issues = parsed.issues;
+    reviewReasons = parsed.events[0]?.reviewReasons ?? [];
   } catch (error) {
     metrics = error.metrics;
     errorCode = error.code || 'pilot_error';
@@ -154,6 +159,8 @@ async function evaluate({ id, context, expected, baseline }) {
     metrics,
     errorCode,
     httpStatus,
+    issues,
+    reviewReasons,
     modelScore: score(expected, facts),
     ...(baseline === undefined ? {} : { baseline, parserScore: score(expected, baseline) }),
   };

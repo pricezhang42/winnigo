@@ -28,8 +28,9 @@ Raw inputs and individual outputs belong in the ignored local QA folder.
 Score only fields in the reference. Dates use Winnipeg calendar dates, including month precision
 for imprecise ends. Clock times use 24-hour local time. Text comparison normalizes Unicode and
 whitespace. Photo checks look for the published cover URL among the candidates and do not check
-image bytes. Parser clocks come from structured times in the saved outputs. Some older parser
-results put times in display text, which this score does not treat as structured timing.
+image bytes. Parser clocks come from structured times in the saved outputs. Where an older parser
+result kept a time only in display text (for example `7:00 pm` or `8 PM - Midnight`), the
+version 2 rerun derives the clock from that text and marks the baseline `timeFromDisplayText`.
 
 An API or validation failure counts as a missing usable extraction and a miss on its scored
 fields. Report the overall score and the score of usable responses separately. Extra events mean
@@ -93,3 +94,29 @@ from the scores above.
 The model runs and diagnostics accounted for an estimated US$0.221 under the US$0.25 cap.
 The 95% rollout gate remains open. A broader Sol sample, direct WAG pages, and non-event
 controls remain unmeasured.
+
+### Version 2 contract rerun
+
+Issue #44 simplified the model output (doc 20). The same 50 prepared pages and references
+were rerun on GPT-6 Luna. Parser times kept only in display text are now credited (12 pages).
+
+| Measure | GPT-6 Luna v2 | Existing parsers |
+| --- | ---: | ---: |
+| Usable event results | 50/50 | 50/50 |
+| Exact date, time and venue checks across all pages | 165/176 (93.8%) | 143/176 (81.3%) |
+| All scored fields across all pages | 307/321 (95.6%) | 281/321 (87.5%) |
+
+Tourism Winnipeg matched 133/141 core checks (parsers 111/141); the Museum matched 32/35
+(parsers 32/35). Misses were five start dates, two start times, one end time and end date,
+two Museum venue labels, one showtime list, one recurrence flag and one weekday set. The
+parser dropped two unsupported date quotes and one unsupported venue as designed.
+
+36 of 50 results had no review reason; 14 were held. A rerun of the 14 held pages, saving
+reasons, held 11. Most reasons are model-reported conflicts: printed run ranges versus
+split structured ranges (3), two postal codes in a Museum address (3), a start date that
+disagrees with the organizer page or ticket URL (2, including the Egoportraits reference
+review) and a "next show" note (1). One hold came from an unsupported date quote. Address
+conflicts concern an optional fact and should not hold an event; see issue #44.
+
+Usage was 178,321 input and 41,405 output tokens, estimated US$0.0386, plus US$0.0126 for
+the held-page rerun.
