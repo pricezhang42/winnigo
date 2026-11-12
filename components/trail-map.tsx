@@ -124,14 +124,29 @@ function TrailCanvas({
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<Leaflet.Map | null>(null);
   const library = useRef<typeof Leaflet | null>(null);
-  const [error, setError] = useState('');
-  const [ready, setReady] = useState(false);
+  // Status belongs to the map built for these inputs, so a rebuild resets it without an effect.
+  const [status, setStatus] = useState<{
+    entries: Entry[];
+    onSelect: (item: Listing) => void;
+    ready: boolean;
+    error: string;
+  } | null>(null);
+  const current = status?.entries === entries && status.onSelect === onSelect ? status : null;
+  const ready = current?.ready ?? false;
+  const error = current?.error ?? '';
 
   useEffect(() => {
     let disposed = false;
     let observer: ResizeObserver | undefined;
-    setReady(false);
-    setError('');
+    const update = (change: { ready?: boolean; error?: string }) =>
+      setStatus((old) => ({
+        entries,
+        onSelect,
+        ready: false,
+        error: '',
+        ...(old?.entries === entries && old.onSelect === onSelect ? old : {}),
+        ...change,
+      }));
     import('leaflet')
       .then((L) => {
         if (disposed || !node.current) return;
@@ -146,20 +161,23 @@ function TrailCanvas({
         L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION })
           .on('tileerror', () => {
             if (!disposed)
-              setError(
-                'Some map tiles could not load. Trail details and source maps are still available.',
-              );
+              update({
+                error:
+                  'Some map tiles could not load. Trail details and source maps are still available.',
+              });
           })
           .addTo(leafletMap);
         addTrailLayers(L, leafletMap, entries, onSelect);
         if (entries.length) leafletMap.fitBounds(markerPositions(entries), OVERVIEW_FIT);
         observer = new ResizeObserver(() => leafletMap.invalidateSize());
         observer.observe(node.current);
-        setReady(true);
+        update({ ready: true });
       })
       .catch(() => {
         if (!disposed)
-          setError('The interactive map could not load. Use the trail list or source maps below.');
+          update({
+            error: 'The interactive map could not load. Use the trail list or source maps below.',
+          });
       });
     return () => {
       disposed = true;
