@@ -83,8 +83,19 @@ often than the model (143/176 versus 171/176 exact date, time and venue checks).
 3. Run `npm test`, `npm run check:event-extraction` and the source's own checks, then enable
    shadow mode locally and review the report before enabling it anywhere else.
 
-The Manitoba Museum collector is wired. Tourism Winnipeg (the largest pilot gain) follows once
-its collector is merged. WAG stays excluded: its pages need a bot-protection workaround.
+The Manitoba Museum and WAG collectors are wired. Tourism Winnipeg (the largest pilot gain)
+follows once its collector is merged.
+
+For WAG, set `WINNIGO_EXTRACTION_SOURCES=wag=shadow` together with
+`WINNIGO_FLARESOLVERR_URL=http://127.0.0.1:8191` and the provider settings above.
+The existing manual worker collection reuses each FlareSolverr detail response for shadow
+extraction, without a second fetch or storing browser cookies. Multi-date grouping pages are
+excluded; their individual class pages are captured. Parser-rejected detail pages are also
+captured so comparisons can expose missing listings. WAG remains manual-only.
+`npm run collect:wag` is still a parser-only dry run; use the worker's manual collection
+(`npm run collect:wag -- --enqueue`) to record shadow comparisons, then
+`npm run extraction:shadow-report -- wag --details`. The queued run still saves parser listings.
+See [WAG setup](sources/wag.md) for transport limits and photo configuration.
 
 ## Toward write mode
 
@@ -93,3 +104,82 @@ cycle, agreement on how a difference is resolved (extraction, parser or review),
 importer's identity checks against known listings (`ambiguous-event-identity`,
 `existing-cancelled-event`), which shadow mode deliberately skips. Until then, listings,
 schedules and the production audience are unchanged.
+
+## WAG live check (November 12, 2026)
+
+Three targeted detail pages were retrieved through the existing FlareSolverr transport and
+compared with live GPT-6 Luna extraction in a disposable PostgreSQL schema. This checks the
+transport-to-shadow path, not full calendar coverage. A repeat comparison used three cache
+hits and no additional model cost. No application listings were changed.
+
+- **Nourish:** extracted November 19, 6–9pm and three artwork images. The shadow report marks
+  differences because the parser includes the subtitle, uses the overall WAG venue and stores
+  a date rather than the extracted timestamp (midnight UTC is 6pm Winnipeg on November 19).
+- **Canada Life:** held for review because November 15 conflicts with “second Sunday.”
+- **Graphic Novel 3:** held because the selected event content does not state a venue. The
+  model found the range, time and October 11 closure, but emitted weekday 6 for Sunday where
+  the contract requires 0. A schema-valid response is not proof of factual accuracy.
+
+The final three-page call cost an estimated US$0.001854 using the configured rates. Earlier
+selector trials plus the final run totalled US$0.005674. WAG remains shadow-only; venue context,
+weekday accuracy and comparisons between date-only and timed listings need review before any
+write rollout.
+
+## Missing venue fallback
+
+Venue-based sources explicitly configure `defaultVenue` in `lib/connectors.mjs`: WAG,
+Manitoba Museum, FortWhyte Alive, Canada Life Centre, The Forks and Assiniboine Park. When
+extraction has no venue, the importer uses the organization's location after checking for an
+existing saved venue. Stated venues and online events take precedence. Known source addresses
+are included only when applying this fallback, not attached to a different stated venue.
+
+This is an owner-authorized source default, applied after model validation and recorded as
+`extraction.venueFallback = "source-location"`; it is not fabricated source evidence. Tourism
+and other aggregators have no default, so missing venues remain withheld. New venue-based
+sources must opt in explicitly rather than falling back to every organization's name.
+
+Replaying the saved Graphic Novel result with this policy produces a candidate at WAG–Qaumajuq,
+300 Memorial Boulevard, Winnipeg. This resolves the missing-venue hold only; the recorded
+weekday error remains a separate extraction issue. No model request or listing import is
+needed to verify the fallback.
+
+## Main event times and explicit schedule precedence
+
+The extraction prompt treats tours, workshops, doors opening and dinner service within the
+main event's attendance window as activities, not additional occurrences. Explicitly offered
+separate sessions of the main event still count separately. Supplied correction notices take
+precedence, followed by explicitly printed event dates/times over conflicting general
+recurrence rules. Two disagreeing explicit dates/times still require review unless one is
+identified as a correction.
+
+A live Luna retest on four saved WAG detail pages returned Canada Life as one November 15,
+11am–5pm event, without extra tour sessions or a conflict hold. Both Graphic Novel classes
+retained their correct weekly rules and closures; Nourish retained one 6–9pm event window.
+The calendar correction notice was not part of those saved detail inputs: the Canada Life
+result followed the printed November 15 date instead of deriving a date from “second Sunday.”
+The model leaves unprinted years null; the existing importer applies the current-year policy.
+The four-page pass cost an estimated US$0.002284 and the repeat used four cache hits. This
+changes shadow extraction only; the legacy parser still withholds Canada Life and no app
+listings were imported.
+
+## Five-page review with explicit-date precedence
+
+The November 12 review at `18e9d66` used saved FlareSolverr responses and fresh GPT-6 Luna
+extraction. All five pages mapped successfully, producing 15 November/December occurrences:
+
+| Page | Reviewed result | Occurrences |
+| --- | --- | --- |
+| Nourish | November 19, 6–9pm; dinner service is not another occurrence; three supplied artwork links | 1 |
+| Canada Life | Explicit November 15, 11am–5pm, free admission takes precedence over “second Sunday” | 1 |
+| Graphic Novel 3 | Sundays, September 20–November 29, 2–3:30pm; October 11 closure; WAG venue fallback | 5 |
+| Graphic Novel 4 | Saturdays, September 19–November 28, 2:45–4:45pm; October 10 closure; WAG venue fallback | 4 |
+| Cannes Lions | All 12 published showtimes extracted; four December showtimes retained in the window; WAG venue fallback | 4 |
+
+Assertions checked date/time values, weekday numbers, closures, venue fallback, occurrence
+counts/window and supplied image URLs (maximum three). Image bytes were not downloaded.
+The run cost an estimated US$0.002992 at the configured rates. A repeat used five cache hits
+and no model cost. No application listings were imported. All five shadow comparisons still
+reported differences: parser formatting/date-only representations and the parser's Canada Life
+hold differ from the reviewed extraction. These report differences do not measure factual
+accuracy. Earlier findings above describe older prompt runs; this review verifies the updated
+precedence and main-attendance-window instructions. Write mode remains unavailable.

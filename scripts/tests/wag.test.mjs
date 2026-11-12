@@ -424,3 +424,50 @@ test('discovery-only parents do not block a valid all-past empty collection', as
   assert.deepEqual(result.supersededUrls, [entry.url]);
   assert.equal(result.allowEmpty, true);
 });
+
+test('shadow captures fetched child pages once, including parser rejections, without changing results', async () => {
+  const pages = [];
+  const fetchPage = async (url) => ({
+    body: url === WAG_CALENDAR ? classCalendar : url === entry.url ? classParent : classPage,
+  });
+  const baseline = await collectWag(source, now, { fetchPage, pauseMs: 0 });
+  const result = await collectWag(source, now, {
+    fetchPage,
+    pauseMs: 0,
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.deepEqual(result, baseline);
+  assert.equal(pages.length, 2);
+  assert.deepEqual(
+    pages.map((page) => page.id),
+    result.items.map((item) => item.id),
+  );
+  assert.ok(pages.every((page) => page.html === classPage && page.url !== entry.url));
+  const { prepareExtractionDocument } = await import('../../lib/server/event-page-preparation.mjs');
+  const document = prepareExtractionDocument({
+    ...pages[0],
+    html: pages[0].html
+      .replace('</main>', '<section><h2>Instructor</h2>Unrelated biography</section></main>')
+      .replace(
+        'Public event description.',
+        'Public event description.</p><h2>Presented by</h2><p>Sponsor logo',
+      ),
+  });
+  assert.match(document.text, /Art weekend/);
+  assert.match(document.text, /Sep 20 - Nov 29/);
+  assert.doesNotMatch(document.text, /Related event|Unrelated biography|Sponsor logo/);
+  pages.length = 0;
+  const rejected = await collectWag(source, now, {
+    pauseMs: 0,
+    fetchPage: async (url) => ({
+      body:
+        url === WAG_CALENDAR
+          ? calendar.replace('class="btn-more"', 'class="unused"')
+          : event.replace('Nov 6 - Nov 8', 'Nov 7 - Nov 8'),
+    }),
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.equal(rejected.reviewRequired, 1);
+  assert.equal(pages.length, 1);
+  assert.equal(rejected.items.length, 0);
+});

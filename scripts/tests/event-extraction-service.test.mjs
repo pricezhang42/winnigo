@@ -99,6 +99,9 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
   assert.equal(schema.type, 'object');
   assert.deepEqual(Object.keys(schema.properties), ['event']);
   assert.match(counted.instructions, /one event/);
+  assert.match(counted.instructions, /activities within that window are not separate occurrences/);
+  assert.match(counted.instructions, /prefer an explicitly printed event date or time/);
+  assert.match(counted.instructions, /If two explicit dates or times disagree/);
   const supported = new Set([
     'type',
     'description',

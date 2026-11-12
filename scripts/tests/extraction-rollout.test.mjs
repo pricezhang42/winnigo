@@ -18,9 +18,10 @@ test('rollout is off by default and only accepts shadow mode for supported sourc
     [...readExtractionRollout(env('manitoba-museum=shadow'))],
     [['manitoba-museum', 'shadow']],
   );
+  assert.equal(readExtractionRollout(env('wag=shadow')).get('wag'), 'shadow');
   for (const [value, message] of [
     ['manitoba-museum=write', /only shadow/],
-    ['wag=shadow', /not available for source wag/],
+    ['unknown=shadow', /not available for source unknown/],
     ['manitoba-museum', /source=shadow/],
     ['manitoba-museum=shadow=x', /source=shadow/],
     ['manitoba-museum=shadow,manitoba-museum=shadow', /listed twice/],
