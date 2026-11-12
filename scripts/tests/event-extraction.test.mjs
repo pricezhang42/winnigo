@@ -4,6 +4,7 @@ import {
   eventExtractionJsonSchema,
   extractionContextJsonSchema,
   EXTRACTION_LIMITS,
+  namedWeekdays,
   parseEventExtraction,
   parseExtractionContext,
   resolveExtractionDate,
@@ -227,6 +228,35 @@ test('recurrence survives DST and monthly selectors remain explicit facts', () =
   const held = event(parseEventExtraction(bad, example.context));
   assert.deepEqual(held.schedule.recurrence, []);
   assert.match(held.reviewReasons[0].reason, /weekly days missing/);
+});
+
+test('weekday numbers are described to the model and must match the quoted day', () => {
+  const described = JSON.stringify(eventExtractionJsonSchema);
+  assert.match(described, /0 = Sunday, 1 = Monday.*6 = Saturday/);
+  // Sundays counted from Monday = 0 become 6 (Saturday); the quote says Sunday, so hold it.
+  const example = examples.find((e) => e.name === 'weekly program across DST');
+  assert.match(example.result.event.schedule.recurrence[0].quote, /Sundays/);
+  const shifted = structuredClone(example.result);
+  shifted.event.schedule.recurrence[0].weekdays = [6];
+  const held = event(parseEventExtraction(shifted, example.context));
+  assert.deepEqual(held.schedule.recurrence, []);
+  assert.match(held.reviewReasons[0].reason, /weekdays do not match the quoted days/);
+  const monthly = examples.find((e) => e.name === 'first Friday monthly program');
+  const wrongFriday = structuredClone(monthly.result);
+  wrongFriday.event.schedule.recurrence[0].weekdays = [4];
+  assert.equal(event(parseEventExtraction(wrongFriday, monthly.context)).reviewReasons.length, 1);
+  assert.equal(
+    event(parseEventExtraction(monthly.result, monthly.context)).reviewReasons.length,
+    0,
+  );
+
+  assert.deepEqual([...namedWeekdays('first Sunday of the month')], [0]);
+  assert.deepEqual([...namedWeekdays('Open weekdays from noon')], [1, 2, 3, 4, 5]);
+  assert.deepEqual([...namedWeekdays('Weekends only')], [0, 6]);
+  assert.deepEqual([...namedWeekdays('Tuesday to Sunday')].sort(), [0, 2]);
+  // Negated or absent days give no evidence either way.
+  for (const quote of ['Closed Mondays', 'daily except Sunday', 'Planetarium sun show', null])
+    assert.equal(namedWeekdays(quote), null);
 });
 
 test('exhibition maps to shared visiting hours without losing run precision', () => {
