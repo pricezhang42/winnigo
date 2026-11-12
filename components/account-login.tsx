@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -75,9 +76,9 @@ export default function AccountLogin({ google, mail }: { google: boolean; mail: 
   }
   return (
     <main className="account-shell">
-      <a className="brand" href="/">
+      <Link className="brand" href="/">
         winnigo.
-      </a>
+      </Link>
       <h1>{copy.heading}</h1>
       <p>Sign in to discover your Winnipeg. New accounts require an invitation.</p>
       <form onSubmit={submit}>

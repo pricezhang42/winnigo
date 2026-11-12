@@ -46,11 +46,25 @@ export function useDiscoveryResults(
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<string[]>([]);
   const [reports, setReports] = useState<SourceReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Loading until the current request has completed (or failed); derived, not set in the effect.
+  const requestKey = JSON.stringify([
+    query,
+    date,
+    tab,
+    quick,
+    category,
+    area,
+    collection,
+    offset,
+    saved,
+    today,
+    mapFilters,
+  ]);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== requestKey;
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     const params = new URLSearchParams({
       query,
       ...(date ? { date } : {}),
@@ -93,7 +107,7 @@ export function useDiscoveryResults(
             }
           })
           .finally(() => {
-            if (!controller.signal.aborted) setLoading(false);
+            if (!controller.signal.aborted) setLoadedKey(requestKey);
           }),
       100,
     );
@@ -103,7 +117,7 @@ export function useDiscoveryResults(
     };
     // setNotice is a state setter, which React keeps stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, date, tab, quick, category, area, collection, offset, saved, today, mapFilters]);
+  }, [requestKey]);
 
   return { items, total, areas, reports, loading };
 }
