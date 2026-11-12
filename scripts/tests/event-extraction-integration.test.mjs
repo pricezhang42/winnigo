@@ -87,6 +87,35 @@ test('expands weekly and first-Friday rules with Winnipeg DST and shared identit
     fridays.occurrences.map((o) => o.start),
     ['2026-11-06', '2026-12-04'],
   );
+  // Listed dates without times confirm the timed rule instead of adding date-only cards.
+  const listed = example('first Friday');
+  listed.context.documents[0].text += ' November 6, 2026. December 4, 2026. December 12, 2026.';
+  listed.result.event.schedule.dates = ['November 6, 2026', 'December 4, 2026'].map((quote, i) => ({
+    start: date(11 + i, i ? 4 : 6),
+    end: null,
+    startTime: null,
+    endTime: null,
+    cancelled: false,
+    quote,
+  }));
+  const [confirmed] = (await preview(listed.result, listed.context)).items;
+  assert.deepEqual(
+    confirmed.occurrences.map((o) => o.startAt),
+    ['2026-11-07T01:00:00.000Z', '2026-12-05T01:00:00.000Z'],
+  );
+  listed.result.event.schedule.dates.push({
+    start: date(12, 12),
+    end: null,
+    startTime: null,
+    endTime: null,
+    cancelled: false,
+    quote: 'December 12, 2026',
+  });
+  const [extra] = (await preview(listed.result, listed.context)).items;
+  assert.deepEqual(
+    extra.occurrences.map((o) => o.startAt ?? o.start),
+    ['2026-11-07T01:00:00.000Z', '2026-12-05T01:00:00.000Z', '2026-12-12'],
+  );
   monthly.result.event.schedule.recurrence[0].interval = 2;
   assert.equal(
     (await preview(monthly.result, monthly.context)).review[0].reason,

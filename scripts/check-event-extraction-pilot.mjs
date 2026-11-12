@@ -34,7 +34,9 @@ function modelFacts(event, context) {
   const first = slots[0];
   const last = slots.at(-1);
   const recurrence = schedule.recurrence?.[0];
-  const timing = first ?? recurrence ?? schedule.hours?.[0]?.weekly[0];
+  // An untimed date takes its time from the rule or visiting hours, as the mapper publishes it.
+  const timing =
+    (first?.startTime ? first : null) ?? recurrence ?? schedule.hours?.[0]?.weekly[0] ?? first;
   const offsetEnd =
     last?.endDayOffset > 0
       ? new Date(Date.parse(last.day) + last.endDayOffset * 86400000).toISOString().slice(0, 10)
@@ -137,10 +139,12 @@ async function evaluate({ id, context, expected, baseline }) {
   let errorCode;
   let issues = [];
   let reviewReasons = [];
+  let raw;
   let httpStatus;
   try {
     const { result, ...usage } = await service.extract(context);
     metrics = usage;
+    raw = result;
     const parsed = parseEventExtraction(result, context);
     facts = modelFacts(parsed.events[0], context);
     issues = parsed.issues;
@@ -161,6 +165,8 @@ async function evaluate({ id, context, expected, baseline }) {
     httpStatus,
     issues,
     reviewReasons,
+    // The validated model output, for diagnosing misses.
+    raw,
     modelScore: score(expected, facts),
     ...(baseline === undefined ? {} : { baseline, parserScore: score(expected, baseline) }),
   };

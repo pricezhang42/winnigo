@@ -150,3 +150,31 @@ them. Two controls cannot establish a false-positive rate.
 
 Usage was 204,014 input and 38,930 output tokens, estimated US$0.040 per full run. Development
 runs for this version (a first v3 run and a five-page quote diagnosis) cost about US$0.045.
+
+#### Time misses
+
+The remaining time misses came from three pages, and the saved raw outputs showed two causes.
+
+- Times printed as a rule. "Second Sunday of the month, from 11am-5pm" and "open weekdays from
+  12:00 to 4:00 pm" were extracted on the recurrence rule and the visiting hours, while the
+  listed dates carried no time. The scorer read the time from the first date, which was null.
+  The mapper published the exhibition correctly but withheld the monthly program as
+  `ambiguous-date-only-occurrence`. A date-only entry now adds no card when a rule or visiting
+  hours give that day a timed occurrence, as exhibitions already did. The scorer takes an
+  untimed date's time from the rule or hours, matching what the mapper publishes.
+- A date inside a ticket URL (`10-24-2026`) was sometimes reported as a schedule conflict. The
+  prompt now says dates in URLs are not published dates.
+
+Two full reruns after these changes:
+
+| Measure | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| Exact date, time and venue checks | 172/176 (97.7%) | 173/176 (98.3%) |
+| All scored fields | 314/321 | 317/321 |
+| Held for review | 2 | 2 |
+| Non-event controls returning an event | 0/2 | 0/2 |
+
+Both holds are the Egoportraits start-date conflict (the reference review) and DOME@HOME's
+"next show" note. Run 2's misses are two venue labels, the PseudoScience date and one recurrence
+flag. The parser baseline is 143/176. Both runs pass the 95% date, time and venue gate; the
+false-positive measure rests on only two controls. Each full run cost about US$0.04.
