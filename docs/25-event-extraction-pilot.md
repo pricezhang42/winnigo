@@ -212,3 +212,13 @@ The tighter prompt caused no missed events. Each run of 63 pages used about 269,
 seconds per page and the 90th percentile 13.2–15.3 seconds. Thirteen controls is still a small
 sample; collectors only send pages their source adapter identifies as event pages, and the
 integration rejects unapproved event URLs, so these controls test the model's own boundary.
+
+#### Weekday numbering
+
+A live shadow run (doc 26) found Sensory Sundays' "first Sunday of the month" rule returned with
+`weekdays: [6]`, so the mapper produced Saturdays. The contract counts Sunday as 0, but that was only
+a code comment; the model counted from Monday. The schema description and prompt now state the
+numbering, and a rule whose quote names other days is held. In a rerun of the 63 pages every rule
+was numbered correctly (first and second Sundays `[0]`, last Thursday `[4]`, first Friday `[5]`,
+weekends `[0, 6]`): 172/176 (97.7%) date, time and venue checks, 315/321 scored fields, the same
+two holds, and no event from the 13 controls, for about US$0.048.

@@ -86,7 +86,10 @@ not a publication decision or a confidence score.
 - `dates`: explicit performances, including different times on the same day and cancellation facts.
 - `recurrence`: daily, weekly, or monthly rules; interval, optional bounds and published times.
   Monthly rules select month days or ordinal weekdays (`weekOfMonth: 1` for first Friday,
-  `-1` for last Friday). Weekdays use Sunday=0 through Saturday=6.
+  `-1` for last Friday). Weekdays use Sunday=0 through Saturday=6; the schema description and the
+  prompt state this, because a model otherwise tends to count from Monday. A rule whose quote names
+  days ("first Sunday", "weekdays", "weekends") but whose numbers include none of them is dropped
+  and held for review. Quotes that negate days ("closed Mondays", "except Sunday") are not checked.
 - `run`: the complete published event/exhibition bounds, independent of the collection window.
 - `hours`: dated weekly visiting schedules, including their verified applicable period.
   A missing weekday in a complete verified schedule is closed; incompletely extracted hours
