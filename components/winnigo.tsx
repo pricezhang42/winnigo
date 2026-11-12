@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Search,
   MapPin,
@@ -163,12 +164,12 @@ export default function Winnigo() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Winnigo home">
+        <Link className="brand" href="/" aria-label="Winnigo home">
           <span className="brand-icon">
             <Compass size={23} />
           </span>
           winnigo<span className="brand-dot">.</span>
-        </a>
+        </Link>
         <nav aria-label="Main navigation">
           {TABS.map((name) => (
             <Button
@@ -389,9 +390,9 @@ export default function Winnigo() {
         </section>
       </main>
       <footer>
-        <a className="brand" href="/">
+        <Link className="brand" href="/">
           winnigo<span className="brand-dot">.</span>
-        </a>
+        </Link>
         <p>Go find your Winnipeg.</p>
         <span>
           Made for the place we call home.{' '}
