@@ -161,3 +161,25 @@ The model leaves unprinted years null; the existing importer applies the current
 The four-page pass cost an estimated US$0.002284 and the repeat used four cache hits. This
 changes shadow extraction only; the legacy parser still withholds Canada Life and no app
 listings were imported.
+
+## Five-page review with explicit-date precedence
+
+The November 12 review at `18e9d66` used saved FlareSolverr responses and fresh GPT-6 Luna
+extraction. All five pages mapped successfully, producing 15 November/December occurrences:
+
+| Page | Reviewed result | Occurrences |
+| --- | --- | --- |
+| Nourish | November 19, 6–9pm; dinner service is not another occurrence; three supplied artwork links | 1 |
+| Canada Life | Explicit November 15, 11am–5pm, free admission takes precedence over “second Sunday” | 1 |
+| Graphic Novel 3 | Sundays, September 20–November 29, 2–3:30pm; October 11 closure; WAG venue fallback | 5 |
+| Graphic Novel 4 | Saturdays, September 19–November 28, 2:45–4:45pm; October 10 closure; WAG venue fallback | 4 |
+| Cannes Lions | All 12 published showtimes extracted; four December showtimes retained in the window; WAG venue fallback | 4 |
+
+Assertions checked date/time values, weekday numbers, closures, venue fallback, occurrence
+counts/window and supplied image URLs (maximum three). Image bytes were not downloaded.
+The run cost an estimated US$0.002992 at the configured rates. A repeat used five cache hits
+and no model cost. No application listings were imported. All five shadow comparisons still
+reported differences: parser formatting/date-only representations and the parser's Canada Life
+hold differ from the reviewed extraction. These report differences do not measure factual
+accuracy. Earlier findings above describe older prompt runs; this review verifies the updated
+precedence and main-attendance-window instructions. Write mode remains unavailable.
