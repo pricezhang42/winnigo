@@ -8,7 +8,10 @@ import { cacheEventExtraction } from '../lib/server/cached-event-extraction.mjs'
 import { createEventExtractionService } from '../lib/server/event-extraction-service.mjs';
 import { prepareExtractedCollection } from '../lib/server/event-extraction-integration.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
-import { configureExtractionRollout } from '../lib/server/extraction-rollout.mjs';
+import {
+  createExtractionShadow,
+  configureExtractionRollout,
+} from '../lib/server/extraction-rollout.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { serviceConfig } from './check-services.mjs';
 import { context, examples, single } from './fixtures/event-extraction.mjs';
@@ -126,6 +129,118 @@ async function checkCache() {
   );
   console.log(
     'Extraction cache and usage survive repeated and concurrent requests, failures and version changes.',
+  );
+}
+
+// Write mode imports through the same repository boundary and falls back per page.
+async function checkWrite() {
+  const source = { id: 'wag', name: 'WAG–Qaumajuq' };
+  const url = (slug) => `https://www.wag.ca/event/${slug}/`;
+  const parsed = ['accepted', 'withheld', 'broken', 'unprepared'].map((slug) => ({
+    id: 'qa-write-' + slug,
+    source: 'wag',
+    sourceName: source.name,
+    url: url(slug),
+    title: 'Parser ' + slug,
+    venue: 'Parser Hall',
+    type: 'Event',
+    category: 'Arts & culture',
+    schedule: 'event',
+    start: '2026-11-20',
+    end: '2026-11-20',
+    status: 'active',
+    price: null,
+  }));
+  const collect = async (source, checkedAt, options) => {
+    for (const slug of ['accepted', 'withheld', 'broken', 'unprepared', 'new'])
+      options.onEventPage?.({
+        url: url(slug),
+        id: 'qa-write-' + slug,
+        html:
+          slug === 'unprepared'
+            ? '<div></div>'
+            : '<main>QA Concert. November 20, 2026 at 7 PM. QA Hall.</main>',
+      });
+    return parsed.map((item) => ({ ...item, checkedAt }));
+  };
+  const extractor = {
+    async extract(context) {
+      if (context.pageUrl === url('broken')) throw Error('provider unavailable');
+      return { result: context.pageUrl === url('withheld') ? { event: null } : single };
+    },
+  };
+  const extraction = {
+    forSource: (source, { pool, checkedAt }) =>
+      createExtractionShadow({
+        source,
+        pool,
+        checkedAt,
+        extractor,
+        maxMs: 10000,
+        mode: 'write',
+      }),
+  };
+  const run = (id, extra = {}) =>
+    runCollection(
+      'wag',
+      { id, data: { trigger: 'manual' } },
+      {
+        pool,
+        repository: repo,
+        collect,
+        extraction,
+        now: () => context.checkedAt,
+        ...extra,
+      },
+    );
+  const first = await run('qa-write-1');
+  assert.equal(first.status, 'ok');
+  assert.equal(first.counts.extraction.imported, 2);
+  assert.equal(first.counts.extraction.fallback, 3);
+  let saved = await repo.knownSourceListings('wag');
+  for (const slug of ['accepted', 'new']) {
+    assert.equal(saved.get('qa-write-' + slug).title, 'QA Concert');
+    assert.equal(saved.get('qa-write-' + slug).provenance, 'event-extraction');
+  }
+  for (const slug of ['withheld', 'broken', 'unprepared'])
+    assert.equal(saved.get('qa-write-' + slug).title, 'Parser ' + slug);
+  await applyAction(
+    { action: 'update', id: 'qa-write-accepted', title: 'Owner write title' },
+    repo,
+    owner,
+  );
+  const before = await pool.query(
+    "SELECT occurrence_id FROM occurrences WHERE listing_id='qa-write-accepted'",
+  );
+  const second = await run('qa-write-2');
+  assert.equal(second.status, 'ok');
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
+    'Owner write title',
+  );
+  assert.deepEqual(
+    (await pool.query("SELECT occurrence_id FROM occurrences WHERE listing_id='qa-write-accepted'"))
+      .rows,
+    before.rows,
+  );
+  // Failure to initialize the provider keeps ordinary parser imports available.
+  const broken = await run('qa-write-3', {
+    extraction: {
+      forSource() {
+        throw Error('unavailable');
+      },
+    },
+  });
+  assert.equal(broken.status, 'ok');
+  assert.equal(broken.counts.extraction, undefined);
+  saved = await repo.knownSourceListings('wag');
+  assert.ok(saved.has('qa-write-new'));
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
+    'Owner write title',
+  );
+  console.log(
+    'WAG write imports accepted pages, preserves owner/session identity, and falls back per page and on provider initialization failure.',
   );
 }
 
@@ -283,6 +398,7 @@ try {
 
   await checkCache();
   await checkShadow();
+  await checkWrite();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

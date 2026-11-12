@@ -62,7 +62,7 @@ if (boss) {
   await syncSchedules(boss);
   if (extractionRollout.size)
     console.log(
-      'Extraction shadow mode: ' +
+      'Extraction modes: ' +
         [...extractionRollout].map(([id, mode]) => `${id} (${mode})`).join(', '),
     );
   console.log(
