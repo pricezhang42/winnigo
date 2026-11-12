@@ -164,19 +164,14 @@ test('builds the Winnipeg collection window and keeps supporting documents separ
   assert.equal(result.timeZone, 'America/Winnipeg');
   assert.equal(result.documents[1].text, 'December 31 at 8 PM.');
   const event = {
-    sourceUrl: organizer,
     title: 'Winter Concert',
-    description: null,
-    category: null,
-    status: null,
+    titleQuote: 'Winter Concert',
     venue: null,
     price: null,
-    organizerUrl: null,
     ticketUrl: null,
-    images: null,
+    organizerUrl: null,
+    imageUrls: [],
     schedule: {
-      kind: 'single',
-      timeZone: null,
       run: null,
       dates: [
         {
@@ -184,23 +179,26 @@ test('builds the Winnipeg collection window and keeps supporting documents separ
           end: null,
           startTime: '20:00',
           endTime: null,
-          endDayOffset: null,
-          status: null,
+          cancelled: false,
+          quote: 'December 31 at 8 PM.',
         },
       ],
-      recurrence: null,
-      hours: null,
-      exceptions: null,
+      recurrence: [],
+      hours: [],
+      exceptions: [],
     },
-    evidence: [
-      { fields: ['/title'], sourceUrl: url, quote: 'Winter Concert' },
-      { fields: ['/schedule'], sourceUrl: organizer, quote: 'December 31 at 8 PM.' },
-    ],
     reviewReasons: [],
   };
+  // Quotes may come from a supporting document; the app keeps the main page as the source URL.
+  const parsed = parseEventExtraction({ event }, result);
+  assert.deepEqual(parsed.issues, []);
+  assert.equal(parsed.events[0].sourceUrl, url);
   assert.deepEqual(
-    parseEventExtraction({ schemaVersion: '1', events: [event] }, result).events[0],
-    event,
+    parsed.events[0].evidence.map((e) => [e.sourceUrl, e.quote]),
+    [
+      [url, 'Winter Concert'],
+      [organizer, 'December 31 at 8 PM.'],
+    ],
   );
   assert.throws(
     () => context(primary, { pages: [{ url: organizer, html: primary }] }),
