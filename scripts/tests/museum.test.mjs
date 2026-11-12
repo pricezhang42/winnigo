@@ -88,11 +88,20 @@ test('month parsing accepts graph data and explicit empty calendars, rejects cha
 });
 
 test('one source series spans months, deduplicates overlapping calendars, and keeps DST offsets', async () => {
+  const pages = [];
   const result = await collectMuseum(source, now, {
     pauseMs: 0,
     fetchImpl: transport([a, b], [b]),
+    onEventPage: (page) => pages.push(page),
   });
   assert.equal(result.items.length, 1);
+  // Shadow extraction receives the detail page already fetched, with the listings it produced.
+  assert.equal(pages.length, 1);
+  assert.match(pages[0].url, /^https:\/\/manitobamuseum\.ca\//);
+  assert.equal(pages[0].selector, '#tribe-events-content');
+  assert.equal(pages[0].html, exhibition);
+  assert.deepEqual(pages[0].itemIds, [result.items[0].seriesId || result.items[0].id]);
+  assert.equal(pages[0].id, result.items[0].id);
   assert.equal(result.occurrencesFound, 2);
   const item = result.items[0];
   assert.equal(item.start, '2026-05-01');

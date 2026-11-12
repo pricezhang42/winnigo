@@ -7,6 +7,8 @@ import { applyAction } from '../lib/server/actions.mjs';
 import { cacheEventExtraction } from '../lib/server/cached-event-extraction.mjs';
 import { createEventExtractionService } from '../lib/server/event-extraction-service.mjs';
 import { prepareExtractedCollection } from '../lib/server/event-extraction-integration.mjs';
+import { runCollection } from '../lib/server/collection.mjs';
+import { configureExtractionRollout } from '../lib/server/extraction-rollout.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { serviceConfig } from './check-services.mjs';
 import { context, examples, single } from './fixtures/event-extraction.mjs';
@@ -127,6 +129,148 @@ async function checkCache() {
   );
 }
 
+// Shadow mode runs a real collection: parser listings are saved unchanged and each fetched event
+// page is extracted (stubbed provider), mapped and compared, with failures kept out of the run.
+async function checkShadow() {
+  let generations = 0;
+  const createService = () =>
+    createEventExtractionService(
+      {
+        model: 'qa-shadow-model',
+        extractionVersion: 'shadow-v1',
+        countInput: async () => 100,
+        async generate() {
+          generations++;
+          return {
+            status: 'completed',
+            text: JSON.stringify(single),
+            usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 5 },
+          };
+        },
+      },
+      { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+    );
+  const env = {
+    WINNIGO_EXTRACTION_SOURCES: 'manitoba-museum=shadow',
+    WINNIGO_EXTRACTION_PROVIDER: 'openai',
+  };
+  const extraction = configureExtractionRollout(env, { createService });
+  const page = (slug, body) => ({
+    url: `https://manitobamuseum.ca/event/${slug}/`,
+    html: `<html><body><nav>Menu</nav><div id="tribe-events-content">${body}</div></body></html>`,
+    selector: '#tribe-events-content',
+    id: 'qa-shadow-' + slug,
+    itemIds: ['qa-shadow-' + slug],
+  });
+  const listing = (slug, venue) => ({
+    id: 'qa-shadow-' + slug,
+    source: 'manitoba-museum',
+    title: 'QA Concert',
+    url: `https://manitobamuseum.ca/event/${slug}/`,
+    type: 'Event',
+    category: 'Arts & Culture',
+    venue,
+    neighbourhood: 'Downtown',
+    start: '2026-11-20',
+    end: '2026-11-20',
+    startAt: '2026-11-21T01:00:00.000Z',
+    schedule: 'event',
+    description: 'Synthetic shadow listing',
+    sourceName: 'Manitoba Museum',
+    price: null,
+    family: false,
+    indoor: true,
+    image: '',
+    status: 'active',
+  });
+  const text = '<h1>QA Concert</h1><p>QA Concert. November 20, 2026 at 7 PM. QA Hall.</p>';
+  const parsed = [
+    listing('agree', 'QA Hall'),
+    listing('differ', 'Another Hall'),
+    listing('empty', 'QA Hall'),
+  ];
+  const collect = async (source, checkedAt, options) => {
+    options.onEventPage?.(page('agree', text));
+    options.onEventPage?.(page('differ', text));
+    options.onEventPage?.(page('empty', ''));
+    return parsed.map((item) => ({ ...item, checkedAt }));
+  };
+  const run = (id) =>
+    runCollection(
+      'manitoba-museum',
+      { id, data: { trigger: 'manual' } },
+      { pool, repository: repo, collect, now: () => context.checkedAt, extraction },
+    );
+  const first = await run('qa-shadow-1');
+  assert.equal(first.status, 'ok');
+  assert.deepEqual(
+    { ...first.counts.extraction, estimatedCostUsd: undefined },
+    {
+      mode: 'shadow',
+      pages: 3,
+      agree: 1,
+      differ: 1,
+      withheld: 0,
+      failed: 1,
+      skipped: 0,
+      cacheHits: 0,
+      estimatedCostUsd: undefined,
+    },
+  );
+  assert.ok(first.counts.extraction.estimatedCostUsd > 0);
+  const rows = (
+    await pool.query(
+      'SELECT page_url, outcome, reason, differences, extracted FROM event_extraction_comparisons ORDER BY page_url',
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r) => [r.page_url.split('/').at(-2), r.outcome, r.reason]),
+    [
+      ['agree', 'agree', null],
+      ['differ', 'differ', 'venue'],
+      ['empty', 'failed', 'preparation-failed'],
+    ],
+  );
+  assert.deepEqual(rows[1].differences, [
+    { field: 'venue', parser: 'Another Hall', extraction: 'QA Hall' },
+  ]);
+  // Listings come only from the parser; nothing records extraction provenance.
+  const saved = await repo.knownSourceListings('manitoba-museum');
+  assert.equal(saved.get('qa-shadow-differ').venue, 'Another Hall');
+  assert.ok([...saved.values()].every((item) => item.provenance !== 'event-extraction'));
+  const runNote = (await pool.query("SELECT error FROM collection_runs WHERE job_id='qa-shadow-1'"))
+    .rows[0].error;
+  assert.match(runNote, /Extraction shadow: 1\/3 page\(s\) agree, 1 differ, 1 failed/);
+
+  // The next run reuses cached extractions and spends nothing.
+  const second = await run('qa-shadow-2');
+  assert.equal(second.counts.extraction.cacheHits, 2);
+  assert.equal(second.counts.extraction.estimatedCostUsd, 0);
+  assert.equal(generations, 2);
+
+  // A failing extraction never fails the collection.
+  const broken = configureExtractionRollout(env, {
+    createService: () => {
+      throw Error('provider unavailable');
+    },
+  });
+  const failed = await runCollection(
+    'manitoba-museum',
+    { id: 'qa-shadow-3', data: { trigger: 'manual' } },
+    { pool, repository: repo, collect, now: () => context.checkedAt, extraction: broken },
+  );
+  assert.equal(failed.status, 'ok');
+  assert.equal(failed.counts.extraction, undefined);
+  assert.match(
+    (await pool.query("SELECT error FROM collection_runs WHERE job_id='qa-shadow-3'")).rows[0]
+      .error,
+    /Extraction shadow unavailable: provider unavailable/,
+  );
+  console.log(
+    'Extraction shadow mode compares fetched pages with parser listings, reuses the cache and never changes listings or fails collection.',
+  );
+}
+
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
   const migrations = new URL('../migrations/postgres/', import.meta.url);
@@ -134,6 +278,7 @@ try {
     await pool.query(await readFile(new URL(file, migrations), 'utf8'));
 
   await checkCache();
+  await checkShadow();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };
