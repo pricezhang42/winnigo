@@ -87,9 +87,15 @@ test('comparison reports title, venue, occurrence, run and price differences onl
   );
   assert.deepEqual(compareExtraction(different, [parser])[1], {
     field: 'occurrences',
-    parser: ['2026-11-14T17:00:00.000Z'],
+    parser: ['2026-11-07T17:00:00.000Z', '2026-11-14T17:00:00.000Z'],
     extraction: ['2026-11-21T17:00:00.000Z'],
   });
+  // A detail page that lists fewer sessions than the calendar is coverage, not a difference.
+  const focused = { ...parser, occurrences: [parser.occurrences[1]] };
+  assert.deepEqual(compareExtraction(focused, [parser]), []);
+  // No shared session at all is a difference.
+  const none = { ...parser, occurrences: [] };
+  assert.equal(compareExtraction(none, [parser])[0].field, 'occurrences');
   // Split sessions from one page are compared together.
   const sessions = parser.occurrences.map((o) => ({ ...parser, occurrences: [o] }));
   assert.deepEqual(compareExtraction(same, sessions), []);
