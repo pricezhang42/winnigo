@@ -142,3 +142,22 @@ Replaying the saved Graphic Novel result with this policy produces a candidate a
 300 Memorial Boulevard, Winnipeg. This resolves the missing-venue hold only; the recorded
 weekday error remains a separate extraction issue. No model request or listing import is
 needed to verify the fallback.
+
+## Main event times and explicit schedule precedence
+
+The extraction prompt treats tours, workshops, doors opening and dinner service within the
+main event's attendance window as activities, not additional occurrences. Explicitly offered
+separate sessions of the main event still count separately. Supplied correction notices take
+precedence, followed by explicitly printed event dates/times over conflicting general
+recurrence rules. Two disagreeing explicit dates/times still require review unless one is
+identified as a correction.
+
+A live Luna retest on four saved WAG detail pages returned Canada Life as one November 15,
+11am–5pm event, without extra tour sessions or a conflict hold. Both Graphic Novel classes
+retained their correct weekly rules and closures; Nourish retained one 6–9pm event window.
+The calendar correction notice was not part of those saved detail inputs: the Canada Life
+result followed the printed November 15 date instead of deriving a date from “second Sunday.”
+The model leaves unprinted years null; the existing importer applies the current-year policy.
+The four-page pass cost an estimated US$0.002284 and the repeat used four cache hits. This
+changes shadow extraction only; the legacy parser still withholds Canada Life and no app
+listings were imported.
