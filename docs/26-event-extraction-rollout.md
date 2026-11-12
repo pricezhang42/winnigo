@@ -117,3 +117,21 @@ The final three-page call cost an estimated US$0.001854 using the configured rat
 selector trials plus the final run totalled US$0.005674. WAG remains shadow-only; venue context,
 weekday accuracy and comparisons between date-only and timed listings need review before any
 write rollout.
+
+## Missing venue fallback
+
+Venue-based sources explicitly configure `defaultVenue` in `lib/connectors.mjs`: WAG,
+Manitoba Museum, FortWhyte Alive, Canada Life Centre, The Forks and Assiniboine Park. When
+extraction has no venue, the importer uses the organization's location after checking for an
+existing saved venue. Stated venues and online events take precedence. Known source addresses
+are included only when applying this fallback, not attached to a different stated venue.
+
+This is an owner-authorized source default, applied after model validation and recorded as
+`extraction.venueFallback = "source-location"`; it is not fabricated source evidence. Tourism
+and other aggregators have no default, so missing venues remain withheld. New venue-based
+sources must opt in explicitly rather than falling back to every organization's name.
+
+Replaying the saved Graphic Novel result with this policy produces a candidate at WAG–Qaumajuq,
+300 Memorial Boulevard, Winnipeg. This resolves the missing-venue hold only; the recorded
+weekday error remains a separate extraction issue. No model request or listing import is
+needed to verify the fallback.

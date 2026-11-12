@@ -302,3 +302,46 @@ test('stores up to three published photos and keeps a stored cover on later runs
   assert.equal(downloaded, false);
   assert.equal(unsafe.failedPages[0].error, 'photo-enrichment-failed');
 });
+
+test('missing venues use only explicit organization defaults, retaining page and existing venues', async () => {
+  const { sources } = await import('../../lib/connectors.mjs');
+  const missing = changed((event) => {
+    event.venue = null;
+  });
+  for (const id of ['wag', 'manitoba-museum', 'fortwhyte', 'canada-life-centre', 'forks', 'park']) {
+    const organization = sources.find((source) => source.id === id);
+    const input = { ...context, source: id };
+    const extra = { source: organization };
+    const [item] = (await preview(missing, input, extra)).items;
+    assert.equal(item.venue, organization.defaultVenue.name);
+    assert.equal(item.address, organization.defaultVenue.address);
+    assert.equal(item.extraction.venueFallback, 'source-location');
+    assert.ok(!item.extraction.evidence.some((e) => e.quote === organization.defaultVenue.name));
+    const [explicit] = (await preview(single, input, extra)).items;
+    assert.equal(explicit.venue, 'QA Hall');
+    assert.equal(explicit.address, '');
+    assert.equal(explicit.extraction.venueFallback, undefined);
+    const prior = { ...item, venue: 'Owner venue', address: 'Owner address' };
+    const [retained] = (
+      await preview(missing, input, { ...extra, knownListings: new Map([[item.id, prior]]) })
+    ).items;
+    assert.equal(retained.venue, 'Owner venue');
+    assert.equal(retained.address, 'Owner address');
+    const online = changed((event) => {
+      event.venue = { name: null, address: null, online: true, quote: 'Online' };
+    });
+    const onlineContext = structuredClone(input);
+    onlineContext.documents[0].text += ' Online';
+    const [remote] = (await preview(online, onlineContext, extra)).items;
+    assert.equal(remote.venue, 'Online');
+    assert.equal(remote.address, '');
+    assert.equal(remote.extraction.venueFallback, undefined);
+  }
+  for (const id of ['manitoba', 'tourism-winnipeg', 'manitoba-music']) {
+    const aggregator = sources.find((s) => s.id === id) || { id, name: id };
+    assert.equal(aggregator.defaultVenue, undefined);
+    const result = await preview(missing, { ...context, source: id }, { source: aggregator });
+    assert.equal(result.items.length, 0);
+    assert.equal(result.review[0].reason, 'missing-title-or-venue');
+  }
+});
