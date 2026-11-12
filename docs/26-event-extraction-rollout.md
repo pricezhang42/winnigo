@@ -1,8 +1,7 @@
 # Event extraction rollout
 
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
-[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**: the collector and
-its parser still own the listings, and extraction only records how its result compares.
+[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG can opt into write mode after review.
 
 ## Modes
 
@@ -10,7 +9,7 @@ its parser still own the listings, and extraction only records how its result co
 | --- | --- | --- |
 | off (default) | Parser | Nothing; no provider calls |
 | `shadow` | Parser | Extracts the event pages the collector already fetched, maps them with the shared importer and records a comparison |
-| write (not yet available) | Extraction, with the parser as fallback | To be added after shadow results for a source have been reviewed |
+| `write` (WAG only) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
 
 ## Enable shadow mode
 
@@ -94,16 +93,15 @@ excluded; their individual class pages are captured. Parser-rejected detail page
 captured so comparisons can expose missing listings. WAG remains manual-only.
 `npm run collect:wag` is still a parser-only dry run; use the worker's manual collection
 (`npm run collect:wag -- --enqueue`) to record shadow comparisons, then
-`npm run extraction:shadow-report -- wag --details`. The queued run still saves parser listings.
+`npm run extraction:shadow-report -- wag --details`. In shadow mode the queued run saves parser listings.
 See [WAG setup](sources/wag.md) for transport limits and photo configuration.
 
-## Toward write mode
+## Gates for further write rollout
 
-Write mode needs, per source: a review of shadow comparisons over at least one full collection
-cycle, agreement on how a difference is resolved (extraction, parser or review), and the
+Before enabling write mode for additional sources, review shadow comparisons over at least one
+full collection cycle, agree how differences are resolved (extraction, parser or review), and test the
 importer's identity checks against known listings (`ambiguous-event-identity`,
-`existing-cancelled-event`), which shadow mode deliberately skips. Until then, listings,
-schedules and the production audience are unchanged.
+`existing-cancelled-event`), which shadow mode deliberately skips. Only WAG is currently supported for opt-in writes. Other sources remain off or shadow-only.
 
 ## WAG live check (November 12, 2026)
 
@@ -182,4 +180,42 @@ and no model cost. No application listings were imported. All five shadow compar
 reported differences: parser formatting/date-only representations and the parser's Canada Life
 hold differ from the reviewed extraction. These report differences do not measure factual
 accuracy. Earlier findings above describe older prompt runs; this review verifies the updated
-precedence and main-attendance-window instructions. Write mode remains unavailable.
+precedence and main-attendance-window instructions. This review preceded the opt-in write implementation below.
+
+
+## Opt-in WAG imports
+
+After reviewing shadow results, use `WINNIGO_EXTRACTION_SOURCES=wag=write` with the existing
+provider, budget, FlareSolverr and photo-container settings, and restart the worker. Enqueue
+WAG manually as documented in [WAG setup](sources/wag.md). This saves listings to the worker's
+configured database. No setting or schedule changes automatically. An unset sources setting
+keeps extraction off; `wag=shadow` returns to comparison-only mode. Museum write mode is not
+yet enabled because its calendars can contain sessions absent from an individual detail page.
+
+Write mode prepares/extracts before the ordinary atomic source import. Each accepted page
+replaces that page's parser listing(s). Provider errors, missing dates, review holds, budget or
+time limits and unavailable collector photos retain the parser result for that page. A page
+without either result leaves existing saved data intact. Setup/comparison-storage failures
+retain the whole parser batch. An incomplete calendar remains a partial run even if extraction
+rescues a page the parser withheld.
+
+The shared importer checks existing identity, cancelled state, schedule consistency and stable
+occurrence ids. Owner overrides remain handled by the repository. AI candidates use only
+photos already stored by the collector or preserved from existing records, up to the existing
+photo limit; model image URLs do not initiate additional downloads. A parser-rejected page
+with new image candidates but no stored photos is withheld for a later collector retry.
+
+Run counts include `extraction.mode=write`, `imported` (accepted page replacements) and
+`fallback` (captured pages retaining parser/existing data), alongside cache, cost and comparison
+counts. Imported counts describe pages, not daily occurrence cards. Comparisons are recorded
+before import, so a failed database import still has diagnostic comparisons but no successful
+collection run. The source remains manual-only. Enabling write mode does not retroactively
+change existing records until the next collection.
+
+
+The WAG queue lease is 15 minutes to cover the existing 450-second collection budget plus the
+default 180-second extraction phase and database work. Keep custom extraction limits within
+that lease. Write integration tests use disposable schemas and cover accepted/rejected pages,
+provider and preparation failures, owner edits, stable occurrence identities, media preservation
+and parser cancellation. A replay of the five reviewed WAG outputs imported 15 occurrences
+twice with unchanged occurrence ids; replay photo downloads were excluded.
