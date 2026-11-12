@@ -178,3 +178,37 @@ Both holds are the Egoportraits start-date conflict (the reference review) and D
 "next show" note. Run 2's misses are two venue labels, the PseudoScience date and one recurrence
 flag. The parser baseline is 143/176. Both runs pass the 95% date, time and venue gate; the
 false-positive measure rests on only two controls. Each full run cost about US$0.04.
+
+#### Non-event controls
+
+Eleven public non-event pages were fetched on 2026-11-12 from sources Winnigo already collects
+and added to the two earlier listing pages, for 13 controls:
+
+- Tourism Winnipeg: two "Upcoming Events" pages, Live Music and Performing Arts listings, a
+  food truck guide, a nightlife venue and a shop.
+- Manitoba Museum: What's On listing, Plan Your Visit (hours and admission), Planetarium and the
+  visitor code of conduct.
+- FortWhyte Alive: Plan Your Visit. Canada Life Centre: home page.
+
+The FortWhyte home page and the Canada Life Centre calendar render their content with
+JavaScript, so their prepared text was nearly empty; they were dropped as trivial.
+
+With the earlier prompt, two controls returned an event that would have published: Plan Your
+Visit returned its Sensory Sundays section, and the Canada Life Centre home page returned the
+Disney On Ice carousel entry. The prompt now returns an event only when the primary page is
+that event's own page, and null for home, visit, venue, business, guide and listing pages that
+feature events among other content.
+
+| Measure | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| Event pages with a usable result | 50/50 | 50/50 |
+| Exact date, time and venue checks | 171/176 (97.2%) | 171/176 (97.2%) |
+| All scored fields | 313/321 | 315/321 |
+| Held for review | 2 | 2 |
+| Controls returning an event | 0/13 | 0/13 |
+
+The tighter prompt caused no missed events. Each run of 63 pages used about 269,000 input and
+39,000 output tokens (about 21,500 reasoning), estimated US$0.047. Median latency was 7.0–7.7
+seconds per page and the 90th percentile 13.2–15.3 seconds. Thirteen controls is still a small
+sample; collectors only send pages their source adapter identifies as event pages, and the
+integration rejects unapproved event URLs, so these controls test the model's own boundary.
