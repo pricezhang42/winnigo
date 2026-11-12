@@ -47,7 +47,7 @@ test('maps one event using source identity, provenance and an unknown end time, 
   assert.equal(item.occurrencesComplete, false);
   assert.equal(item.occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
   assert.equal(item.occurrences[0].endTimeKnown, false);
-  assert.equal(item.extraction.schemaVersion, '2');
+  assert.equal(item.extraction.schemaVersion, '3');
   assert.deepEqual(
     item.extraction.evidence.map((e) => e.quote),
     ['QA Concert', 'QA Hall', 'November 20, 2026 at 7 PM'],

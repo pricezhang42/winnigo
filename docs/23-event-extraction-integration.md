@@ -14,7 +14,8 @@ matching listing and occurrence IDs.
   a day, ambiguous DST times and conflicting schedules for review.
 - Keep unknown end times and prices unknown. Keep the derived evidence quotes, original schedule
   facts and photo candidates with the mapped listing for review. Hold the event when the parser
-  records review reasons (an unsupported title or schedule entry, or a model-reported conflict).
+  records review reasons (an unsupported title or schedule entry, or a model-reported title,
+  schedule or unclassified conflict).
 - If a trusted photo policy is supplied, approve URLs before reading bytes and store up to three
   verified JPEG, PNG or WebP images through the existing private photo interface. The reader must
   enforce source scope on redirects and bound downloads. Images are not classified; a listing

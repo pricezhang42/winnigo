@@ -120,3 +120,33 @@ conflicts concern an optional fact and should not hold an event; see issue #44.
 
 Usage was 178,321 input and 41,405 output tokens, estimated US$0.0386, plus US$0.0126 for
 the held-page rerun.
+
+### Version 3: field-named review reasons
+
+Model review reasons now name the fact they affect. Title, schedule and unclassified conflicts
+hold an event; venue, price and link conflicts become issues. The prompt says that structured
+data splitting a printed range is not a conflict. A quote may also be several excerpts on
+separate lines when they all appear in the same document, such as a date and a time printed
+apart. The same 50 pages were rerun on GPT-6 Luna with two non-event controls added.
+
+| Measure | v2 | v3 |
+| --- | ---: | ---: |
+| Usable event results | 50/50 | 50/50 |
+| Held for review | 14 | 4 |
+| Exact date, time and venue checks | 165/176 (93.8%) | 167/176 (94.9%) |
+| All scored fields | 307/321 | 311/321 |
+
+All four holds are model-reported schedule conflicts: the Egoportraits start date (the reference
+review), a ticket URL dated two days earlier, DOME@HOME's "next show" note, and a First Fridays
+program labelled with another month. The five Museum postal-code conflicts are now issues.
+Remaining misses: three start times, two end times, two dates, two venue labels and one
+recurrence flag. The 95% gate needs one more correct check.
+
+Both non-event controls, Tourism Winnipeg "Upcoming Events" listing pages, returned no event.
+A third candidate was dropped: its page title said "Annual Festivals & Events" but the page is
+the Culture Days detail page, which the model correctly extracted. FortWhyte month calendars
+exceed the preparation limits because of their page-wide JSON-LD, so production would not send
+them. Two controls cannot establish a false-positive rate.
+
+Usage was 204,014 input and 38,930 output tokens, estimated US$0.040 per full run. Development
+runs for this version (a first v3 run and a five-page quote diagnosis) cost about US$0.045.
