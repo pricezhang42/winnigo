@@ -54,7 +54,9 @@ is compared with the parser listings produced from the same page:
 
 Each page becomes one row in `event_extraction_comparisons` with outcome `agree`, `differ`,
 `withheld` (the importer held it, for example `source-facts-need-review`), `failed`
-(preparation or provider error) or `skipped` (time limit or budget). The run's counts gain an
+(preparation or provider error) or `skipped` (time limit or budget). `differ` and `withheld`
+rows also keep the validated model output (`raw`), so the cause of a difference can be checked;
+agreeing rows do not. The run's counts gain an
 `extraction` summary, and its notes say, for example, `Extraction shadow: 8/10 page(s) agree,
 1 differ, 1 withheld`. Extraction trouble is noted but never fails or retries a collection.
 
@@ -65,7 +67,8 @@ npm run extraction:shadow-report -- manitoba-museum --days=14 --details
 ```
 
 The report lists outcomes, the most common reasons, cost and cache hits, and with `--details`
-the latest differing, withheld or failed page and each field difference. A difference is not
+the latest differing, withheld or failed page, each field difference, and the model's schedule
+facts (without quotes) and review reasons. A difference is not
 automatically a model error: check the source page, since the pilot found the parser wrong more
 often than the model (143/176 versus 171/176 exact date, time and venue checks).
 

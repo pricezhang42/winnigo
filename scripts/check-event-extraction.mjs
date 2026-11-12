@@ -220,7 +220,7 @@ async function checkShadow() {
   assert.ok(first.counts.extraction.estimatedCostUsd > 0);
   const rows = (
     await pool.query(
-      'SELECT page_url, outcome, reason, differences, extracted FROM event_extraction_comparisons ORDER BY page_url',
+      'SELECT page_url, outcome, reason, differences, extracted, raw FROM event_extraction_comparisons ORDER BY page_url',
     )
   ).rows;
   assert.deepEqual(
@@ -231,6 +231,10 @@ async function checkShadow() {
       ['empty', 'failed', 'preparation-failed'],
     ],
   );
+  // Only the row a person needs to diagnose keeps the model output.
+  assert.deepEqual(rows[1].raw, single);
+  assert.equal(rows[0].raw, null);
+  assert.equal(rows[2].raw, null);
   assert.deepEqual(rows[1].differences, [
     { field: 'venue', parser: 'Another Hall', extraction: 'QA Hall' },
   ]);

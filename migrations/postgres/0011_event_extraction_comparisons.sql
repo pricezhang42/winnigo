@@ -11,6 +11,8 @@ CREATE TABLE event_extraction_comparisons (
   estimated_cost_usd numeric,
   differences jsonb NOT NULL DEFAULT '[]',
   extracted jsonb,
+  -- The validated model output, kept for differ and withheld rows so a person can see why.
+  raw jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

@@ -42,7 +42,7 @@ try {
     if (!details) continue;
     // The latest comparison per page that needs a person's attention.
     const latest = await pool.query(
-      `SELECT DISTINCT ON (page_url) page_url, outcome, reason, differences
+      `SELECT DISTINCT ON (page_url) page_url, outcome, reason, differences, raw
          FROM event_extraction_comparisons WHERE ${filter}
         ORDER BY page_url, created_at DESC`,
       [days, id],
@@ -53,6 +53,25 @@ try {
         console.log(
           `      ${d.field}: parser ${JSON.stringify(d.parser)} | extraction ${JSON.stringify(d.extraction)}`,
         );
+      // The model's own schedule facts and review reasons, without quotes, to see why it differed.
+      const event = row.raw?.event;
+      if (event) {
+        const strip = (list) =>
+          list?.map((fact) =>
+            Object.fromEntries(Object.entries(fact).filter(([k]) => k !== 'quote')),
+          ) ?? [];
+        const { run, dates, recurrence, hours, exceptions } = event.schedule;
+        const facts = {
+          ...(run ? { run: strip([run])[0] } : {}),
+          ...(dates.length ? { dates: strip(dates) } : {}),
+          ...(recurrence.length ? { recurrence: strip(recurrence) } : {}),
+          ...(hours.length ? { hours: strip(hours) } : {}),
+          ...(exceptions.length ? { exceptions: strip(exceptions) } : {}),
+        };
+        console.log(`      model schedule: ${JSON.stringify(facts).slice(0, 800)}`);
+        for (const r of event.reviewReasons)
+          console.log(`      model review (${r.field}): ${r.reason}`);
+      } else if (row.raw) console.log('      model returned no event');
     }
   }
 } finally {
