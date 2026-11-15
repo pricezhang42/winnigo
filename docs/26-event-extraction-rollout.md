@@ -219,3 +219,17 @@ that lease. Write integration tests use disposable schemas and cover accepted/re
 provider and preparation failures, owner edits, stable occurrence identities, media preservation
 and parser cancellation. A replay of the five reviewed WAG outputs imported 15 occurrences
 twice with unchanged occurrence ids; replay photo downloads were excluded.
+
+## WAG fallback window guard
+
+Every WAG collection now applies the shared current/next Winnipeg month window immediately
+before repository import, after AI replacement or parser fallback. Out-of-window events are
+omitted; recurring occurrence rows are filtered individually while the published run dates
+remain intact. This also applies when extraction is off or provider initialization fails.
+`outsideWindow` counts excluded occurrence rows (or excluded records with no occurrences).
+An all-out-of-window result is a legitimate empty import, not a collector failure.
+
+Existing saved records are retained as history; the guard does not delete old records or owner
+edits. A replay of the November 15 live QA batch under a simulated provider outage reduced
+23 incoming records to 10 in-window events and 13 occurrences, with zero out-of-window rows.
+The original QA database was left intact. No model requests or photo downloads were needed.

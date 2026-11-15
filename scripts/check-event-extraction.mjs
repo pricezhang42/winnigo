@@ -239,6 +239,54 @@ async function checkWrite() {
     (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
     'Owner write title',
   );
+  // Even a provider failure must not import parser dates outside the current/next month.
+  const future = {
+    ...parsed[0],
+    id: 'qa-write-future',
+    url: url('future'),
+    start: '2027-01-10',
+    end: '2027-01-10',
+    title: 'Outside window',
+  };
+  const limited = await run('qa-write-window', {
+    collect: async () => [future],
+    extraction: {
+      forSource() {
+        throw Error('unavailable');
+      },
+    },
+  });
+  assert.equal(limited.status, 'ok');
+  assert.equal(limited.counts.outsideWindow, 1);
+  assert.ok(!(await repo.knownSourceListings('wag')).has(future.id));
+  // Mixed recurring rows retain current-month sessions and never import January sessions.
+  const mixed = {
+    ...parsed[0],
+    id: 'qa-write-mixed',
+    url: url('mixed'),
+    recurring: true,
+    schedule: 'series',
+    occurrences: [
+      { id: 'qa-write-nov', start: '2026-11-20', end: '2026-11-20' },
+      { id: 'qa-write-dec', start: '2026-12-31', end: '2026-12-31' },
+      { id: 'qa-write-jan', start: '2027-01-01', end: '2027-01-01' },
+    ],
+  };
+  const clipped = await run('qa-write-window-mixed', {
+    collect: async () => [mixed],
+    extraction: { forSource: () => null },
+  });
+  assert.equal(clipped.status, 'ok');
+  assert.equal(clipped.counts.outsideWindow, 1);
+  const dates = (
+    await pool.query(
+      "SELECT start_date::text AS visit_date FROM occurrences WHERE listing_id='qa-write-mixed' ORDER BY start_date",
+    )
+  ).rows;
+  assert.deepEqual(
+    dates.map((row) => row.visit_date),
+    ['2026-11-20', '2026-12-31'],
+  );
   console.log(
     'WAG write imports accepted pages, preserves owner/session identity, and falls back per page and on provider initialization failure.',
   );
