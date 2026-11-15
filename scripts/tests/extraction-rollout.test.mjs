@@ -19,8 +19,9 @@ test('rollout is off by default and only accepts shadow mode for supported sourc
     [['manitoba-museum', 'shadow']],
   );
   assert.equal(readExtractionRollout(env('wag=shadow')).get('wag'), 'shadow');
+  assert.equal(readExtractionRollout(env('wag=write')).get('wag'), 'write');
   for (const [value, message] of [
-    ['manitoba-museum=write', /only shadow/],
+    ['manitoba-museum=write', /only for wag/],
     ['unknown=shadow', /not available for source unknown/],
     ['manitoba-museum', /source=shadow/],
     ['manitoba-museum=shadow=x', /source=shadow/],
@@ -101,4 +102,60 @@ test('comparison reports title, venue, occurrence, run and price differences onl
   const sessions = parser.occurrences.map((o) => ({ ...parser, occurrences: [o] }));
   assert.deepEqual(compareExtraction(same, sessions), []);
   assert.equal(compareExtraction(same, [])[0].field, 'listing');
+});
+
+test('write preserves collector media/cancellation and falls back on provider/budget/time/preparation failures', async () => {
+  const { createExtractionShadow } = await import('../../lib/server/extraction-rollout.mjs');
+  const { single, context } = await import('../fixtures/event-extraction.mjs');
+  const source = { id: 'wag', name: 'WAG–Qaumajuq' };
+  const html = '<main>QA Concert. November 20, 2026 at 7 PM. QA Hall.</main>';
+  const parsed = {
+    id: 'write-page',
+    source: 'wag',
+    url: context.pageUrl,
+    title: 'Parser',
+    venue: 'QA Hall',
+    images: ['/api/photos/' + 'a'.repeat(64)],
+    image: '/api/photos/' + 'a'.repeat(64),
+    sourceImages: ['https://events.example.test/photo.jpg'],
+    status: 'cancelled',
+    availability: 'sold-out',
+    price: 12,
+  };
+  const run = async (extract, extra = {}) => {
+    const hook = createExtractionShadow({
+      source,
+      pool: { query: async () => ({ rows: [] }) },
+      checkedAt: context.checkedAt,
+      maxMs: 1000,
+      mode: 'write',
+      extractor: { extract },
+    });
+    hook.capture({ url: context.pageUrl, html, id: parsed.id, ...extra });
+    return hook.finish({ runId: null, items: [parsed] });
+  };
+  const result = await run(async () => ({ result: single }));
+  assert.equal(result.counts.imported, 1);
+  assert.deepEqual(result.items[0].images, parsed.images);
+  assert.deepEqual(result.items[0].sourceImages, parsed.sourceImages);
+  assert.equal(result.items[0].status, 'cancelled');
+  assert.equal(result.items[0].availability, 'sold-out');
+  assert.equal(result.items[0].price, 12);
+  for (const code of ['provider_failed', 'budget_exceeded', 'timeout', 'aborted']) {
+    const fallback = await run(async () => {
+      throw Object.assign(Error(code), { code });
+    });
+    assert.deepEqual(fallback.items, [parsed]);
+    assert.equal(fallback.counts.imported, 0);
+    assert.equal(fallback.counts.fallback, 1);
+  }
+  const held = await run(async () => ({ result: { event: null } }));
+  assert.deepEqual(held.items, [parsed]);
+  const unprepared = await run(
+    async () => {
+      throw Error('must not call');
+    },
+    { html: '<main></main>' },
+  );
+  assert.deepEqual(unprepared.items, [parsed]);
 });
