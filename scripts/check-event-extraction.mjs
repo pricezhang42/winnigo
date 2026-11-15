@@ -287,6 +287,56 @@ async function checkWrite() {
     dates.map((row) => row.visit_date),
     ['2026-11-20', '2026-12-31'],
   );
+  // Previously saved out-of-window records remain available to admin, not discovery.
+  await repo.applySourceCollection('wag', [future], {
+    checkedAt: context.checkedAt,
+    cancelMissing: false,
+    complete: false,
+  });
+  assert.equal((await repo.search({ query: 'Outside window', principal: owner })).total, 0);
+  assert.equal(
+    (await repo.search({ query: 'Outside window', admin: true, principal: owner })).total,
+    1,
+  );
+  const sorting = {
+    ...parsed[0],
+    id: 'qa-screenings',
+    title: 'QA screening order',
+    url: url('screenings'),
+    recurring: true,
+    schedule: 'series',
+    occurrences: [
+      {
+        id: 'a-late',
+        start: '2026-11-20',
+        end: '2026-11-20',
+        startAt: '2026-11-21T01:00:00Z',
+        endAt: '2026-11-21T02:00:00Z',
+      },
+      {
+        id: 'z-early',
+        start: '2026-11-20',
+        end: '2026-11-20',
+        startAt: '2026-11-20T21:00:00Z',
+        endAt: '2026-11-20T22:00:00Z',
+      },
+    ],
+  };
+  await repo.applySourceCollection('wag', [sorting], {
+    checkedAt: context.checkedAt,
+    cancelMissing: false,
+    complete: false,
+  });
+  const screenings = await repo.search({ query: 'QA screening order', principal: owner });
+  assert.deepEqual(
+    screenings.items.map((item) => item.startAt),
+    ['2026-11-20T21:00:00.000Z', '2026-11-21T01:00:00.000Z'],
+  );
+  assert.ok(
+    (await repo.search({ query: 'WAG–Qaumajuq', principal: owner, limit: 100 })).items.some(
+      (item) => item.title === 'QA Concert',
+    ),
+  );
   console.log(
     'WAG write imports accepted pages, preserves owner/session identity, and falls back per page and on provider initialization failure.',
   );

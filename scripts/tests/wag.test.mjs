@@ -471,3 +471,26 @@ test('shadow captures fetched child pages once, including parser rejections, wit
   assert.equal(pages.length, 1);
   assert.equal(rejected.items.length, 0);
 });
+
+test('extraction sees ticket labels/prices without checkout inputs or controls', async () => {
+  const ticket =
+    '<form><input type="hidden" value="private-token"><div><strong class="ticket-name">General admission</strong><span class="ticket-price">$110</span></div><input name="email" value="checkout-only@example.test"><button>Checkout</button></form>';
+  let captured;
+  await collectWag(source, now, {
+    pauseMs: 0,
+    maxPages: 1,
+    fetchPage: async (url) => ({
+      body:
+        url === WAG_CALENDAR
+          ? calendar
+          : event.replace('<div class="sidebar">', '<div class="sidebar">' + ticket),
+    }),
+    onEventPage: (page) => {
+      captured = page;
+    },
+  });
+  const { prepareExtractionDocument } = await import('../../lib/server/event-page-preparation.mjs');
+  const document = prepareExtractionDocument(captured);
+  assert.match(document.text, /General admission \$110/);
+  assert.doesNotMatch(document.text, /private-token|checkout-only@example|Checkout/);
+});

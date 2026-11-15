@@ -233,3 +233,27 @@ Existing saved records are retained as history; the guard does not delete old re
 edits. A replay of the November 15 live QA batch under a simulated provider outage reduced
 23 incoming records to 10 in-window events and 13 occurrences, with zero out-of-window rows.
 The original QA database was left intact. No model requests or photo downloads were needed.
+
+## WAG card and admission review fixes
+
+WAG ticket prices can be inside checkout forms, which normal page preparation removes.
+The collector now turns only `.ticket-name` / `.ticket-price` labels into inert text before
+preparation, excluding form fields and controls. The model reads regular ticket prices from
+these rows, quotes them, and distinguishes coupon discounts from admission. Distinct tiers
+without a general price stay unknown numerically with their options in admission text.
+A live Luna test on saved public HTML extracted Bell Ornaments at $110 (ignoring the $5 coupon)
+and Cannes Lions at $17 per screening. The first pass cost approximately US$0.001476; a repeat
+used cache hits. New page fetches were rejected by automatic approval review, so these checks
+used the saved responses and made no FlareSolverr requests.
+
+Discovery sorts equal-date cards by their actual start timestamp before title/id and searches
+source names for public listings as well as admin. Previously saved WAG records beyond the
+current/next month are excluded from discovery/detail reads, while admin history remains
+available. Missing/failed card images use a neutral placeholder instead of another destination's
+photo. Extraction summaries remove prepared-text heading/separator markers, and write mode
+retains a parser subtitle when it extends the extracted heading, distinguishing Wednesday
+programs. Existing owner overrides remain effective.
+
+The named WAG QA database was refreshed with the verified admission outputs and recorded
+parser subtitles. Browser checks confirmed prices, time ordering, neutral photos, subtitle
+labels, source search and clean summaries. The ordinary app database was not changed.

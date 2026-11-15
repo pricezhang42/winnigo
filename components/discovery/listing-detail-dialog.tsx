@@ -14,7 +14,6 @@ import ListingGallery from '@/components/listing-gallery';
 import { collectionLabel, resolveMapLocation } from '@/lib/trail-locations';
 import type { Listing } from '@/lib/domain';
 import {
-  FORKS_IMAGE,
   dateLabel,
   detailPriceLabel,
   directionsUrl,
@@ -68,7 +67,7 @@ function ListingDetail({
       ) : (
         <ListingGallery
           key={listing.id}
-          images={listing.images?.length ? listing.images : [listing.image || FORKS_IMAGE]}
+          images={listing.images?.length ? listing.images : listing.image ? [listing.image] : []}
           title={listing.title}
           sourceUrl={listing.url}
         />

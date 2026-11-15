@@ -1,16 +1,10 @@
 'use client';
+import { useState } from 'react';
 import { ArrowUpRight, Bookmark, CalendarDays, Compass, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { collectionLabel } from '@/lib/trail-locations';
 import type { Listing } from '@/lib/domain';
-import {
-  FORKS_IMAGE,
-  LEAF_IMAGE,
-  cardPriceLabel,
-  dateLabel,
-  isCommunityPost,
-  usesPlaceholderImage,
-} from './listing-format';
+import { cardPriceLabel, dateLabel, isCommunityPost, usesPlaceholderImage } from './listing-format';
 
 type Props = {
   item: Listing;
@@ -21,11 +15,12 @@ type Props = {
 
 export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
   const collection = collectionLabel(item);
+  const [failedImage, setFailedImage] = useState('');
   return (
     <article className="listing-card">
       <div className="card-image">
         <button onClick={() => onSelect(item)} aria-label={'View ' + item.title}>
-          {usesPlaceholderImage(item) ? (
+          {usesPlaceholderImage(item) || failedImage === item.image ? (
             <div className="social-placeholder">
               <Compass size={38} />
               <span>{item.category}</span>
@@ -38,12 +33,10 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
             </div>
           ) : (
             <img
-              src={item.image || FORKS_IMAGE}
-              alt={item.image ? item.title : 'The Forks, Winnipeg'}
+              src={item.image}
+              alt={item.title}
               loading="lazy"
-              onError={(event) => {
-                event.currentTarget.src = LEAF_IMAGE;
-              }}
+              onError={() => setFailedImage(item.image || '')}
             />
           )}
           <span className="type-badge">{item.type}</span>
