@@ -4,7 +4,13 @@ import { ArrowUpRight, Bookmark, CalendarDays, Compass, MapPin } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { collectionLabel } from '@/lib/trail-locations';
 import type { Listing } from '@/lib/domain';
-import { cardPriceLabel, dateLabel, isCommunityPost, usesPlaceholderImage } from './listing-format';
+import {
+  availabilityLabel,
+  cardPriceLabel,
+  dateLabel,
+  isCommunityPost,
+  usesPlaceholderImage,
+} from './listing-format';
 
 type Props = {
   item: Listing;
@@ -65,6 +71,7 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
           <span>{item.category}</span>
           <span>{cardPriceLabel(item.price)}</span>
         </div>
+        {availabilityLabel(item) && <p className="card-date">{availabilityLabel(item)}</p>}
         <button className="card-title" onClick={() => onSelect(item)}>
           <h3>{item.title}</h3>
         </button>

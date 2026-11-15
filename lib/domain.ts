@@ -62,7 +62,8 @@ export type Listing = {
   /** Source wording preserves admission exceptions and audience restrictions. */
   admission?: string;
   audience?: string;
-  availability?: 'sold-out' | 'unknown';
+  availability?: 'available' | 'sold-out' | 'unavailable' | 'unknown';
+  availabilityText?: string;
   collection?: string;
   activityCategories?: string[];
   seasons?: string[];

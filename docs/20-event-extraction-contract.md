@@ -50,8 +50,8 @@ empty array reports no facts of that kind. Neither implies complete collection o
 closure. A null event is a valid result, not permission to delete previous listings.
 
 The event has `title` and `titleQuote`; `venue {name, address, online, quote}`; `price {amount,
-text, quote}`; `ticketUrl`, `organizerUrl`, up to three `imageUrls`; `schedule`; and
-`reviewReasons`, each `{field, reason}` where field is title, schedule, venue, price, links or
+text, quote}`; `availability {status, text, quote}` (nullable); `ticketUrl`, `organizerUrl`, up to three `imageUrls`; `schedule`; and
+`reviewReasons`, each `{field, reason}` where field is title, schedule, venue, price, availability, links or
 other. Missing price is null, never free.
 
 The model does **not** return: the source URL, timezone, schedule kind, end-day offsets,
@@ -143,3 +143,14 @@ Monday/holiday closures and month-precision closing date, missing year/time, con
 and photo/ticket links. Unit tests exercise validation and the existing visiting-hour/DST
 boundaries; compile-time checks confirm the inferred types retain nullable facts and reject
 repository fields. These examples verify the contract, not real-source accuracy or model quality.
+
+
+Ticket availability is separate from cancellation: `available`, `sold-out`, `unavailable` or
+`unknown`, with an exact supporting quote. Unsupported availability becomes unknown without
+withholding an otherwise supported event. Specific ticket-row notices take precedence over
+generic sales promotions. Mixed ticket options use unknown with their published wording.
+Old stored model results without availability remain readable (default null); the provider's
+strict schema requires the nullable field. Prompt/schema hashing invalidates old provider cache
+keys. The importer retains `availability` and `availabilityText`, and owner overrides can
+correct these fields without being overwritten by collection. Prices remain present even when
+tickets are no longer available.

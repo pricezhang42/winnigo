@@ -345,3 +345,46 @@ test('missing venues use only explicit organization defaults, retaining page and
     assert.equal(result.review[0].reason, 'missing-title-or-venue');
   }
 });
+
+test('paid but unavailable events retain their price, status wording and source evidence', async () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' General admission $125. No longer available.';
+  const value = changed((event) => {
+    event.price = { amount: 125, text: 'General admission $125', quote: 'General admission $125' };
+    event.availability = {
+      status: 'unavailable',
+      text: 'No longer available',
+      quote: 'No longer available',
+    };
+  });
+  const [item] = (await preview(value, input)).items;
+  assert.equal(item.price, 125);
+  assert.equal(item.availability, 'unavailable');
+  assert.equal(item.availabilityText, 'No longer available');
+  assert.equal(item.status, 'active');
+  assert.ok(
+    item.extraction.evidence.some(
+      (e) => e.fields.includes('/availability') && e.quote === 'No longer available',
+    ),
+  );
+  value.event.availability.quote = 'Invented sold-out notice';
+  const [unsupported] = (await preview(value, input)).items;
+  assert.equal(unsupported.availability, 'unknown');
+  assert.equal(unsupported.price, 125);
+});
+
+test('supported ticket tiers clear a prior single price rather than inventing one amount', async () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Ticket options: $10 and $15.';
+  const value = changed((event) => {
+    event.price = {
+      amount: null,
+      text: 'Ticket options: $10 and $15',
+      quote: 'Ticket options: $10 and $15',
+    };
+  });
+  const old = { ...(await preview()).items[0], price: 25 };
+  const [item] = (await preview(value, input, { knownListings: new Map([[old.id, old]]) })).items;
+  assert.equal(item.price, null);
+  assert.equal(item.admission, 'Ticket options: $10 and $15');
+});

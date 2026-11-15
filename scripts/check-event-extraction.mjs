@@ -205,7 +205,13 @@ async function checkWrite() {
   for (const slug of ['withheld', 'broken', 'unprepared'])
     assert.equal(saved.get('qa-write-' + slug).title, 'Parser ' + slug);
   await applyAction(
-    { action: 'update', id: 'qa-write-accepted', title: 'Owner write title' },
+    {
+      action: 'update',
+      id: 'qa-write-accepted',
+      title: 'Owner write title',
+      availability: 'unavailable',
+      availabilityText: 'No longer available',
+    },
     repo,
     owner,
   );
@@ -217,6 +223,10 @@ async function checkWrite() {
   assert.equal(
     (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
     'Owner write title',
+  );
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).availability,
+    'unavailable',
   );
   assert.deepEqual(
     (await pool.query("SELECT occurrence_id FROM occurrences WHERE listing_id='qa-write-accepted'"))
@@ -238,6 +248,15 @@ async function checkWrite() {
   assert.equal(
     (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
     'Owner write title',
+  );
+  await applyAction(
+    { action: 'update', id: 'qa-write-accepted', availability: 'available' },
+    repo,
+    owner,
+  );
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).availabilityText,
+    '',
   );
   // Even a provider failure must not import parser dates outside the current/next month.
   const future = {

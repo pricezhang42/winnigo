@@ -14,6 +14,7 @@ import ListingGallery from '@/components/listing-gallery';
 import { collectionLabel, resolveMapLocation } from '@/lib/trail-locations';
 import type { Listing } from '@/lib/domain';
 import {
+  availabilityLabel,
   dateLabel,
   detailPriceLabel,
   directionsUrl,
@@ -91,9 +92,14 @@ function ListingDetail({
         </p>
         <p>
           <Ticket />
-          {detailPriceLabel(listing.price)}
+          {listing.price === null && listing.admission
+            ? listing.admission
+            : detailPriceLabel(listing.price)}
         </p>
       </div>
+      {availabilityLabel(listing) && (
+        <p>{listing.availabilityText || availabilityLabel(listing)}</p>
+      )}
       {!!listing.occurrences?.length && (
         <details className="event-schedule">
           <summary>Dates and times ({listing.occurrences.length})</summary>

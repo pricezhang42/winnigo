@@ -257,3 +257,24 @@ programs. Existing owner overrides remain effective.
 The named WAG QA database was refreshed with the verified admission outputs and recorded
 parser subtitles. Browser checks confirmed prices, time ordering, neutral photos, subtitle
 labels, source search and clean summaries. The ordinary app database was not changed.
+
+
+## Shared admission and ticket availability
+
+Ticket-form preparation now lives in the shared page preparer rather than a WAG-specific
+transform. Published prices, ticket labels and visible action/closed-sales notices survive as
+inert text; hidden/input/select/textarea values and form actions are excluded. Non-ticket forms
+remain excluded. The shared model contract extracts price and ticket availability with source
+quotes, and cards/details display available, sold out, no longer available, or a mixed-options
+availability reminder. Missing notices remain unknown. Unavailable tickets do not cancel the
+event or erase its price. This supports every paid event page supplied to extraction, while
+write rollout remains source-specific.
+
+The three saved WAG examples were retested with live Luna: Nourish $125, Bell Ornaments $110,
+Cannes Lions $17. The saved Nourish snapshot still says “Tickets on sale now”; current source
+access was blocked by verification. Its QA “No longer available” label is therefore an owner
+override based on the user's current report, not a claim of fresh source verification. A
+separate synthetic, non-WAG paid-event test gave Luna both the old promotional wording and a
+specific “No longer available” notice; it correctly retained $125 and returned unavailable
+(cost approximately US$0.000431). Tests also check evidence handling, unknown availability,
+form-value exclusion, and preservation of the owner override across re-imports.

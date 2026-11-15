@@ -91,3 +91,15 @@ export function directionsUrl(item: Listing) {
     encodeURIComponent(item.venue + ' ' + region)
   );
 }
+
+export function availabilityLabel(item: Listing) {
+  if (item.availability === 'sold-out') return 'Sold out';
+  if (item.availability === 'unavailable') return 'No longer available';
+  if (item.availability === 'available') return 'Available';
+  if (
+    item.availabilityText ||
+    (item.type === 'Event' && typeof item.price === 'number' && item.price > 0)
+  )
+    return 'Check availability';
+  return '';
+}

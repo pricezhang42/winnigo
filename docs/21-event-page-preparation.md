@@ -43,7 +43,7 @@ in `pages`; do not combine organizer wording with the aggregator's source docume
   `documents[].urls`. Relative URLs are resolved against the fetched page URL. Only HTTPS URLs
   without credentials are added as URL candidates; supplying a URL is not permission to fetch it. Image URLs come
   from image `src`/lazy attributes and Event JSON-LD; CSS backgrounds are not interpreted.
-- Navigation, site headers/footers, forms, scripts other than event data, hidden markup and recognized
+- Navigation, site headers/footers, non-ticket forms, scripts other than event data, hidden markup and recognized
   related/sponsor sections are dropped. Evidence should quote the prepared text, whose whitespace
   is normalized and which may include formatting labels. It is not a byte-for-byte HTML copy.
 
@@ -63,3 +63,9 @@ The saved QA replay checked Bleeker's Manitoba Music card and the Tourism Winnip
 listing with its separately captured organizer page. The complete Manitoba Music calendar page
 also prepared successfully with 40 selected cards. Local replay artifacts are kept under the
 ignored `.winnigo/extraction-preparation-evidence` directory.
+
+
+Published admission and availability text inside ticket forms is retained as inert text/links.
+Ticket fields, hidden values, form actions and controls are not sent to the model. Visible action
+labels such as “No longer available” are preserved, so sales closure does not hide the price.
+The same preparation applies across event sources.
