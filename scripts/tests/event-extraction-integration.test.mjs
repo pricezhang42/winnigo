@@ -74,6 +74,23 @@ test('separates same-day showtimes, clips occurrences and records missing-year a
   assert.equal(dateOnly.extraction.schedule.dates[0].start.year, null);
 });
 
+test('a published multi-session event remains recurring when only one session is in the collection window', async () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Next session January 2, 2027 at 7 PM.';
+  const value = changed((event) =>
+    event.schedule.dates.push({
+      ...event.schedule.dates[0],
+      start: date(1, 2, 2027),
+      quote: 'January 2, 2027 at 7 PM',
+    }),
+  );
+  const [item] = (await preview(value, input)).items;
+  assert.equal(item.occurrences.length, 1);
+  assert.equal(item.occurrences[0].start, '2026-11-20');
+  assert.equal(item.recurring, true);
+  assert.equal(item.schedule, 'series');
+});
+
 test('expands weekly and first-Friday rules with Winnipeg DST and shared identities', async () => {
   const weekly = example('weekly');
   const [program] = (await preview(weekly.result, weekly.context)).items;
