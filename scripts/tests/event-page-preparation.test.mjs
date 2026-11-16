@@ -248,3 +248,13 @@ test('rejects empty, over-limit or missing page sections without truncation or f
   }));
   assert.throws(() => context('', { pages }), /JSON size limit exceeded/);
 });
+
+test('shared preparation keeps paid admission and closed-sales text without form values or actions', () => {
+  const document = prepare(
+    '<main><h1>Dinner</h1><form action="https://checkout.example.test/private"><label>General admission $125</label><input name="email" value="private@example.test"><input type="hidden" value="token-secret"><button disabled>No longer available</button><div hidden>$999</div></form><form hidden><span>$987 secret hidden offer</span></form><form><input placeholder="Search"><button>Search</button></form></main>',
+  );
+  assert.match(document.text, /General admission \$125/);
+  assert.match(document.text, /No longer available/);
+  assert.doesNotMatch(document.text, /private@example|token-secret|\$999|\$987|Search/);
+  assert.ok(!document.urls.some((u) => u.includes('checkout.example')));
+});

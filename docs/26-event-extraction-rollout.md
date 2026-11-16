@@ -219,3 +219,62 @@ that lease. Write integration tests use disposable schemas and cover accepted/re
 provider and preparation failures, owner edits, stable occurrence identities, media preservation
 and parser cancellation. A replay of the five reviewed WAG outputs imported 15 occurrences
 twice with unchanged occurrence ids; replay photo downloads were excluded.
+
+## WAG fallback window guard
+
+Every WAG collection now applies the shared current/next Winnipeg month window immediately
+before repository import, after AI replacement or parser fallback. Out-of-window events are
+omitted; recurring occurrence rows are filtered individually while the published run dates
+remain intact. This also applies when extraction is off or provider initialization fails.
+`outsideWindow` counts excluded occurrence rows (or excluded records with no occurrences).
+An all-out-of-window result is a legitimate empty import, not a collector failure.
+
+Existing saved records are retained as history; the guard does not delete old records or owner
+edits. A replay of the November 15 live QA batch under a simulated provider outage reduced
+23 incoming records to 10 in-window events and 13 occurrences, with zero out-of-window rows.
+The original QA database was left intact. No model requests or photo downloads were needed.
+
+## WAG card and admission review fixes
+
+WAG ticket prices can be inside checkout forms, which normal page preparation removes.
+The collector now turns only `.ticket-name` / `.ticket-price` labels into inert text before
+preparation, excluding form fields and controls. The model reads regular ticket prices from
+these rows, quotes them, and distinguishes coupon discounts from admission. Distinct tiers
+without a general price stay unknown numerically with their options in admission text.
+A live Luna test on saved public HTML extracted Bell Ornaments at $110 (ignoring the $5 coupon)
+and Cannes Lions at $17 per screening. The first pass cost approximately US$0.001476; a repeat
+used cache hits. New page fetches were rejected by automatic approval review, so these checks
+used the saved responses and made no FlareSolverr requests.
+
+Discovery sorts equal-date cards by their actual start timestamp before title/id and searches
+source names for public listings as well as admin. Previously saved WAG records beyond the
+current/next month are excluded from discovery/detail reads, while admin history remains
+available. Missing/failed card images use a neutral placeholder instead of another destination's
+photo. Extraction summaries remove prepared-text heading/separator markers, and write mode
+retains a parser subtitle when it extends the extracted heading, distinguishing Wednesday
+programs. Existing owner overrides remain effective.
+
+The named WAG QA database was refreshed with the verified admission outputs and recorded
+parser subtitles. Browser checks confirmed prices, time ordering, neutral photos, subtitle
+labels, source search and clean summaries. The ordinary app database was not changed.
+
+
+## Shared admission and ticket availability
+
+Ticket-form preparation now lives in the shared page preparer rather than a WAG-specific
+transform. Published prices, ticket labels and visible action/closed-sales notices survive as
+inert text; hidden/input/select/textarea values and form actions are excluded. Non-ticket forms
+remain excluded. The shared model contract extracts price and ticket availability with source
+quotes, and cards/details display available, sold out, no longer available, or a mixed-options
+availability reminder. Missing notices remain unknown. Unavailable tickets do not cancel the
+event or erase its price. This supports every paid event page supplied to extraction, while
+write rollout remains source-specific.
+
+The three saved WAG examples were retested with live Luna: Nourish $125, Bell Ornaments $110,
+Cannes Lions $17. The saved Nourish snapshot still says “Tickets on sale now”; current source
+access was blocked by verification. Its QA “No longer available” label is therefore an owner
+override based on the user's current report, not a claim of fresh source verification. A
+separate synthetic, non-WAG paid-event test gave Luna both the old promotional wording and a
+specific “No longer available” notice; it correctly retained $125 and returned unavailable
+(cost approximately US$0.000431). Tests also check evidence handling, unknown availability,
+form-value exclusion, and preservation of the owner override across re-imports.

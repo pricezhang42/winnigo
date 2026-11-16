@@ -30,6 +30,7 @@ export const single = {
     titleQuote: 'QA Concert',
     venue: { name: 'QA Hall', address: null, online: false, quote: 'QA Hall' },
     price: null,
+    availability: null,
     ticketUrl: null,
     organizerUrl: null,
     imageUrls: [],

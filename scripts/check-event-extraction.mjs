@@ -205,7 +205,13 @@ async function checkWrite() {
   for (const slug of ['withheld', 'broken', 'unprepared'])
     assert.equal(saved.get('qa-write-' + slug).title, 'Parser ' + slug);
   await applyAction(
-    { action: 'update', id: 'qa-write-accepted', title: 'Owner write title' },
+    {
+      action: 'update',
+      id: 'qa-write-accepted',
+      title: 'Owner write title',
+      availability: 'unavailable',
+      availabilityText: 'No longer available',
+    },
     repo,
     owner,
   );
@@ -217,6 +223,10 @@ async function checkWrite() {
   assert.equal(
     (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
     'Owner write title',
+  );
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).availability,
+    'unavailable',
   );
   assert.deepEqual(
     (await pool.query("SELECT occurrence_id FROM occurrences WHERE listing_id='qa-write-accepted'"))
@@ -238,6 +248,113 @@ async function checkWrite() {
   assert.equal(
     (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).title,
     'Owner write title',
+  );
+  await applyAction(
+    { action: 'update', id: 'qa-write-accepted', availability: 'available' },
+    repo,
+    owner,
+  );
+  assert.equal(
+    (await repo.detail('qa-write-accepted', { admin: true, principal: owner })).availabilityText,
+    '',
+  );
+  // Even a provider failure must not import parser dates outside the current/next month.
+  const future = {
+    ...parsed[0],
+    id: 'qa-write-future',
+    url: url('future'),
+    start: '2027-01-10',
+    end: '2027-01-10',
+    title: 'Outside window',
+  };
+  const limited = await run('qa-write-window', {
+    collect: async () => [future],
+    extraction: {
+      forSource() {
+        throw Error('unavailable');
+      },
+    },
+  });
+  assert.equal(limited.status, 'ok');
+  assert.equal(limited.counts.outsideWindow, 1);
+  assert.ok(!(await repo.knownSourceListings('wag')).has(future.id));
+  // Mixed recurring rows retain current-month sessions and never import January sessions.
+  const mixed = {
+    ...parsed[0],
+    id: 'qa-write-mixed',
+    url: url('mixed'),
+    recurring: true,
+    schedule: 'series',
+    occurrences: [
+      { id: 'qa-write-nov', start: '2026-11-20', end: '2026-11-20' },
+      { id: 'qa-write-dec', start: '2026-12-31', end: '2026-12-31' },
+      { id: 'qa-write-jan', start: '2027-01-01', end: '2027-01-01' },
+    ],
+  };
+  const clipped = await run('qa-write-window-mixed', {
+    collect: async () => [mixed],
+    extraction: { forSource: () => null },
+  });
+  assert.equal(clipped.status, 'ok');
+  assert.equal(clipped.counts.outsideWindow, 1);
+  const dates = (
+    await pool.query(
+      "SELECT start_date::text AS visit_date FROM occurrences WHERE listing_id='qa-write-mixed' ORDER BY start_date",
+    )
+  ).rows;
+  assert.deepEqual(
+    dates.map((row) => row.visit_date),
+    ['2026-11-20', '2026-12-31'],
+  );
+  // Previously saved out-of-window records remain available to admin, not discovery.
+  await repo.applySourceCollection('wag', [future], {
+    checkedAt: context.checkedAt,
+    cancelMissing: false,
+    complete: false,
+  });
+  assert.equal((await repo.search({ query: 'Outside window', principal: owner })).total, 0);
+  assert.equal(
+    (await repo.search({ query: 'Outside window', admin: true, principal: owner })).total,
+    1,
+  );
+  const sorting = {
+    ...parsed[0],
+    id: 'qa-screenings',
+    title: 'QA screening order',
+    url: url('screenings'),
+    recurring: true,
+    schedule: 'series',
+    occurrences: [
+      {
+        id: 'a-late',
+        start: '2026-11-20',
+        end: '2026-11-20',
+        startAt: '2026-11-21T01:00:00Z',
+        endAt: '2026-11-21T02:00:00Z',
+      },
+      {
+        id: 'z-early',
+        start: '2026-11-20',
+        end: '2026-11-20',
+        startAt: '2026-11-20T21:00:00Z',
+        endAt: '2026-11-20T22:00:00Z',
+      },
+    ],
+  };
+  await repo.applySourceCollection('wag', [sorting], {
+    checkedAt: context.checkedAt,
+    cancelMissing: false,
+    complete: false,
+  });
+  const screenings = await repo.search({ query: 'QA screening order', principal: owner });
+  assert.deepEqual(
+    screenings.items.map((item) => item.startAt),
+    ['2026-11-20T21:00:00.000Z', '2026-11-21T01:00:00.000Z'],
+  );
+  assert.ok(
+    (await repo.search({ query: 'WAG–Qaumajuq', principal: owner, limit: 100 })).items.some(
+      (item) => item.title === 'QA Concert',
+    ),
   );
   console.log(
     'WAG write imports accepted pages, preserves owner/session identity, and falls back per page and on provider initialization failure.',
