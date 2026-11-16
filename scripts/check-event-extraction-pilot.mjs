@@ -1,7 +1,9 @@
 // Read a local reference manifest and compare a live extraction with a parser snapshot.
 import { open, readFile } from 'node:fs/promises';
-import { parseEventExtraction, resolveExtractionDate } from '../lib/contracts/event-extraction.mjs';
+import { parseEventExtraction } from '../lib/contracts/event-extraction.mjs';
 import { createConfiguredEventExtractionService } from '../lib/server/openai-event-extraction.mjs';
+
+import { modelFacts, score } from './lib/extraction-pilot-scoring.mjs';
 
 const fields = new Set([
   'title',
@@ -19,75 +21,6 @@ const fields = new Set([
   'imageUrl',
   'review',
 ]);
-const ordered = (values) => [...new Set(values)].sort();
-const normalized = (value) =>
-  typeof value === 'string' ? value.normalize('NFKC').replace(/\s+/g, ' ').trim() : value;
-
-function modelFacts(event, context) {
-  if (!event) return null;
-  const schedule = event.schedule;
-  const date = (fact) => fact && resolveExtractionDate(fact, context).value;
-  const slots = (schedule.dates || []).map((row) => ({ ...row, day: date(row.start) }));
-  slots.sort(
-    (a, b) => a.day.localeCompare(b.day) || (a.startTime || '').localeCompare(b.startTime || ''),
-  );
-  const first = slots[0];
-  const last = slots.at(-1);
-  const recurrence = schedule.recurrence?.[0];
-  // An untimed date takes its time from the rule or visiting hours, as the mapper publishes it.
-  const timing =
-    (first?.startTime ? first : null) ?? recurrence ?? schedule.hours?.[0]?.weekly[0] ?? first;
-  const offsetEnd =
-    last?.endDayOffset > 0
-      ? new Date(Date.parse(last.day) + last.endDayOffset * 86400000).toISOString().slice(0, 10)
-      : null;
-  return {
-    title: event.title,
-    venue: event.venue?.name ?? (event.venue?.mode === 'online' ? 'Online' : null),
-    sourceUrl: event.sourceUrl,
-    date: date(schedule.run?.from ?? null) || first?.day || date(recurrence?.from ?? null),
-    endDate:
-      date(schedule.run?.through ?? recurrence?.through ?? last?.end ?? null) ||
-      offsetEnd ||
-      (last?.day !== first?.day ? last.day : null),
-    startTime: timing?.startTime ?? null,
-    endTime: timing?.endTime ?? null,
-    dates: ordered(slots.map((row) => row.day)),
-    showtimes: slots.filter((row) => row.startTime).map((row) => row.day + ' ' + row.startTime),
-    recurring: Boolean(schedule.recurrence?.length) || schedule.kind === 'recurring',
-    closedDates: ordered(
-      (schedule.exceptions || []).filter((row) => row.closed).map((row) => date(row.from)),
-    ),
-    openWeekdays: ordered(
-      (schedule.hours || []).flatMap((period) => period.weekly.flatMap((row) => row.weekdays)),
-    ),
-    imageUrls: (event.images || []).map((image) => image.url),
-    review: event.reviewReasons.length > 0,
-  };
-}
-
-function score(expected, actual) {
-  const matches = ([field, value]) => {
-    if (!actual) return false;
-    if (field === 'imageUrl') {
-      const images = actual.imageUrls || [];
-      return value === null ? images.length === 0 : images.includes(value);
-    }
-    if (Array.isArray(value))
-      return (
-        Array.isArray(actual[field]) &&
-        JSON.stringify(ordered(value)) === JSON.stringify(ordered(actual[field]))
-      );
-    return normalized(value) === normalized(actual[field]);
-  };
-  return {
-    missing: expected !== null && actual === null,
-    extra: expected === null && actual !== null,
-    fields: Object.fromEntries(
-      Object.entries(expected || {}).map((entry) => [entry[0], matches(entry)]),
-    ),
-  };
-}
 
 function validateManifest(cases) {
   if (!Array.isArray(cases) || !cases.length) throw Error('A nonempty pilot manifest is required');
@@ -129,7 +62,10 @@ if (!manifestFile || !reportFile || manifestFile === reportFile)
   throw Error('Usage: check-event-extraction-pilot.mjs MANIFEST.json REPORT.json');
 const cases = JSON.parse(await readFile(manifestFile, 'utf8'));
 validateManifest(cases);
-const service = createConfiguredEventExtractionService();
+const service = createConfiguredEventExtractionService({
+  ...process.env,
+  WINNIGO_EXTRACTION_TIMEOUT_MS: process.env.WINNIGO_EXTRACTION_TIMEOUT_MS || '60000',
+});
 if (!service) throw Error('Configure an opt-in extraction provider before running the pilot');
 const results = [];
 
