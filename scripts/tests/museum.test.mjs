@@ -10,6 +10,7 @@ import {
   museumUrl,
   MUSEUM_CALENDAR,
 } from '../../lib/server/museum.mjs';
+import { prepareExtractionContext } from '../../lib/server/event-page-preparation.mjs';
 import { listingDedupeKey } from '../../lib/connectors.mjs';
 import { invalidReason } from '../../lib/server/collection.mjs';
 const fixture = (n) =>
@@ -491,4 +492,33 @@ test('cached calendar offsets use the occurrence date DST and preserve published
   });
   assert.deepEqual(repeat.supersededIds, [old.id]);
   assert.equal(repeat.items[0].id, item.id);
+});
+
+test('Museum extraction hook identifies the canonical event and authoritative calendar schedule', async () => {
+  const pages = [];
+  await collectMuseum(source, now, {
+    pauseMs: 0,
+    fetchImpl: transport(
+      [a, event('unrelated/2026-10-15', '2026-10-15', '10:00:00', { name: 'Unrelated workshop' })],
+      [b],
+    ),
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.equal(pages[0].eventUrl, 'https://manitobamuseum.ca/event/paper/');
+  assert.equal(pages[0].calendarSchedule, true);
+  assert.equal(pages[0].supportingPages.length, 2);
+  const input = prepareExtractionContext({
+    source: source.id,
+    pageUrl: pages[0].url,
+    checkedAt: now,
+    pages: [
+      { url: pages[0].url, html: pages[0].html, selector: pages[0].selector },
+      ...pages[0].supportingPages,
+    ],
+  });
+  assert.equal(input.documents.length, 3);
+  assert.match(input.documents[1].url, /month\/2026-10/);
+  assert.match(input.documents[1].text, /2026-10-14T10:00:00-05:00/);
+  assert.match(input.documents[2].text, /2026-11-01/);
+  assert.ok(input.documents.slice(1).every((d) => !d.text.includes('Unrelated workshop')));
 });

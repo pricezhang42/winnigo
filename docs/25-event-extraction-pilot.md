@@ -222,3 +222,37 @@ numbering, and a rule whose quote names other days is held. In a rerun of the 63
 was numbered correctly (first and second Sundays `[0]`, last Thursday `[4]`, first Friday `[5]`,
 weekends `[0, 6]`): 172/176 (97.7%) date, time and venue checks, 315/321 scored fields, the same
 two holds, and no event from the 13 controls, for about US$0.048.
+
+
+### Pricing/availability prompt regression (November 16, 2026)
+
+The merged PR #54 prompt/validator at `a740192` was rerun on the unchanged 50-event/13-control
+reference manifest with GPT-6 Luna. No source fetching or database imports were performed.
+
+| Measure | Full run | With one timeout recovery |
+| --- | ---: | ---: |
+| Event pages returning a validated event result | 49/50 | 50/50 |
+| Exact date/time/venue checks | 167/176 (94.9%) | 170/176 (96.6%) |
+| All scored fields | 305/321 | 311/321 |
+| Controls returning an event | 0/13 | 0/13 |
+| Review holds | 2 | 2 |
+
+The first run missed the 95% gate because First Friday in the Exchange timed out. Only that
+failed case was retried once, separately; the original score is retained above. The retry
+recovered date, time and venue but still missed the recurrence flag. This is operational
+recovery, not a replacement full-run accuracy claim.
+
+Remaining core differences include a venue punctuation difference, DOME@HOME's unknown
+venue/start/end time while held for conflicting dates, the Museum First Fridays venue label,
+and PseudoScience's selected date. Other misses concern recurrence flags and one visiting
+weekday set. The two holds remain Egoportraits and DOME@HOME schedule conflicts.
+
+The full run reported 299,195 input tokens, 41,721 output tokens (24,369 reasoning), and
+145,424 cached input tokens, with median latency 6.82 seconds and p90 13.32 seconds. The
+estimated configured cost was US$0.053697 plus US$0.000759 for the retry (US$0.054456 total).
+The timed-out request lacks complete usage, so these are reported/accounted estimates, not
+an independently verified invoice total.
+
+This reference set has no reviewed price/availability labels. It measures regression on its
+existing fields; separate paid-ticket tests cover those new fields. Broader source rollout
+remains opt-in and requires source-specific calendar/session checks and fallback.

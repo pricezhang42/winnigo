@@ -20,8 +20,8 @@ test('rollout is off by default and only accepts shadow mode for supported sourc
   );
   assert.equal(readExtractionRollout(env('wag=shadow')).get('wag'), 'shadow');
   assert.equal(readExtractionRollout(env('wag=write')).get('wag'), 'write');
+  assert.equal(readExtractionRollout(env('manitoba-museum=write')).get('manitoba-museum'), 'write');
   for (const [value, message] of [
-    ['manitoba-museum=write', /only for wag/],
     ['unknown=shadow', /not available for source unknown/],
     ['manitoba-museum', /source=shadow/],
     ['manitoba-museum=shadow=x', /source=shadow/],
