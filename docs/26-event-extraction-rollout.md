@@ -316,6 +316,12 @@ Replaying those three saved responses produced 3 cache hits, zero provider calls
 no Mondays appeared for Paper Trail, and all three stored photo hashes remained valid. These
 repeat checks reuse saved responses rather than claiming another fresh fetch.
 
+Dev and built asset checks passed. A focused Chrome check rendered separate Paper Trail day
+cards with dates, 10 a.m.–4 p.m. hours, recurring labels and loaded photos. The complete seeded
+QA browser regression passed on the built server, including loading/grid, pagination, galleries,
+maps and synthetic admin edits/hide/show. QA servers must set their matching `WINNIGO_ORIGIN`
+when using a port different from the inherited local configuration.
+
 ### November 16 access and rollout status
 
 Fresh WAG QA could not proceed: ordinary access to Nourish and the page's published public
