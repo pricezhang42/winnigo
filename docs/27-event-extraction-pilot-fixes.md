@@ -89,3 +89,13 @@ venue differences. Existing lint warnings remain; there are no lint errors.
 
 Prepared contexts, manifests, raw outputs and summaries remain in the ignored local
 `.winnigo/extraction-pilot/` folder. No production destinations, audiences or schedules change.
+
+
+## Calendar-context follow-up
+
+The full-pilot figures above predate the calendar-aware follow-up in PR #55. Both PRs now use
+the same shared prompt, distinguishing dates for separate, corroborated sessions from conflicts
+about one session. In a live paired DOME@HOME test, detail-only input still requires review;
+adding its scoped month-calendar records yields November 5, November 26 and December 31,
+each 19:00–20:00, with online attendance and no review hold. These new inputs/results do not
+replace the earlier full-pilot score. See [Museum calendar context](26-event-extraction-rollout.md#matching-museum-calendar-context).
