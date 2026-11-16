@@ -332,3 +332,35 @@ Tourism Winnipeg onboarding depends on open PR #32, whose base is the Manitoba M
 in open PR #31. Neither collector is on this epic branch yet. These dependency PRs are not
 merged as part of the Museum change. Production destinations, audience and schedules remain
 unchanged.
+
+
+## Matching Museum calendar context
+
+Museum detail-page hooks now include up to two supporting calendar documents, taken from the
+current/next-month pages already fetched by the collector. Each contains only that canonical
+event's published calendar records: title, URL, original start/end timestamps, venue and status.
+Unrelated events and descriptions are excluded. Calendar document URLs remain the evidence
+sources. No extra requests, database model or alternative occurrence pipeline is introduced.
+
+The shared preparer includes these documents alongside the detail page. Calendar changes affect
+the extraction cache key; unrelated events do not enter the event's context. Partial month reads
+supply only successful evidence and preserve existing sessions. The importer still rejects
+candidates that disagree with authoritative calendar sessions. The shared prompt distinguishes
+separately corroborated sessions from conflicting claims about the same session.
+
+A fresh DOME@HOME calendar/detail capture was tested with the same shared prompt in PRs #55
+and #56. In a paired live test, detail-only input retained its explicit-date review hold;
+adding the scoped calendar documents returned November 5, November 26 and December 31,
+all 19:00–20:00, with online attendance and no date-conflict hold. Thus the November 26 ending
+time is recovered from supported session evidence rather than assigned to every recurring date.
+
+The targeted QA write used AI successfully with no parser fallback, retained all three stable
+session IDs and the stored photo, and a saved-response repeat used one cache hit with zero
+provider calls/cost. Event content remained identical apart from `checkedAt`; the repository
+counts that timestamp advancement as an update. The run remains partial because only DOME@HOME
+was recollected. The ordinary database and schedules were not changed.
+
+The full 50-event/13-control pilot was not repeated for this follow-up. Its published scores
+remain measurements of the earlier prompt/contexts; these paired results are not substituted
+into that score. Unit/integration coverage checks calendar scoping, evidence URLs, cache
+invalidation when a calendar month disappears, owner edits and partial-read preservation.

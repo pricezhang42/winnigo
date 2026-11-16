@@ -175,7 +175,13 @@ async function checkMuseumWrite() {
           {
             model: 'qa-calendar-model',
             extractionVersion: 'calendar-v1',
-            countInput: async () => 100,
+            countInput: async (input) => {
+              assert.equal(input.documents.length, partial ? 2 : 3);
+              assert.match(input.documents[1].url, /month\/2026-11/);
+              assert.match(input.documents[1].text, /2026-11-20T19:00:00-06:00/);
+              if (!partial) assert.match(input.documents[2].text, /2026-12-04T19:00:00-06:00/);
+              return 100;
+            },
             async generate() {
               generations++;
               return {
@@ -256,6 +262,8 @@ async function checkMuseumWrite() {
   partial = true;
   const incomplete = await run('museum-write-partial');
   assert.equal(incomplete.status, 'partial');
+  assert.equal(incomplete.counts.extraction.cacheHits, 0);
+  assert.equal(generations, 3, 'changed calendar evidence invalidates extraction cache');
   assert.deepEqual(
     (await rows()).map((r) => r.occurrence_id),
     before.map((r) => r.occurrence_id),
