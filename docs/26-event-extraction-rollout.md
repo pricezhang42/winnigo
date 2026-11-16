@@ -1,7 +1,7 @@
 # Event extraction rollout
 
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
-[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG can opt into write mode after review.
+[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG and Manitoba Museum can opt into write mode after review.
 
 ## Modes
 
@@ -9,7 +9,7 @@ Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
 | --- | --- | --- |
 | off (default) | Parser | Nothing; no provider calls |
 | `shadow` | Parser | Extracts the event pages the collector already fetched, maps them with the shared importer and records a comparison |
-| `write` (WAG only) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
+| `write` (WAG and Museum) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
 
 ## Enable shadow mode
 
@@ -101,7 +101,7 @@ See [WAG setup](sources/wag.md) for transport limits and photo configuration.
 Before enabling write mode for additional sources, review shadow comparisons over at least one
 full collection cycle, agree how differences are resolved (extraction, parser or review), and test the
 importer's identity checks against known listings (`ambiguous-event-identity`,
-`existing-cancelled-event`), which shadow mode deliberately skips. Only WAG is currently supported for opt-in writes. Other sources remain off or shadow-only.
+`existing-cancelled-event`), which shadow mode deliberately skips. WAG and Museum support opt-in writes. Other sources remain off or shadow-only.
 
 ## WAG live check (November 12, 2026)
 
@@ -189,8 +189,7 @@ After reviewing shadow results, use `WINNIGO_EXTRACTION_SOURCES=wag=write` with 
 provider, budget, FlareSolverr and photo-container settings, and restart the worker. Enqueue
 WAG manually as documented in [WAG setup](sources/wag.md). This saves listings to the worker's
 configured database. No setting or schedule changes automatically. An unset sources setting
-keeps extraction off; `wag=shadow` returns to comparison-only mode. Museum write mode is not
-yet enabled because its calendars can contain sessions absent from an individual detail page.
+keeps extraction off; `wag=shadow` returns to comparison-only mode. Museum write mode preserves the calendar sessions absent from an individual detail page, as described below.
 
 Write mode prepares/extracts before the ordinary atomic source import. Each accepted page
 replaces that page's parser listing(s). Provider errors, missing dates, review holds, budget or
@@ -278,3 +277,52 @@ separate synthetic, non-WAG paid-event test gave Luna both the old promotional w
 specific “No longer available” notice; it correctly retained $125 and returned unavailable
 (cost approximately US$0.000431). Tests also check evidence handling, unknown availability,
 form-value exclusion, and preservation of the owner override across re-imports.
+
+
+## Manitoba Museum write mode
+
+Use `WINNIGO_EXTRACTION_SOURCES=manitoba-museum=write` with the existing provider and budget
+settings, then restart the worker and enqueue a manual Museum run. It remains off by default
+and does not enable schedules. WAG and Museum may be configured independently in the same
+comma-separated setting. Both use the shared importer, repository, occurrence and private-media
+logic; no separate extraction database model is introduced.
+
+The Museum adapter supplies its canonical event URL and `calendarSchedule: true` on captured
+detail pages. This trusted adapter flag makes the current normalized calendar sessions the
+schedule authority. AI may enrich the event's details, but cannot reduce the collected calendar
+to the one session shown on a detail page. Candidate sessions must agree with published
+calendar dates/times/statuses; conflicts are withheld and retain parser results. Accepted
+candidates keep every collected calendar session, its cancellation state and stable id, plus
+verified published run bounds. Missing sessions in a partial month read never retire existing
+history. Owner/session overrides and stored media remain protected by the normal repository.
+The Museum lease is 15 minutes for its bounded fetch/photo and extraction phases.
+
+Integration coverage uses the actual Museum collector: one-date detail/two-month calendar,
+canonical identity, cached repetition, owner edits to a later session, conflicting AI dates,
+and a failed second-month read. This source-specific schedule policy is supplied by the
+adapter; it can be reused for other collectors with reliable calendars.
+
+### November 16 live Museum QA
+
+A bounded live collection into a separate QA PostgreSQL database and private media prefix
+accepted all three selected groups with no extraction failures or parser fallbacks: Paper Trail
+(52 visiting days, no Mondays), Sensory Sundays (2 sessions), and PseudoScience! (1 session).
+The 55 imported occurrences retain the published calendar schedule; each group has one verified
+stored photo. The run reports partial because the sample intentionally stops at 3 of 12 groups.
+Its configured estimated model cost was US$0.004438.
+
+Replaying those three saved responses produced 3 cache hits, zero provider calls/cost, and
+0 added / 0 updated / 3 unchanged. All 55 occurrence rows and event identities stayed stable,
+no Mondays appeared for Paper Trail, and all three stored photo hashes remained valid. These
+repeat checks reuse saved responses rather than claiming another fresh fetch.
+
+### November 16 access and rollout status
+
+Fresh WAG QA could not proceed: ordinary access to Nourish and the page's published public
+ticket JSON endpoint returned HTTP 403. No verification bypass was attempted; saved-response
+replays are not claimed as fresh source checks.
+
+Tourism Winnipeg onboarding depends on open PR #32, whose base is the Manitoba Music branch
+in open PR #31. Neither collector is on this epic branch yet. These dependency PRs are not
+merged as part of the Museum change. Production destinations, audience and schedules remain
+unchanged.

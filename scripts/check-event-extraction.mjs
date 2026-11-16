@@ -8,6 +8,7 @@ import { cacheEventExtraction } from '../lib/server/cached-event-extraction.mjs'
 import { createEventExtractionService } from '../lib/server/event-extraction-service.mjs';
 import { prepareExtractedCollection } from '../lib/server/event-extraction-integration.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
+import { collectMuseum } from '../lib/server/museum.mjs';
 import {
   createExtractionShadow,
   configureExtractionRollout,
@@ -129,6 +130,139 @@ async function checkCache() {
   );
   console.log(
     'Extraction cache and usage survive repeated and concurrent requests, failures and version changes.',
+  );
+}
+
+// Museum detail pages may show one date while month calendars publish more sessions.
+async function checkMuseumWrite() {
+  let detailDay = 20,
+    partial = false,
+    modelResult = single,
+    generations = 0;
+  const baseUrl = 'https://manitobamuseum.ca/event/qa-calendar/';
+  const event = (day) => ({
+    '@type': 'Event',
+    name: 'QA Concert',
+    url: baseUrl + day + '/',
+    startDate: day + 'T19:00:00-06:00',
+    endDate: day + 'T20:00:00-06:00',
+    location: { name: 'QA Hall' },
+  });
+  const month = (events) =>
+    '<div data-view="month"></div><script type="application/ld+json">' +
+    JSON.stringify(events) +
+    '</script>';
+  const collect = (source, checkedAt, options) =>
+    collectMuseum(source, checkedAt, {
+      ...options,
+      pauseMs: 0,
+      fetchImpl: async (url) => {
+        if (url.includes('/month/2026-11/')) return new Response(month([event('2026-11-20')]));
+        if (url.includes('/month/2026-12/')) {
+          if (partial) throw new TypeError('fetch failed');
+          return new Response(month([event('2026-12-04')]));
+        }
+        return new Response(
+          `<main id="tribe-events-content"><h1>QA Concert</h1><div class="tribe-events-single-event-description">QA Concert. November ${detailDay}, 2026 at 7 PM. QA Hall.</div></main>`,
+        );
+      },
+    });
+  const extraction = configureExtractionRollout(
+    { WINNIGO_EXTRACTION_SOURCES: 'manitoba-museum=write', WINNIGO_EXTRACTION_PROVIDER: 'openai' },
+    {
+      createService: () =>
+        createEventExtractionService(
+          {
+            model: 'qa-calendar-model',
+            extractionVersion: 'calendar-v1',
+            countInput: async () => 100,
+            async generate() {
+              generations++;
+              return {
+                status: 'completed',
+                text: JSON.stringify(modelResult),
+                usage: {
+                  inputTokens: 100,
+                  outputTokens: 50,
+                  cachedInputTokens: 0,
+                  reasoningTokens: 0,
+                },
+              };
+            },
+          },
+          { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+        ),
+    },
+  );
+  const run = (id) =>
+    runCollection(
+      'manitoba-museum',
+      { id, data: { trigger: 'manual' } },
+      { pool, repository: repo, collect, extraction, now: () => context.checkedAt },
+    );
+  const first = await run('museum-write-1');
+  assert.equal(first.status, 'ok');
+  assert.equal(first.counts.extraction.imported, 1);
+  const saved = [...(await repo.knownSourceListings('manitoba-museum')).values()].find(
+    (i) => i.eventUrl === baseUrl,
+  );
+  assert.ok(saved);
+  assert.equal(saved.provenance, 'event-extraction');
+  assert.equal(saved.occurrences.length, 2);
+  const rows = async () =>
+    (
+      await pool.query(
+        'SELECT occurrence_id,start_date::text AS visit_date,hidden FROM occurrences WHERE listing_id=$1 ORDER BY start_date',
+        [saved.id],
+      )
+    ).rows;
+  const before = await rows();
+  assert.deepEqual(
+    before.map((r) => r.visit_date),
+    ['2026-11-20', '2026-12-04'],
+  );
+  await applyAction(
+    {
+      action: 'update',
+      id: before[1].occurrence_id,
+      title: 'Owner December session',
+      hidden: true,
+    },
+    repo,
+    owner,
+  );
+  const repeat = await run('museum-write-2');
+  assert.equal(repeat.counts.extraction.cacheHits, 1);
+  assert.equal(generations, 1);
+  assert.deepEqual(
+    (await rows()).map((r) => r.occurrence_id),
+    before.map((r) => r.occurrence_id),
+  );
+  assert.equal((await rows())[1].hidden, true);
+  // An AI date absent from the calendar cannot replace the verified calendar sessions.
+  detailDay = 21;
+  modelResult = structuredClone(single);
+  modelResult.event.schedule.dates[0].start.day = 21;
+  modelResult.event.schedule.dates[0].quote = 'November 21, 2026 at 7 PM';
+  const conflict = await run('museum-write-conflict');
+  assert.equal(conflict.counts.extraction.imported, 0);
+  assert.equal(conflict.counts.extraction.fallback, 1);
+  assert.deepEqual(
+    (await rows()).map((r) => r.visit_date),
+    ['2026-11-20', '2026-12-04'],
+  );
+  detailDay = 20;
+  modelResult = single;
+  partial = true;
+  const incomplete = await run('museum-write-partial');
+  assert.equal(incomplete.status, 'partial');
+  assert.deepEqual(
+    (await rows()).map((r) => r.occurrence_id),
+    before.map((r) => r.occurrence_id),
+  );
+  assert.equal((await rows())[1].hidden, true);
+  console.log(
+    'Museum writes retain extra calendar sessions, canonical identities and owner/session edits across cached, conflicting and partial reads.',
   );
 }
 
@@ -515,6 +649,7 @@ try {
 
   await checkCache();
   await checkShadow();
+  await checkMuseumWrite();
   await checkWrite();
 
   // Run the extraction preview through the existing import path in this temporary schema.

@@ -492,3 +492,14 @@ test('cached calendar offsets use the occurrence date DST and preserve published
   assert.deepEqual(repeat.supersededIds, [old.id]);
   assert.equal(repeat.items[0].id, item.id);
 });
+
+test('Museum extraction hook identifies the canonical event and authoritative calendar schedule', async () => {
+  const pages = [];
+  await collectMuseum(source, now, {
+    pauseMs: 0,
+    fetchImpl: transport([a], [b]),
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.equal(pages[0].eventUrl, 'https://manitobamuseum.ca/event/paper/');
+  assert.equal(pages[0].calendarSchedule, true);
+});
