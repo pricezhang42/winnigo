@@ -1,7 +1,7 @@
 # Event extraction rollout
 
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
-[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG and Manitoba Museum can opt into write mode after review.
+[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG and Manitoba Museum can opt into write mode after review. Tourism Winnipeg supports shadow comparison only.
 
 ## Modes
 
@@ -364,3 +364,17 @@ The full 50-event/13-control pilot was not repeated for this follow-up. Its publ
 remain measurements of the earlier prompt/contexts; these paired results are not substituted
 into that score. Unit/integration coverage checks calendar scoping, evidence URLs, cache
 invalidation when a calendar month disappears, owner edits and partial-read preservation.
+
+
+## Tourism Winnipeg onboarding
+
+The Tourism collector and required shared helper are ported from PRs #32/#31 without integrating
+Manitoba Music. `tourism-winnipeg=shadow` compares focused pages, matching calendar records and
+validated organizer evidence through the same preparer, model/cache, mapper and reporting path.
+The source has no organization venue fallback. `tourism-winnipeg=write` fails configuration
+validation pending date-only/time refinement and exhibition-boundary review.
+
+The bounded November 16 QA sample saved six parser events, 81 sessions and six private photos.
+The final shadow comparison yielded three differing candidates and three withheld; no model
+result changed listings. A saved-input repeat had six cache hits, zero provider calls/cost and
+six unchanged parser records. See [Tourism setup and review findings](sources/tourism-winnipeg.md#ai-shadow-onboarding--november-16-2026).

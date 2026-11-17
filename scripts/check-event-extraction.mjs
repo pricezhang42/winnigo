@@ -8,6 +8,18 @@ import { cacheEventExtraction } from '../lib/server/cached-event-extraction.mjs'
 import { createEventExtractionService } from '../lib/server/event-extraction-service.mjs';
 import { prepareExtractedCollection } from '../lib/server/event-extraction-integration.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
+import {
+  collectTourism,
+  TOURISM_CALENDAR,
+  TOURISM_ANNUAL,
+} from '../lib/server/tourism-winnipeg.mjs';
+import {
+  entry as tourismEntry,
+  calendar as tourismCalendar,
+  directory as tourismDirectory,
+  detail as tourismDetail,
+  festival as tourismFestival,
+} from './fixtures/tourism/pages.mjs';
 import { collectMuseum } from '../lib/server/museum.mjs';
 import {
   createExtractionShadow,
@@ -130,6 +142,122 @@ async function checkCache() {
   );
   console.log(
     'Extraction cache and usage survive repeated and concurrent requests, failures and version changes.',
+  );
+}
+
+async function checkTourismShadow() {
+  let generations = 0;
+  const model = structuredClone(single);
+  model.event.title = model.event.titleQuote = 'Test exhibition';
+  model.event.venue = { name: 'Test Hall', address: null, online: false, quote: 'Test Hall' };
+  model.event.schedule.dates = [
+    {
+      start: { year: 2026, month: 10, day: 28 },
+      end: null,
+      startTime: null,
+      endTime: null,
+      cancelled: false,
+      quote: 'October 28, 2026',
+    },
+  ];
+  const env = {
+    WINNIGO_EXTRACTION_SOURCES: 'tourism-winnipeg=shadow',
+    WINNIGO_EXTRACTION_PROVIDER: 'openai',
+  };
+  const extraction = configureExtractionRollout(env, {
+    createService: () =>
+      createEventExtractionService(
+        {
+          model: 'qa-tourism-model',
+          extractionVersion: 'tourism-v1',
+          countInput: async (input) => {
+            assert.equal(input.documents.length, input.pageUrl === tourismFestival ? 1 : 2);
+            if (input.pageUrl !== tourismFestival)
+              assert.equal(input.documents[1].url, TOURISM_CALENDAR);
+            return 100;
+          },
+          async generate(input) {
+            generations++;
+            return {
+              status: 'completed',
+              text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+              usage: {
+                inputTokens: 100,
+                outputTokens: 50,
+                cachedInputTokens: 0,
+                reasoningTokens: 0,
+              },
+            };
+          },
+        },
+        { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+      ),
+  });
+  const collect = (source, checkedAt, options) =>
+    collectTourism(source, checkedAt, {
+      ...options,
+      pauseMs: 0,
+      fetchImpl: async (url) =>
+        new Response(
+          url === TOURISM_CALENDAR
+            ? tourismCalendar([tourismEntry('2026-10-28')])
+            : url === TOURISM_ANNUAL
+              ? tourismDirectory
+              : tourismDetail(
+                  url === tourismFestival,
+                  url === tourismFestival ? 'TBD' : 'October 28, 2026',
+                ).replace(
+                  '<div class="body">',
+                  '<div class="contact-details">Venue: Test Hall</div><div class="body">',
+                ),
+        ),
+    });
+  const run = (id, extractor = extraction) =>
+    runCollection(
+      'tourism-winnipeg',
+      { id, data: { trigger: 'manual' } },
+      { pool, repository: repo, collect, extraction: extractor, now: () => '2026-10-26T12:00:00Z' },
+    );
+  await run('tourism-parser-baseline', configureExtractionRollout({}));
+  const before = await repo.knownSourceListings('tourism-winnipeg');
+  const first = await run('tourism-shadow-first');
+  assert.equal(first.status, 'ok');
+  assert.equal(first.counts.extraction.mode, 'shadow');
+  assert.equal(first.counts.extraction.pages, 2);
+  assert.equal(first.counts.extraction.agree, 1);
+  assert.equal(first.counts.extraction.withheld, 1);
+  assert.equal(first.counts.extraction.failed, 0);
+  assert.deepEqual(await repo.knownSourceListings('tourism-winnipeg'), before);
+  const item = [...before.values()].find((i) => i.title === 'Test exhibition');
+  await applyAction(
+    { action: 'update', id: item.id, title: 'Owner Tourism shadow correction', hidden: true },
+    repo,
+    owner,
+  );
+  const repeat = await run('tourism-shadow-repeat');
+  assert.equal(generations, 2);
+  assert.equal(repeat.counts.extraction.cacheHits, 2);
+  assert.equal(repeat.counts.extraction.estimatedCostUsd, 0);
+  assert.equal(
+    (await repo.detail(item.id, { admin: true, principal: owner })).title,
+    'Owner Tourism shadow correction',
+  );
+  assert.equal(await repo.detail(item.id, { principal: owner }), null);
+  assert.ok(
+    [...(await repo.knownSourceListings('tourism-winnipeg')).values()].every(
+      (i) => i.provenance !== 'event-extraction',
+    ),
+  );
+  const broken = configureExtractionRollout(env, {
+    createService: () => {
+      throw Error('provider unavailable');
+    },
+  });
+  const fallback = await run('tourism-shadow-failed-provider', broken);
+  assert.equal(fallback.status, 'ok');
+  assert.equal(fallback.counts.extraction, undefined);
+  console.log(
+    'Tourism shadow compares fetched calendar/annual details, preserves parser records and owner edits, caches repeats and survives provider failure.',
   );
 }
 
@@ -659,6 +787,7 @@ try {
   await checkShadow();
   await checkMuseumWrite();
   await checkWrite();
+  await checkTourismShadow();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

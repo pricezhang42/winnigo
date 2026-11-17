@@ -330,3 +330,32 @@ test('request context and result limits fail closed without clipping content', (
   tooBig.event.schedule.dates = Array(201).fill(tooBig.event.schedule.dates[0]);
   assert.throws(() => parseEventExtraction(tooBig, context));
 });
+
+test('calendar dates and detail clocks retain separate exact document citations', () => {
+  const input = structuredClone(context);
+  input.documents[0].text = 'QA Concert at QA Hall. Starts at 7 PM.';
+  input.documents.push({
+    url: 'https://events.example.test/calendar',
+    urls: [],
+    text: 'November 20, 2026',
+  });
+  const supported = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n7 PM';
+  }, input).events[0];
+  assert.deepEqual(supported.reviewReasons, []);
+  assert.equal(supported.schedule.dates.length, 1);
+  const citations = supported.evidence.filter((e) => e.fields.includes('/schedule/dates/0'));
+  assert.deepEqual(
+    citations.map((e) => [e.sourceUrl, e.quote]),
+    [
+      [input.documents[1].url, 'November 20, 2026'],
+      [input.documents[0].url, '7 PM'],
+    ],
+  );
+  const rejected = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n9 PM';
+  }, input).events[0];
+  assert.equal(rejected.schedule.dates.length, 0);
+  assert.equal(rejected.reviewReasons.length, 1);
+  assert.ok(!rejected.evidence.some((e) => e.fields.includes('/schedule/dates/0')));
+});
