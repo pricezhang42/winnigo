@@ -15,6 +15,14 @@ export function modelFacts(event, context) {
   const first = slots[0];
   const last = slots.at(-1);
   const recurrence = schedule.recurrence?.[0];
+  // Multiple open-date blocks belong to one event. Score the complete published bounds,
+  // not just the first block; leave an unbounded rule's overall boundary unknown.
+  const ruleBounds = (field) => {
+    const rules = schedule.recurrence || [];
+    return rules.length && rules.every((rule) => rule[field])
+      ? ordered(rules.map((rule) => date(rule[field])))
+      : [];
+  };
   // An untimed date takes its time from the rule or visiting hours, as the mapper publishes it.
   const timing =
     (first?.startTime ? first : null) ?? recurrence ?? schedule.hours?.[0]?.weekly[0] ?? first;
@@ -28,9 +36,11 @@ export function modelFacts(event, context) {
     availability: event.availability ?? 'unknown',
     venue: event.venue?.name ?? (event.venue?.mode === 'online' ? 'Online' : null),
     sourceUrl: event.sourceUrl,
-    date: date(schedule.run?.from ?? recurrence?.from ?? null) || first?.day || null,
+    date: date(schedule.run?.from) || ruleBounds('from')[0] || first?.day || null,
     endDate:
-      date(schedule.run?.through ?? recurrence?.through ?? last?.end ?? null) ||
+      date(schedule.run?.through) ||
+      ruleBounds('through').at(-1) ||
+      date(last?.end) ||
       offsetEnd ||
       (last?.day !== first?.day ? last.day : null),
     startTime: timing?.startTime ?? null,

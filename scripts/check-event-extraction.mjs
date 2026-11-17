@@ -142,6 +142,97 @@ async function checkDerivedEditorial() {
   assert.equal(original.duplicateOf, 'verified-copy');
 }
 
+async function checkHtmlWrites() {
+  for (const sourceId of ['forks', 'park', 'manitoba', 'winnipeg-rotary', 'manitoba-music']) {
+    const id = 'html-integration-' + sourceId;
+    let failed = false;
+    const extraction = {
+      forSource(source, { checkedAt }) {
+        return createExtractionShadow({
+          source,
+          pool,
+          checkedAt,
+          mode: 'write',
+          maxMs: 10000,
+          extractor: {
+            extract: async () => {
+              if (failed) throw Error('Provider unavailable');
+              return { result: single };
+            },
+          },
+        });
+      },
+    };
+    const parsed = {
+      id,
+      source: sourceId,
+      title: 'QA Concert',
+      type: 'Event',
+      schedule: 'event',
+      url: context.pageUrl,
+      venue: 'QA Hall',
+      start: '2026-11-20',
+      end: '2026-11-20',
+      occurrences: [
+        { id: id + '-reviewed-slot', start: '2026-11-20', end: '2026-11-20', status: 'active' },
+      ],
+    };
+    const collect = async (source, checkedAt, options) => {
+      options.onEventPage({
+        id,
+        itemIds: [id],
+        url: context.pageUrl,
+        html: '<main>QA Concert. November 20, 2026 at 7 PM. QA Hall. Admission not stated.</main>',
+        refineDateOnly: true,
+        ...(sourceId === 'manitoba-music' || sourceId === 'forks'
+          ? { calendarSchedule: 'dates' }
+          : {}),
+      });
+      return { items: [parsed], pagesRead: 1, failedPages: [] };
+    };
+    const run = () =>
+      runCollection(
+        sourceId,
+        { id: id + Date.now(), data: { trigger: 'manual' } },
+        { pool, repository: repo, collect, extraction },
+      );
+    const first = await run();
+    assert.notEqual(first.status, 'error');
+    assert.equal(first.counts.extraction.imported, 1);
+    const saved = (await repo.knownSourceListings(sourceId)).get(id);
+    assert.equal(saved.occurrences[0].id, id + '-reviewed-slot');
+    assert.equal(saved.occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
+    await applyAction({ action: 'update', id, title: 'Owner HTML title' }, repo, owner);
+    await applyAction(
+      { action: 'update', id: id + '-reviewed-slot', title: 'Owner HTML session', hidden: true },
+      repo,
+      owner,
+    );
+    await run();
+    failed = true;
+    assert.notEqual((await run()).status, 'error');
+    assert.equal(
+      (
+        await pool.query('SELECT fields AS override FROM listing_overrides WHERE listing_id=$1', [
+          id,
+        ])
+      ).rows[0].override.title,
+      'Owner HTML title',
+    );
+    const session = (
+      await pool.query(
+        'SELECT override, hidden FROM occurrences WHERE listing_id=$1 AND occurrence_id=$2',
+        [id, id + '-reviewed-slot'],
+      )
+    ).rows[0];
+    assert.equal(session.override.title, 'Owner HTML session');
+    assert.equal(session.hidden, true);
+  }
+  console.log(
+    'All five additional HTML sources use shared writes, stable refined IDs, per-page fallback and preserved owner/session edits.',
+  );
+}
+
 async function checkCache() {
   let calls = 0;
   const service = (model = 'qa-model', extractionVersion = 'v1', options = {}) =>
@@ -1030,6 +1121,7 @@ try {
   await checkTourismShadow();
   await checkPageLimits();
   await checkDerivedEditorial();
+  await checkHtmlWrites();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

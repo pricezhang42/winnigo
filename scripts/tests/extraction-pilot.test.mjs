@@ -59,3 +59,27 @@ test('published open weekdays can be represented as timed weekly rules', () => {
   const parsed = parseEventExtraction(value, input);
   assert.deepEqual(modelFacts(parsed.events[0], input).openWeekdays, [0, 3, 4]);
 });
+
+test('pilot scores the bounds of every daily opening block without filling closure gaps', () => {
+  const example = structuredClone(examples.find((e) => e.name.startsWith('weekly')));
+  const parsed = parseEventExtraction(example.result, example.context);
+  const event = parsed.events[0];
+  const rule = event.schedule.recurrence[0];
+  event.schedule.run = null;
+  event.schedule.recurrence = [
+    {
+      ...rule,
+      from: { year: 2026, month: 11, day: 20 },
+      through: { year: 2026, month: 11, day: 22 },
+    },
+    {
+      ...rule,
+      from: { year: 2026, month: 12, day: 4 },
+      through: { year: 2026, month: 12, day: 6 },
+    },
+  ];
+  const facts = modelFacts(event, example.context);
+  assert.equal(facts.date, '2026-11-20');
+  assert.equal(facts.endDate, '2026-12-06');
+  assert.deepEqual(facts.dates, []);
+});

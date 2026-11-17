@@ -176,3 +176,26 @@ test('source extraction page caps are explicit and bounded', () => {
     );
   assert.ok(configureExtractionRollout({ WINNIGO_EXTRACTION_MAX_PAGES: '400' }));
 });
+
+test('all HTML event sources accept rollout modes while native structured feeds remain direct', () => {
+  const env = { WINNIGO_EXTRACTION_PROVIDER: 'openai' };
+  for (const id of [
+    'wag',
+    'manitoba-museum',
+    'tourism-winnipeg',
+    'forks',
+    'park',
+    'manitoba',
+    'winnipeg-rotary',
+    'manitoba-music',
+  ])
+    assert.equal(
+      readExtractionRollout({ ...env, WINNIGO_EXTRACTION_SOURCES: id + '=shadow' }).get(id),
+      'shadow',
+    );
+  for (const id of ['fortwhyte', 'canada-life-centre', 'winnipeg-free-swim', 'attractions'])
+    assert.throws(
+      () => readExtractionRollout({ ...env, WINNIGO_EXTRACTION_SOURCES: id + '=write' }),
+      /not available/,
+    );
+});
