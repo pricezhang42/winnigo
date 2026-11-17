@@ -258,3 +258,9 @@ test('shared preparation keeps paid admission and closed-sales text without form
   assert.doesNotMatch(document.text, /private@example|token-secret|\$999|\$987|Search/);
   assert.ok(!document.urls.some((u) => u.includes('checkout.example')));
 });
+
+test('rotating email-protection tokens do not change prepared event material', () => {
+  const page = (token) =>
+    `<main><h1>QA Concert</h1><p>November 20, 2026 at 7 PM</p><a href="/cdn-cgi/l/email-protection#${token}">Contact by Email</a></main>`;
+  assert.deepEqual(prepare(page('abc123')), prepare(page('def456')));
+});

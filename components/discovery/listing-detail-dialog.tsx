@@ -85,6 +85,21 @@ function ListingDetail({
           {dateLabel(listing)}
           {listing.time ? ' · ' + listing.time : ''}
         </p>
+        {listing.runDates &&
+          (listing.runDates.start || listing.runDates.end || listing.runDates.endMonth) && (
+            <p>
+              <CalendarDays />
+              Full run:{' '}
+              {dateLabel({
+                ...listing,
+                start: listing.runDates.start,
+                end: listing.runDates.end,
+                endMonth: listing.runDates.endMonth,
+                recurring: false,
+                schedule: 'event',
+              })}
+            </p>
+          )}
         <p>
           <MapPin />
           {listing.address || listing.venue}

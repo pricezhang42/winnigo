@@ -8,6 +8,18 @@ import { cacheEventExtraction } from '../lib/server/cached-event-extraction.mjs'
 import { createEventExtractionService } from '../lib/server/event-extraction-service.mjs';
 import { prepareExtractedCollection } from '../lib/server/event-extraction-integration.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
+import {
+  collectTourism,
+  TOURISM_CALENDAR,
+  TOURISM_ANNUAL,
+} from '../lib/server/tourism-winnipeg.mjs';
+import {
+  entry as tourismEntry,
+  calendar as tourismCalendar,
+  directory as tourismDirectory,
+  detail as tourismDetail,
+  festival as tourismFestival,
+} from './fixtures/tourism/pages.mjs';
 import { collectMuseum } from '../lib/server/museum.mjs';
 import {
   createExtractionShadow,
@@ -23,6 +35,47 @@ const admin = new Pool({ connectionString });
 const pool = new Pool({ connectionString, options: `-c search_path=${schema}` });
 const repo = new PostgresRepository(pool);
 const owner = { userId: 'extraction-qa-owner', role: 'owner' };
+
+async function checkPageLimits() {
+  const source = { id: context.source, name: 'QA events' };
+  const page = {
+    url: context.pageUrl,
+    html: '<main>QA Concert. QA Hall. November 20, 2026 at 7 PM.</main>',
+    id: 'limit-qa',
+  };
+  let calls = 0;
+  const extractor = {
+    extract: async () => {
+      calls++;
+      return { result: single };
+    },
+  };
+  const limited = createExtractionShadow({
+    source,
+    pool,
+    checkedAt: context.checkedAt,
+    extractor,
+    maxMs: 10000,
+    maxPages: 1,
+  });
+  for (let i = 0; i < 3; i++) limited.capture({ ...page, url: page.url + '/' + i });
+  const result = await limited.finish({ runId: null, items: [] });
+  assert.equal(calls, 1);
+  assert.equal(result.counts.skipped, 2);
+  const review = createExtractionShadow({
+    source,
+    pool,
+    checkedAt: context.checkedAt,
+    extractor,
+    maxMs: 10000,
+    mode: 'write',
+  });
+  review.capture({ ...page, reviewOnly: 'annual-edition-outside-window' });
+  const reviewed = await review.finish({ runId: null, items: [] });
+  assert.equal(reviewed.counts.reviewOnly, 1);
+  assert.equal(reviewed.counts.fallback, 0);
+  assert.equal(reviewed.items.length, 0);
+}
 
 async function checkCache() {
   let calls = 0;
@@ -130,6 +183,256 @@ async function checkCache() {
   );
   console.log(
     'Extraction cache and usage survive repeated and concurrent requests, failures and version changes.',
+  );
+}
+
+async function checkTourismShadow() {
+  let generations = 0;
+  const model = structuredClone(single);
+  model.event.title = model.event.titleQuote = 'Test exhibition';
+  model.event.venue = { name: 'Test Hall', address: null, online: false, quote: 'Test Hall' };
+  model.event.schedule.dates = [
+    {
+      start: { year: 2026, month: 10, day: 28 },
+      end: null,
+      startTime: null,
+      endTime: null,
+      cancelled: false,
+      quote: 'October 28, 2026',
+    },
+  ];
+  const env = {
+    WINNIGO_EXTRACTION_SOURCES: 'tourism-winnipeg=shadow',
+    WINNIGO_EXTRACTION_PROVIDER: 'openai',
+  };
+  const extraction = configureExtractionRollout(env, {
+    createService: () =>
+      createEventExtractionService(
+        {
+          model: 'qa-tourism-model',
+          extractionVersion: 'tourism-v1',
+          countInput: async (input) => {
+            assert.equal(input.documents.length, input.pageUrl === tourismFestival ? 1 : 2);
+            if (input.pageUrl !== tourismFestival)
+              assert.equal(input.documents[1].url, TOURISM_CALENDAR);
+            return 100;
+          },
+          async generate(input) {
+            generations++;
+            return {
+              status: 'completed',
+              text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+              usage: {
+                inputTokens: 100,
+                outputTokens: 50,
+                cachedInputTokens: 0,
+                reasoningTokens: 0,
+              },
+            };
+          },
+        },
+        { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+      ),
+  });
+  const collect = (source, checkedAt, options) =>
+    collectTourism(source, checkedAt, {
+      ...options,
+      pauseMs: 0,
+      fetchImpl: async (url) =>
+        new Response(
+          url === TOURISM_CALENDAR
+            ? tourismCalendar([tourismEntry('2026-10-28')])
+            : url === TOURISM_ANNUAL
+              ? tourismDirectory
+              : tourismDetail(
+                  url === tourismFestival,
+                  url === tourismFestival ? 'TBD' : 'October 28, 2026',
+                ).replace(
+                  '<div class="body">',
+                  '<div class="contact-details">Venue: Test Hall</div><div class="body">',
+                ),
+        ),
+    });
+  const run = (id, extractor = extraction) =>
+    runCollection(
+      'tourism-winnipeg',
+      { id, data: { trigger: 'manual' } },
+      { pool, repository: repo, collect, extraction: extractor, now: () => '2026-10-26T12:00:00Z' },
+    );
+  await run('tourism-parser-baseline', configureExtractionRollout({}));
+  const before = await repo.knownSourceListings('tourism-winnipeg');
+  const first = await run('tourism-shadow-first');
+  assert.equal(first.status, 'ok');
+  assert.equal(first.counts.extraction.mode, 'shadow');
+  assert.equal(first.counts.extraction.pages, 2);
+  assert.equal(first.counts.extraction.agree, 1);
+  assert.equal(first.counts.extraction.withheld, 1);
+  assert.equal(first.counts.extraction.failed, 0);
+  assert.deepEqual(await repo.knownSourceListings('tourism-winnipeg'), before);
+  const item = [...before.values()].find((i) => i.title === 'Test exhibition');
+  await applyAction(
+    { action: 'update', id: item.id, title: 'Owner Tourism shadow correction', hidden: true },
+    repo,
+    owner,
+  );
+  const repeat = await run('tourism-shadow-repeat');
+  assert.equal(generations, 2);
+  assert.equal(repeat.counts.extraction.cacheHits, 2);
+  assert.equal(repeat.counts.extraction.estimatedCostUsd, 0);
+  assert.equal(
+    (await repo.detail(item.id, { admin: true, principal: owner })).title,
+    'Owner Tourism shadow correction',
+  );
+  assert.equal(await repo.detail(item.id, { principal: owner }), null);
+  assert.ok(
+    [...(await repo.knownSourceListings('tourism-winnipeg')).values()].every(
+      (i) => i.provenance !== 'event-extraction',
+    ),
+  );
+  const broken = configureExtractionRollout(env, {
+    createService: () => {
+      throw Error('provider unavailable');
+    },
+  });
+  const fallback = await run('tourism-shadow-failed-provider', broken);
+  assert.equal(fallback.status, 'ok');
+  assert.equal(fallback.counts.extraction, undefined);
+  // A cached write enriches known date-only rows without changing their identities.
+  model.event.schedule.dates[0].startTime = '12:00';
+  model.event.schedule.dates[0].endTime = '16:00';
+  model.event.schedule.dates[0].quote = 'October 28, 2026 at 12–4 PM';
+  const writeConfig = { ...env, WINNIGO_EXTRACTION_SOURCES: 'tourism-winnipeg=write' };
+  const writer = configureExtractionRollout(writeConfig, {
+    createService: () =>
+      createEventExtractionService(
+        {
+          model: 'qa-tourism-clock-model',
+          extractionVersion: 'tourism-clock-v1',
+          countInput: async () => 100,
+          generate: async (input) => ({
+            status: 'completed',
+            text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+            usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 0 },
+          }),
+        },
+        { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+      ),
+  });
+  const writeCollect = async (source, checkedAt, options) => {
+    const capture = options.onEventPage;
+    return collect(source, checkedAt, {
+      ...options,
+      onEventPage: (page) =>
+        capture({
+          ...page,
+          html: page.html.replace('October 28, 2026', 'October 28, 2026 at 12–4 PM'),
+        }),
+    });
+  };
+  const writeRun = (id, extraction = writer) =>
+    runCollection(
+      'tourism-winnipeg',
+      { id, data: { trigger: 'manual' } },
+      {
+        pool,
+        repository: repo,
+        collect: writeCollect,
+        extraction,
+        now: () => '2026-10-26T12:00:00Z',
+      },
+    );
+  const written = await writeRun('tourism-clock-write');
+  assert.equal(written.counts.extraction.imported, 1);
+  assert.equal(written.counts.extraction.fallback, 1);
+  const enriched = (await repo.knownSourceListings('tourism-winnipeg')).get(item.id);
+  assert.equal(enriched.occurrences[0].id, item.occurrences[0].id);
+  assert.equal(enriched.occurrences[0].startAt, '2026-10-28T17:00:00.000Z');
+  assert.equal(enriched.occurrences[0].endAt, '2026-10-28T21:00:00.000Z');
+  assert.equal(
+    (await repo.detail(item.id, { admin: true, principal: owner })).title,
+    'Owner Tourism shadow correction',
+  );
+  assert.equal(await repo.detail(item.id, { principal: owner }), null);
+  const writtenRepeat = await writeRun('tourism-clock-repeat');
+  assert.equal(writtenRepeat.counts.extraction.cacheHits, 2);
+  assert.equal(writtenRepeat.counts.updated, 0);
+  const failedWriter = configureExtractionRollout(writeConfig, {
+    createService: () => {
+      throw Error('unavailable');
+    },
+  });
+  await writeRun('tourism-clock-provider-failure', failedWriter);
+  const afterFailure = (await repo.knownSourceListings('tourism-winnipeg')).get(item.id);
+  assert.deepEqual(afterFailure.occurrences, enriched.occurrences);
+  const annualBefore = [...(await repo.knownSourceListings('tourism-winnipeg')).values()].find(
+    (i) => i.type === 'Activity',
+  );
+  await applyAction(
+    { action: 'update', id: annualBefore.id, title: 'Owner annual title', hidden: true },
+    repo,
+    owner,
+  );
+  const annualModel = structuredClone(model);
+  annualModel.event.title = annualModel.event.titleQuote = 'Annual Festival';
+  const lateDatesCollect = (source, checkedAt, options) =>
+    collectTourism(source, checkedAt, {
+      ...options,
+      pauseMs: 0,
+      fetchImpl: async (url) =>
+        new Response(
+          url === TOURISM_CALENDAR
+            ? tourismCalendar([tourismEntry('2026-10-28')])
+            : url === TOURISM_ANNUAL
+              ? tourismDirectory
+              : tourismDetail(
+                  url === tourismFestival,
+                  'TBD',
+                  url === tourismFestival
+                    ? 'Intro.</p><p>More.</p><p>Details.</p><p>October 28, 2026 at 12–4 PM'
+                    : 'An exhibition.',
+                ).replace(
+                  '<div class="body">',
+                  '<div class="contact-details">Venue: Test Hall</div><div class="body">',
+                ),
+        ),
+    });
+  const annualResult = await runCollection(
+    'tourism-winnipeg',
+    { id: 'annual-date-review-upgrade', data: { trigger: 'manual' } },
+    {
+      pool,
+      repository: repo,
+      collect: lateDatesCollect,
+      now: () => '2026-10-26T12:00:00Z',
+      extraction: {
+        forSource: (source, { pool, checkedAt }) =>
+          createExtractionShadow({
+            source,
+            pool,
+            checkedAt,
+            mode: 'write',
+            maxMs: 10000,
+            extractor: {
+              extract: async (input) => ({
+                result: input.pageUrl === tourismFestival ? annualModel : { event: null },
+              }),
+            },
+          }),
+      },
+    },
+  );
+  assert.equal(annualResult.counts.extraction.imported, 1);
+  const annualAfter = (await repo.knownSourceListings('tourism-winnipeg')).get(annualBefore.id);
+  assert.equal(annualAfter.type, 'Event');
+  assert.equal(annualAfter.status, 'active');
+  assert.equal(annualAfter.occurrences[0].start, '2026-10-28');
+  assert.equal(
+    (await repo.detail(annualBefore.id, { admin: true, principal: owner })).title,
+    'Owner annual title',
+  );
+  assert.equal(await repo.detail(annualBefore.id, { principal: owner }), null);
+  console.log(
+    'Tourism shadow compares fetched calendar/annual details, preserves parser records and owner edits, caches repeats and survives provider failure.',
   );
 }
 
@@ -659,6 +962,8 @@ try {
   await checkShadow();
   await checkMuseumWrite();
   await checkWrite();
+  await checkTourismShadow();
+  await checkPageLimits();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

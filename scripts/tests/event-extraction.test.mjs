@@ -330,3 +330,63 @@ test('request context and result limits fail closed without clipping content', (
   tooBig.event.schedule.dates = Array(201).fill(tooBig.event.schedule.dates[0]);
   assert.throws(() => parseEventExtraction(tooBig, context));
 });
+
+test('calendar dates and detail clocks retain separate exact document citations', () => {
+  const input = structuredClone(context);
+  input.documents[0].text = 'QA Concert at QA Hall. Starts at 7 PM.';
+  input.documents.push({
+    url: 'https://events.example.test/calendar',
+    urls: [],
+    text: 'November 20, 2026',
+  });
+  const supported = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n7 PM';
+  }, input).events[0];
+  assert.deepEqual(supported.reviewReasons, []);
+  assert.equal(supported.schedule.dates.length, 1);
+  const citations = supported.evidence.filter((e) => e.fields.includes('/schedule/dates/0'));
+  assert.deepEqual(
+    citations.map((e) => [e.sourceUrl, e.quote]),
+    [
+      [input.documents[1].url, 'November 20, 2026'],
+      [input.documents[0].url, '7 PM'],
+    ],
+  );
+  const rejected = parse((e) => {
+    e.schedule.dates[0].quote = 'November 20, 2026\n9 PM';
+  }, input).events[0];
+  assert.equal(rejected.schedule.dates.length, 0);
+  assert.equal(rejected.reviewReasons.length, 1);
+  assert.ok(!rejected.evidence.some((e) => e.fields.includes('/schedule/dates/0')));
+});
+
+test('a quoted ticket range cannot become a definite general admission price', () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Tickets: 0 -$15.60. Adult $15, children $5–$10.';
+  const result = parse((e) => {
+    e.price = { amount: 15.6, text: '$15.60', quote: 'Tickets: 0 -$15.60' };
+  }, input);
+  assert.equal(event(result).price.amount, null);
+  assert.equal(event(result).price.text, '0 -$15.60');
+  const adult = parse((e) => {
+    e.price = { amount: 15, text: 'Adult $15', quote: 'Adult $15, children $5–$10' };
+  }, input);
+  assert.equal(event(adult).price.amount, 15);
+});
+
+test('ticket labels and prices alone cannot establish availability', () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Tickets: $55–$60. Get tickets today!';
+  const bare = parse((e) => {
+    e.availability = { status: 'available', text: 'Tickets offered', quote: 'Tickets: $55–$60' };
+  }, input);
+  assert.equal(event(bare).availability, 'unknown');
+  const offer = parse((e) => {
+    e.availability = {
+      status: 'available',
+      text: 'Get tickets today!',
+      quote: 'Get tickets today!',
+    };
+  }, input);
+  assert.equal(event(offer).availability, 'available');
+});

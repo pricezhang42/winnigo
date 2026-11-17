@@ -19,6 +19,14 @@ test('rollout is off by default and only accepts shadow mode for supported sourc
     [['manitoba-museum', 'shadow']],
   );
   assert.equal(readExtractionRollout(env('wag=shadow')).get('wag'), 'shadow');
+  assert.equal(
+    readExtractionRollout(env('tourism-winnipeg=shadow')).get('tourism-winnipeg'),
+    'shadow',
+  );
+  assert.equal(
+    readExtractionRollout(env('tourism-winnipeg=write')).get('tourism-winnipeg'),
+    'write',
+  );
   assert.equal(readExtractionRollout(env('wag=write')).get('wag'), 'write');
   assert.equal(readExtractionRollout(env('manitoba-museum=write')).get('manitoba-museum'), 'write');
   for (const [value, message] of [
@@ -158,4 +166,13 @@ test('write preserves collector media/cancellation and falls back on provider/bu
     { html: '<main></main>' },
   );
   assert.deepEqual(unprepared.items, [parsed]);
+});
+
+test('source extraction page caps are explicit and bounded', () => {
+  for (const value of ['0', '401', '1.5', 'wrong'])
+    assert.throws(
+      () => configureExtractionRollout({ WINNIGO_EXTRACTION_MAX_PAGES: value }),
+      /MAX_PAGES/,
+    );
+  assert.ok(configureExtractionRollout({ WINNIGO_EXTRACTION_MAX_PAGES: '400' }));
 });

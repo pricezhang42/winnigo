@@ -1,7 +1,7 @@
 # Event extraction rollout
 
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
-[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG and Manitoba Museum can opt into write mode after review.
+[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG, Manitoba Museum and Tourism Winnipeg support opt-in write mode after review.
 
 ## Modes
 
@@ -82,8 +82,7 @@ often than the model (143/176 versus 171/176 exact date, time and venue checks).
 3. Run `npm test`, `npm run check:event-extraction` and the source's own checks, then enable
    shadow mode locally and review the report before enabling it anywhere else.
 
-The Manitoba Museum and WAG collectors are wired. Tourism Winnipeg (the largest pilot gain)
-follows once its collector is merged.
+The Manitoba Museum, WAG and Tourism Winnipeg collectors are wired. Tourism uses the calendar-authoritative enrichment described below.
 
 For WAG, set `WINNIGO_EXTRACTION_SOURCES=wag=shadow` together with
 `WINNIGO_FLARESOLVERR_URL=http://127.0.0.1:8191` and the provider settings above.
@@ -101,7 +100,7 @@ See [WAG setup](sources/wag.md) for transport limits and photo configuration.
 Before enabling write mode for additional sources, review shadow comparisons over at least one
 full collection cycle, agree how differences are resolved (extraction, parser or review), and test the
 importer's identity checks against known listings (`ambiguous-event-identity`,
-`existing-cancelled-event`), which shadow mode deliberately skips. WAG and Museum support opt-in writes. Other sources remain off or shadow-only.
+`existing-cancelled-event`), which model-only shadow mode deliberately skips. WAG, Museum and Tourism support opt-in writes; Tourism also checks calendar identity in shadow mode. Other sources remain off.
 
 ## WAG live check (November 12, 2026)
 
@@ -364,3 +363,43 @@ The full 50-event/13-control pilot was not repeated for this follow-up. Its publ
 remain measurements of the earlier prompt/contexts; these paired results are not substituted
 into that score. Unit/integration coverage checks calendar scoping, evidence URLs, cache
 invalidation when a calendar month disappears, owner edits and partial-read preservation.
+
+
+## Tourism Winnipeg onboarding
+
+The Tourism collector and required shared helper are ported from PRs #32/#31 without integrating
+Manitoba Music. `tourism-winnipeg=shadow` compares focused pages, matching calendar records and
+validated organizer evidence through the same preparer, model/cache, mapper and reporting path.
+The source has no organization venue fallback. `tourism-winnipeg=write` enables calendar-authoritative enrichment; extraction stays off by default.
+
+The bounded November 16 QA sample saved six parser events, 81 sessions and six private photos.
+The final shadow comparison yielded three differing candidates and three withheld; no model
+result changed listings. A saved-input repeat had six cache hits, zero provider calls/cost and
+six unchanged parser records. See [Tourism setup and review findings](sources/tourism-winnipeg.md#ai-shadow-onboarding--november-16-2026).
+
+
+### Tourism calendar enrichment — November 17
+
+After review of Dalnavert, Omalluq and Staycation, Tourism now treats its collected calendar
+visits as authoritative in both shadow and write modes. AI can enrich details and add a unique,
+quoted same-day time; it cannot remove visits, fill closure gaps, add dates or replace verified
+run bounds. A next-available detail-page date never establishes the exhibition opening.
+Schedule-only model reviews remain diagnostic; other blocking reviews still use parser fallback.
+An annual entry without verified calendar dates remains withheld.
+
+Date-only IDs survive time enrichment. Existing precise slots, cancellations, private photos and
+owner edits remain intact; ambiguous or conflicting clock refinements are recorded for review.
+The parser also retains saved precise times if AI is disabled or fails. The model JSON and
+prompt are unchanged. `extraction.scheduleAuthority=calendar` identifies this policy.
+
+Replaying the six saved real Luna outputs in the isolated QA database accepted all six enrichments,
+retained **81 visits and every occurrence ID/photo**, and added supported times to six visits.
+Dalnavert retained both calendar dates with noon–4 p.m. times despite its unsupported reformatted
+date quote; only its separately supported recurrence supplied the clock range. Omalluq's 43
+and Staycation's 31 visits stayed date-only, with unverified original opening dates unknown.
+A cached repeat changed no records, used six cache hits and made zero provider calls/cost.
+A simulated provider initialization failure retained the enriched timestamps.
+
+This is a bounded saved-evidence replay, not a fresh full-site collection or a new accuracy score.
+Review a full calendar cycle before enabling this source beyond local QA. Schedules and defaults
+have not changed.
