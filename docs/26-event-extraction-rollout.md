@@ -3,7 +3,7 @@
 Current verification and remaining source limits: [final acceptance](28-event-extraction-acceptance.md). Earlier dated results below remain historical.
 
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
-[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG, Manitoba Museum and Tourism Winnipeg support opt-in write mode after review.
+[pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. All eight HTML event sources support opt-in shadow/write mode: `wag`, `manitoba-museum`, `tourism-winnipeg`, `forks`, `park`, `manitoba`, `winnipeg-rotary` and `manitoba-music`. Structured feed sources keep direct parsing.
 
 ## Modes
 
@@ -11,7 +11,7 @@ Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
 | --- | --- | --- |
 | off (default) | Parser | Nothing; no provider calls |
 | `shadow` | Parser | Extracts the event pages the collector already fetched, maps them with the shared importer and records a comparison |
-| `write` (WAG, Museum and Tourism) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
+| `write` (HTML event sources) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
 
 ## Enable shadow mode
 
@@ -102,7 +102,7 @@ See [WAG setup](sources/wag.md) for transport limits and photo configuration.
 Before enabling write mode for additional sources, review shadow comparisons over at least one
 full collection cycle, agree how differences are resolved (extraction, parser or review), and test the
 importer's identity checks against known listings (`ambiguous-event-identity`,
-`existing-cancelled-event`), which model-only shadow mode deliberately skips. WAG, Museum and Tourism support opt-in writes; Tourism also checks calendar identity in shadow mode. Other sources remain off.
+`existing-cancelled-event`), which model-only shadow mode deliberately skips. WAG, Museum and Tourism support opt-in writes; Tourism also checks calendar identity in shadow mode. The five additional HTML adapters are covered below; this paragraph records the earlier pilot state.
 
 ## WAG live check (November 12, 2026)
 
@@ -416,3 +416,25 @@ validated extraction; owner edits remain separate. Limits are explicit: `WINNIGO
 is 1–400 (default 100); excess pages get `page-limit` skips. Review-only pages are counted separately
 from parser fallbacks. Budget/time caps still apply. See [acceptance](28-event-extraction-acceptance.md)
 for the final pilot, edition checks, operation and rollback.
+
+## Additional HTML collectors
+
+The Forks, Assiniboine Park and Travel Manitoba reuse their calendar parsers, then fetch focused
+event details only when extraction is enabled. The Forks reads the current and next calendar
+months explicitly and retains repeated event URLs across both months. Its calendar dates are
+authoritative; a broader detail-page interval cannot replace them. Park detail pages may supply
+explicit recurring sessions missing from its summary cards. Travel Manitoba has no organization
+venue fallback. Unparsed dates stay hidden until supported extraction succeeds.
+
+Manitoba Music keeps its numeric event identity, matching calendar dates, exact showtimes and
+cancellations. Detail extraction enriches metadata without replacing these sessions. Unconfirmed
+locations remain hidden. Rotary uses the public ClubRunner calendar when its legacy home box is absent, filters to own
+club event-page links, and validates the requested date window. Speaker/member links are excluded.
+Its existing bounded host policy and poster/registration verification remain; extraction excludes
+private contact blocks. All use the same contract,
+cache, provider caps, PostgreSQL event/occurrence records and private photos (at most three).
+
+Detail collection is bounded to 100 events per run; requests and elapsed time have independent
+limits. Detail, media or provider failures retain parser records and report a partial run. Previously
+verified times are retained on date-only fallback where dates still match. Places, trails, social
+highlights, ICS/JSON feeds and the structured swim schedule do not use this HTML rollout.

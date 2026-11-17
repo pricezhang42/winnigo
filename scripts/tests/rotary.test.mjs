@@ -176,3 +176,69 @@ test('failures degrade gracefully and the layout check catches a changed home pa
     /Upcoming Events box not found/,
   );
 });
+
+test('Rotary captures only public event content, retaining the contact exclusion and native QR validation', async () => {
+  const { fetchPage } = savedSite();
+  const pages = [];
+  const result = await collectRotary(source, '2026-10-09T12:00:00Z', {
+    fetchPage,
+    pauseMs: 0,
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.equal(pages.length, 2);
+  assert.ok(pages.every((p) => p.exclude.includes('.AdditionalInfo')));
+  assert.deepEqual(
+    pages.map((p) => p.id),
+    result.items.map((i) => i.id),
+  );
+  assert.equal(result.items[0].ticketUrl, REGISTRATION);
+});
+
+test('current Rotary calendar accepts only scoped public event links and verifies the requested months', async () => {
+  const { parseRotaryCalendar, ROTARY_CALENDAR } = await import('../../lib/server/rotary.mjs');
+  const window = { from: '2026-11-01', to: '2026-12-31', until: '2027-01-01' };
+  const record = {
+    Title: 'Public concert',
+    Url: 'https://portal.clubrunner.ca/998/Event/public-concert',
+    EntityId: '2ee20510-e575-42d6-a10f-6701000e1a10',
+    StartDate: '2026-11-20T00:00:00',
+    EndDate: '2026-11-20T00:00:00',
+    TimeDescription: 'Fri Nov 20, 2026 at 7:00 PM - 9:00 PM',
+    Location: 'Public Hall',
+  };
+  const payload = {
+    From: window.from,
+    To: window.until,
+    Events: [
+      record,
+      { ...record, Url: '/Speakers/private-member', Title: 'Private contact' },
+      { ...record, Url: 'https://evil.test/event/trap' },
+      { ...record, Url: 'https://portal.clubrunner.ca/999/Event/other-club' },
+    ],
+  };
+  const parsed = parseRotaryCalendar(JSON.stringify(payload), window);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].uid, record.EntityId);
+  assert.doesNotMatch(JSON.stringify(parsed), /Private contact|evil/);
+  assert.throws(
+    () => parseRotaryCalendar(JSON.stringify({ ...payload, From: '2026-10-01' }), window),
+    /window/,
+  );
+  const requests = [];
+  const result = await collectRotary(source, '2026-11-17T12:00:00Z', {
+    pauseMs: 0,
+    fetchPage: async (url, options) => {
+      requests.push({ url, options });
+      if (url === HOME) return { url, body: '<a href="events/calendar">Events Calendar</a>' };
+      if (url === ROTARY_CALENDAR) return { url, body: JSON.stringify(payload) };
+      return {
+        url,
+        body: '<h1>Public concert</h1><div class="event-description">Open to everyone.</div>',
+      };
+    },
+  });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].start, '2026-11-20');
+  assert.equal(result.items[0].id, 'winnipeg-rotary-' + record.EntityId);
+  assert.equal(requests[1].options.json.EndDate, '2027-01-01');
+});

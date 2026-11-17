@@ -1,7 +1,8 @@
 # Event extraction acceptance — November 17, 2026
 
-The shared pipeline is implemented and opt-in rollout is verified for the three pilot sources:
-WAG, Manitoba Museum and Tourism Winnipeg. Page reads never collect. Production destinations,
+The shared pipeline supports all eight HTML event sources. The original three-source evidence
+for WAG, Manitoba Museum and Tourism Winnipeg is retained below; expanded HTML verification
+is recorded separately at the end. Page reads never collect. Production destinations,
 audience and schedules are unchanged. Extraction remains off unless a worker explicitly enables it.
 
 ## Behavior
@@ -110,7 +111,11 @@ source/model snapshots or private environment files are committed.
 | Manitoba Museum | opt-in shadow/write | matching calendars, own details, source venue fallback |
 | Tourism Winnipeg | opt-in shadow/write | calendar visits and bounded annual-edition review; no organization fallback |
 | Canada Life Centre, FortWhyte, free swim | native parser | structured feeds/schedules, closures and private-media rules |
-| Other existing collectors | native parser | unchanged; an additional AI adapter needs its own source review |
+| The Forks | opt-in shadow/write | printed month-calendar intervals and stable occurrence IDs; detail metadata/time refinements |
+| Assiniboine Park | opt-in shadow/write | focused event details, explicit sessions and organization venue fallback |
+| Travel Manitoba | opt-in shadow/write | own event details plus matching card; no organization venue fallback |
+| Manitoba Music | opt-in shadow/write | numeric identity, calendar dates/showtimes/cancellations; metadata enrichment |
+| Winnipeg Rotary | opt-in shadow/write | public event pages; existing poster/QR checks and private-contact exclusion |
 
 Use `WINNIGO_EXTRACTION_SOURCES=tourism-winnipeg=shadow` to compare or `=write` to import.
 `WINNIGO_EXTRACTION_MAX_PAGES` defaults to 100 and can be set to 1–400. Page-limit skips are
@@ -129,3 +134,54 @@ Do not change production scheduling or destination to exercise a local feature.
 URLs, disputed show closing bounds, unverified visiting-day blocks, the changed Nourish redirect,
 and a currently absent Cannes Lions price. The collector reports or holds these facts. It does
 not invent replacements or change an event's identity to follow a redirect.
+
+## Expanded HTML verification — November 17
+
+Issue #63 adds The Forks, Assiniboine Park, Travel Manitoba, Winnipeg Rotary and Manitoba Music
+to the same shadow/write pipeline. Manitoba Music is ported from its existing collector without
+merging unrelated branch changes. Structured feeds remain direct parsers. No production
+destination, audience, schedule or deployment changed.
+
+The Forks' new unlinked headings/See More buttons now parse correctly. Its explicit current and
+next month calendars preserve multiple date blocks for a repeated event URL. Calendar dates
+override a detail page's broad range. Park supports both ordinary event pages and dedicated
+pages such as Zoo Lights. A unique date-only fallback can gain a quoted time while keeping its
+occurrence ID; competing same-day sessions still require review.
+
+Rotary's home widget has disappeared. Discovery now falls back to the public ClubRunner calendar,
+validates the requested months, filters dates and accepts only own club event-page links. Speaker
+links are excluded. Public event pages retain the existing poster/registration verification and
+private-contact exclusion. Fresh discovery found one in-window public event, Remembrance Day
+Service, November 9, 18:00–22:00. Its old stable UID survives. This resolves #64.
+
+A bounded **13-page live pilot** covers three pages each for Forks, Park, Travel Manitoba and
+Music, plus Rotary's one current public event. Final results: **10 accepted enrichments, three
+parser fallbacks, zero provider failures**. Repeating the same prepared snapshots used **13 cache
+hits, no paid calls, zero changed records**. All **12 attached private photo objects** passed
+integrity verification; every listing stays within the three-photo cap. This is targeted
+coverage, not a full live AI collection of every event from these five sources.
+
+The conservative fallbacks are explicit: Zoo Lights produced unsupported schedule quotes;
+Wallflower's printed start dates disagree; one Music page with a generic event heading returned
+no main event. Their native records remain. The prompt now distinguishes daily opening blocks
+from continuous multi-day attendance, preserving closed-day gaps rather than creating overnight
+visits. We do not import an unsupported schedule to improve an acceptance count.
+
+The latest prompt also ran the original **50-event + 13-control** pilot in full, with no retries
+substituted: **419/423 checks**, no missing event responses, no API/structural errors and
+**0/13 control false positives**. Price and availability each matched **50/50**. Cost estimate:
+**US$0.054100** using the configured rates. A scoring bug initially read only the first of two
+correctly extracted Train of Terror date blocks. Aggregating all finite recurrence bounds and
+rescoring those same outputs, without changing labels or calling the model again, gives
+**420/423 total (99.3%) and 175/177 core (98.9%)**. Both reports are retained privately. The three
+remaining scored misses are the disputed gallery start, Boo's missing published weekday rule
+(despite explicit dates), and detail-only DOME's unknown end time.
+
+The expanded PostgreSQL check exercises all five source IDs through writes, unique date/time
+refinement, provider failure and owner/session override preservation. P2/P5 checks, **237 unit tests**,
+typecheck/build, dev/built asset checks and seeded browser regression pass. Focused Chrome checks
+verify future Forks/Park/Travel cards, dated times, loaded photos and no duplicate cards. Music
+and Rotary pilot dates are already past, so they are correctly absent from discovery and verified
+in the collection desk instead. No severe browser console errors were recorded. Browser evidence
+and source/model reports remain local under `.winnigo/html-rollout-20261117`; raw candidates,
+keys and private configuration are never committed.

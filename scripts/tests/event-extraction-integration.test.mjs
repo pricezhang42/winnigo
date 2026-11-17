@@ -517,3 +517,25 @@ test('only a trusted date-review placeholder can become a verified dated event',
     0,
   );
 });
+
+test('HTML clock refinement retains a unique date-only occurrence ID but holds ambiguous sessions', async () => {
+  const [old] = (await preview()).items;
+  const row = old.occurrences[0];
+  row.id = 'owner-reviewed-date';
+  delete row.startAt;
+  delete row.endAt;
+  const knownListings = new Map([[old.id, old]]);
+  assert.equal(
+    (await preview(single, context, { knownListings })).review[0].reason,
+    'ambiguous-existing-occurrence',
+  );
+  const refined = await preview(single, context, { knownListings, refineDateOnly: true });
+  assert.equal(refined.items[0].occurrences[0].id, 'owner-reviewed-date');
+  assert.equal(refined.items[0].occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
+  const multiple = example('multiple');
+  const ambiguous = await preview(multiple.result, multiple.context, {
+    knownListings,
+    refineDateOnly: true,
+  });
+  assert.equal(ambiguous.review[0].reason, 'ambiguous-existing-occurrence');
+});
