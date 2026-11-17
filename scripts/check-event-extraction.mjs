@@ -36,6 +36,47 @@ const pool = new Pool({ connectionString, options: `-c search_path=${schema}` })
 const repo = new PostgresRepository(pool);
 const owner = { userId: 'extraction-qa-owner', role: 'owner' };
 
+async function checkPageLimits() {
+  const source = { id: context.source, name: 'QA events' };
+  const page = {
+    url: context.pageUrl,
+    html: '<main>QA Concert. QA Hall. November 20, 2026 at 7 PM.</main>',
+    id: 'limit-qa',
+  };
+  let calls = 0;
+  const extractor = {
+    extract: async () => {
+      calls++;
+      return { result: single };
+    },
+  };
+  const limited = createExtractionShadow({
+    source,
+    pool,
+    checkedAt: context.checkedAt,
+    extractor,
+    maxMs: 10000,
+    maxPages: 1,
+  });
+  for (let i = 0; i < 3; i++) limited.capture({ ...page, url: page.url + '/' + i });
+  const result = await limited.finish({ runId: null, items: [] });
+  assert.equal(calls, 1);
+  assert.equal(result.counts.skipped, 2);
+  const review = createExtractionShadow({
+    source,
+    pool,
+    checkedAt: context.checkedAt,
+    extractor,
+    maxMs: 10000,
+    mode: 'write',
+  });
+  review.capture({ ...page, reviewOnly: 'annual-edition-outside-window' });
+  const reviewed = await review.finish({ runId: null, items: [] });
+  assert.equal(reviewed.counts.reviewOnly, 1);
+  assert.equal(reviewed.counts.fallback, 0);
+  assert.equal(reviewed.items.length, 0);
+}
+
 async function checkCache() {
   let calls = 0;
   const service = (model = 'qa-model', extractionVersion = 'v1', options = {}) =>
@@ -323,6 +364,73 @@ async function checkTourismShadow() {
   await writeRun('tourism-clock-provider-failure', failedWriter);
   const afterFailure = (await repo.knownSourceListings('tourism-winnipeg')).get(item.id);
   assert.deepEqual(afterFailure.occurrences, enriched.occurrences);
+  const annualBefore = [...(await repo.knownSourceListings('tourism-winnipeg')).values()].find(
+    (i) => i.type === 'Activity',
+  );
+  await applyAction(
+    { action: 'update', id: annualBefore.id, title: 'Owner annual title', hidden: true },
+    repo,
+    owner,
+  );
+  const annualModel = structuredClone(model);
+  annualModel.event.title = annualModel.event.titleQuote = 'Annual Festival';
+  const lateDatesCollect = (source, checkedAt, options) =>
+    collectTourism(source, checkedAt, {
+      ...options,
+      pauseMs: 0,
+      fetchImpl: async (url) =>
+        new Response(
+          url === TOURISM_CALENDAR
+            ? tourismCalendar([tourismEntry('2026-10-28')])
+            : url === TOURISM_ANNUAL
+              ? tourismDirectory
+              : tourismDetail(
+                  url === tourismFestival,
+                  'TBD',
+                  url === tourismFestival
+                    ? 'Intro.</p><p>More.</p><p>Details.</p><p>October 28, 2026 at 12–4 PM'
+                    : 'An exhibition.',
+                ).replace(
+                  '<div class="body">',
+                  '<div class="contact-details">Venue: Test Hall</div><div class="body">',
+                ),
+        ),
+    });
+  const annualResult = await runCollection(
+    'tourism-winnipeg',
+    { id: 'annual-date-review-upgrade', data: { trigger: 'manual' } },
+    {
+      pool,
+      repository: repo,
+      collect: lateDatesCollect,
+      now: () => '2026-10-26T12:00:00Z',
+      extraction: {
+        forSource: (source, { pool, checkedAt }) =>
+          createExtractionShadow({
+            source,
+            pool,
+            checkedAt,
+            mode: 'write',
+            maxMs: 10000,
+            extractor: {
+              extract: async (input) => ({
+                result: input.pageUrl === tourismFestival ? annualModel : { event: null },
+              }),
+            },
+          }),
+      },
+    },
+  );
+  assert.equal(annualResult.counts.extraction.imported, 1);
+  const annualAfter = (await repo.knownSourceListings('tourism-winnipeg')).get(annualBefore.id);
+  assert.equal(annualAfter.type, 'Event');
+  assert.equal(annualAfter.status, 'active');
+  assert.equal(annualAfter.occurrences[0].start, '2026-10-28');
+  assert.equal(
+    (await repo.detail(annualBefore.id, { admin: true, principal: owner })).title,
+    'Owner annual title',
+  );
+  assert.equal(await repo.detail(annualBefore.id, { principal: owner }), null);
   console.log(
     'Tourism shadow compares fetched calendar/annual details, preserves parser records and owner edits, caches repeats and survives provider failure.',
   );
@@ -855,6 +963,7 @@ try {
   await checkMuseumWrite();
   await checkWrite();
   await checkTourismShadow();
+  await checkPageLimits();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

@@ -167,3 +167,12 @@ test('write preserves collector media/cancellation and falls back on provider/bu
   );
   assert.deepEqual(unprepared.items, [parsed]);
 });
+
+test('source extraction page caps are explicit and bounded', () => {
+  for (const value of ['0', '401', '1.5', 'wrong'])
+    assert.throws(
+      () => configureExtractionRollout({ WINNIGO_EXTRACTION_MAX_PAGES: value }),
+      /MAX_PAGES/,
+    );
+  assert.ok(configureExtractionRollout({ WINNIGO_EXTRACTION_MAX_PAGES: '400' }));
+});

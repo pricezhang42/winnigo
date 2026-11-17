@@ -482,3 +482,38 @@ test('calendar enrichment leaves ambiguous showtimes unknown and retains prior p
   ).items;
   assert.ok(cancelled.occurrences.slice(0, 2).every((o) => o.status === 'cancelled'));
 });
+
+test('uses a quoted event address as its display location without inventing an aggregator venue', async () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' At grade railway crossing at Test Road.';
+  const value = changed((e) => {
+    e.venue = {
+      name: null,
+      address: 'At grade railway crossing at Test Road',
+      online: false,
+      quote: 'At grade railway crossing at Test Road',
+    };
+  });
+  const [item] = (await preview(value, input)).items;
+  assert.equal(item.venue, 'At grade railway crossing at Test Road');
+  assert.equal(item.extraction.venueFallback, undefined);
+});
+
+test('only a trusted date-review placeholder can become a verified dated event', async () => {
+  const [old] = (await preview()).items;
+  old.type = 'Activity';
+  old.status = 'hidden';
+  old.reviewReason = 'Annual edition dates need verification';
+  delete old.occurrences;
+  const knownListings = new Map([[old.id, old]]);
+  assert.equal((await preview(single, context, { knownListings })).items.length, 0);
+  const [accepted] = (await preview(single, context, { knownListings, allowUndated: true })).items;
+  assert.equal(accepted.type, 'Event');
+  assert.equal(accepted.status, 'active');
+  assert.equal(accepted.reviewReason, undefined);
+  old.sourceVisibility = 'private';
+  assert.equal(
+    (await preview(single, context, { knownListings, allowUndated: true })).items.length,
+    0,
+  );
+});

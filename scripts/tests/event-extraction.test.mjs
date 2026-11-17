@@ -359,3 +359,34 @@ test('calendar dates and detail clocks retain separate exact document citations'
   assert.equal(rejected.reviewReasons.length, 1);
   assert.ok(!rejected.evidence.some((e) => e.fields.includes('/schedule/dates/0')));
 });
+
+test('a quoted ticket range cannot become a definite general admission price', () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Tickets: 0 -$15.60. Adult $15, children $5–$10.';
+  const result = parse((e) => {
+    e.price = { amount: 15.6, text: '$15.60', quote: 'Tickets: 0 -$15.60' };
+  }, input);
+  assert.equal(event(result).price.amount, null);
+  assert.equal(event(result).price.text, '0 -$15.60');
+  const adult = parse((e) => {
+    e.price = { amount: 15, text: 'Adult $15', quote: 'Adult $15, children $5–$10' };
+  }, input);
+  assert.equal(event(adult).price.amount, 15);
+});
+
+test('ticket labels and prices alone cannot establish availability', () => {
+  const input = structuredClone(context);
+  input.documents[0].text += ' Tickets: $55–$60. Get tickets today!';
+  const bare = parse((e) => {
+    e.availability = { status: 'available', text: 'Tickets offered', quote: 'Tickets: $55–$60' };
+  }, input);
+  assert.equal(event(bare).availability, 'unknown');
+  const offer = parse((e) => {
+    e.availability = {
+      status: 'available',
+      text: 'Get tickets today!',
+      quote: 'Get tickets today!',
+    };
+  }, input);
+  assert.equal(event(offer).availability, 'available');
+});
