@@ -136,3 +136,40 @@ retain their calendar visiting days and unknown original opening dates. A repeat
 calls, used six cache hits and changed no records. Provider-failure fallback retained the times.
 These are bounded replay checks, not new live model accuracy or full-site coverage results.
 A full-cycle review remains required before enabling outside local QA.
+
+## Broad live AI test — November 17, 2026
+
+A fresh November–December source attempt read 25 calendar/directory pages, 224 event details and
+one organizer page: **207 retained records / 501 visits**. A local QA harness tested all retained
+pages in batches through the shared production extraction components; the worker's normal
+100-page cap was unchanged. One service shared a US$0.50 configured budget across batches.
+
+GPT-6 Luna returned **204 fresh responses plus 3 cache hits**. **202 enrichments were accepted,
+5 used parser fallback**, with no provider/validation failures. Input/output usage was
+832,989 / 152,799 tokens, including 80,979 reasoning tokens; estimated cost **US$0.159797** at
+configured rates. This is an import/validation result, not a scored accuracy percentage.
+
+All **501 occurrence dates and IDs** and photo references survived. Precise visits increased
+from 6 to 171. No duplicate slots within a parent or wholly outside-window dates were found.
+204 records have photos; all 203 unique private photo objects passed integrity checks. A saved-input
+repeat used **207 cache hits, zero paid calls/cost, 0 added / 207 unchanged**. Only `checkedAt`
+refreshed on enriched records. Chrome verified dated/timed cards, exhibition visiting days and
+loaded photos without severe console errors.
+
+Review findings remain:
+
+- **The Leaf After Dark:** AI turned the quoted `0 -$15.60` range into a definite $15.60. No
+  general ticket tier is stated; the amount should remain unknown with the range preserved.
+- **Manito Ahbee annual page:** AI returned no event despite a named, dated festival. Parser
+  fallback retained it. The calendar and annual record also need verified deduplication.
+- **Grandpa’s Home Alone:** two source IDs have matching descriptions/venue and six overlapping
+  days, but different closing dates. Flag likely duplicates without choosing a closing date.
+- **CP Holiday Train:** the model supplies a crossing address but no venue name. The importer
+  requires a name, so parser fallback remains. Three annual entries without verified dates
+  stay held; TROLLS and Zoo lights retain existing visiting-day review holds.
+- Two source photos return HTTP 404 (Laura Ramoso and Mundane Problems: Holiday Edition),
+  confirmed on one retry. The annual Manito Ahbee profile has no collector photo. The annual
+  WSO New Music Festival page returned HTTP 520. The collection is therefore partial.
+
+This test uses the separate Tourism QA database/media prefix. Raw source/model outputs and
+review reports remain ignored and local. No production audience, destination or schedules changed.
