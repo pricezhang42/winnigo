@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { modelFacts, score } from '../lib/extraction-pilot-scoring.mjs';
 import { parseEventExtraction } from '../../lib/contracts/event-extraction.mjs';
-import { examples } from '../fixtures/event-extraction.mjs';
+import { examples, context, single } from '../fixtures/event-extraction.mjs';
 
 test('pilot facts credit multiple explicit sessions as recurring, matching shared imports', () => {
   const example = examples.find((e) => e.name === 'multiple dates and same-day showtimes');
@@ -35,4 +35,27 @@ test('a disputed date stays explicitly unknown when only an end is supported', (
   assert.equal(facts.date, null);
   assert.equal(facts.endDate, '2026-11-20');
   assert.equal(score({ date: null }, facts).fields.date, true);
+});
+
+test('published open weekdays can be represented as timed weekly rules', () => {
+  const input = structuredClone(context),
+    value = structuredClone(single);
+  value.event.schedule.dates = [];
+  value.event.schedule.recurrence = [
+    {
+      frequency: 'weekly',
+      interval: 1,
+      from: null,
+      through: null,
+      weekdays: [0, 3, 4],
+      monthDays: null,
+      weekOfMonth: null,
+      startTime: '17:00',
+      endTime: '22:00',
+      quote: 'Sunday, Wednesday, Thursday: 5–10 PM',
+    },
+  ];
+  input.documents[0].text += ' Sunday, Wednesday, Thursday: 5–10 PM';
+  const parsed = parseEventExtraction(value, input);
+  assert.deepEqual(modelFacts(parsed.events[0], input).openWeekdays, [0, 3, 4]);
 });

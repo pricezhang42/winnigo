@@ -77,6 +77,71 @@ async function checkPageLimits() {
   assert.equal(reviewed.items.length, 0);
 }
 
+async function checkDerivedEditorial() {
+  const row = {
+    id: 'qa-derived-range',
+    start: '2026-11-28',
+    end: '2026-11-29',
+    status: 'active',
+    time: '',
+    url: context.pageUrl,
+    basis: 'calendar',
+  };
+  const item = {
+    id: 'qa-derived-parent',
+    source: 'tourism-winnipeg',
+    sourceIdentity: 'qa-derived-parent',
+    type: 'Event',
+    title: 'QA derived show',
+    url: context.pageUrl,
+    eventUrl: context.pageUrl,
+    venue: 'QA Hall',
+    recurring: true,
+    schedule: 'series',
+    occurrences: [row],
+  };
+  const save = () =>
+    repo.applySourceCollection(item.source, [item], {
+      checkedAt: context.checkedAt,
+      complete: false,
+    });
+  await save();
+  await applyAction(
+    { action: 'update', id: row.id, title: 'Owner range title', hidden: true },
+    repo,
+    owner,
+  );
+  item.occurrences = [
+    { ...row, status: 'superseded', duplicateOf: 'verified-copy' },
+    {
+      ...row,
+      id: 'qa-derived-unique',
+      start: '2026-11-29',
+      end: '2026-11-29',
+      derivedFrom: row.id,
+    },
+  ];
+  await save();
+  let detail = await repo.detail('qa-derived-unique', { admin: true, principal: owner });
+  assert.equal(detail.title, 'Owner range title');
+  assert.equal(await repo.detail('qa-derived-unique', { principal: owner }), null);
+  await applyAction(
+    { action: 'update', id: 'qa-derived-unique', title: 'Owner unique visit', hidden: false },
+    repo,
+    owner,
+  );
+  await save();
+  detail = await repo.detail('qa-derived-unique', { admin: true, principal: owner });
+  assert.equal(detail.title, 'Owner unique visit');
+  assert.ok(await repo.detail('qa-derived-unique', { principal: owner }));
+  const original = (await repo.knownSourceListings(item.source))
+    .get(item.id)
+    .occurrences.find((o) => o.id === row.id);
+  assert.equal(original.start, '2026-11-28');
+  assert.equal(original.end, '2026-11-29');
+  assert.equal(original.duplicateOf, 'verified-copy');
+}
+
 async function checkCache() {
   let calls = 0;
   const service = (model = 'qa-model', extractionVersion = 'v1', options = {}) =>
@@ -964,6 +1029,7 @@ try {
   await checkWrite();
   await checkTourismShadow();
   await checkPageLimits();
+  await checkDerivedEditorial();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };

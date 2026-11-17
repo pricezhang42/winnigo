@@ -548,3 +548,29 @@ test('a transient first calendar read retries with its original date-filter requ
   assert.equal(attempts, 2);
   assert.equal(r.failedPages.length, 0);
 });
+
+test('partial duplicate ranges retain their original ID and split only unique visiting days', async () => {
+  const { combineTourismDuplicates } = await import('../../lib/server/tourism-duplicates.mjs');
+  const common = {
+    title: 'Same show',
+    venue: 'Same venue',
+    description: 'Verified matching production copy. '.repeat(10),
+  };
+  const a = {
+      ...common,
+      id: 'a',
+      occurrences: [{ id: 'a-1', start: '2026-11-12', end: '2026-11-14', status: 'active' }],
+    },
+    b = {
+      ...common,
+      id: 'b',
+      occurrences: [{ id: 'b-1', start: '2026-11-14', end: '2026-11-15', status: 'active' }],
+    };
+  combineTourismDuplicates({ items: [a, b] });
+  assert.equal(b.occurrences[0].id, 'b-1');
+  assert.equal(b.occurrences[0].status, 'superseded');
+  assert.deepEqual(
+    b.occurrences.slice(1).map((o) => [o.start, o.end, o.derivedFrom]),
+    [['2026-11-15', '2026-11-15', 'b-1']],
+  );
+});

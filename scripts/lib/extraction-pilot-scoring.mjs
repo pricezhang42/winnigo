@@ -24,6 +24,8 @@ export function modelFacts(event, context) {
       : null;
   return {
     title: event.title,
+    price: event.price?.amount ?? null,
+    availability: event.availability ?? 'unknown',
     venue: event.venue?.name ?? (event.venue?.mode === 'online' ? 'Online' : null),
     sourceUrl: event.sourceUrl,
     date: date(schedule.run?.from ?? recurrence?.from ?? null) || first?.day || null,
@@ -39,9 +41,12 @@ export function modelFacts(event, context) {
     closedDates: ordered(
       (schedule.exceptions || []).filter((row) => row.closed).map((row) => date(row.from)),
     ),
-    openWeekdays: ordered(
-      (schedule.hours || []).flatMap((period) => period.weekly.flatMap((row) => row.weekdays)),
-    ),
+    openWeekdays: ordered([
+      ...(schedule.hours || []).flatMap((period) => period.weekly.flatMap((row) => row.weekdays)),
+      ...(schedule.recurrence || [])
+        .filter((rule) => rule.frequency === 'weekly')
+        .flatMap((rule) => rule.weekdays || []),
+    ]),
     imageUrls: (event.images || []).map((image) => image.url),
     review: event.reviewReasons.length > 0,
   };

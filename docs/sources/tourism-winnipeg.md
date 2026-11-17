@@ -173,3 +173,31 @@ Review findings remain:
 
 This test uses the separate Tourism QA database/media prefix. Raw source/model outputs and
 review reports remain ignored and local. No production audience, destination or schedules changed.
+
+
+## Annual coverage and resolved test findings
+
+The final workflow reviews every fetched annual profile, including outside-window editions and
+calendar-linked profiles. `WINNIGO_EXTRACTION_MAX_PAGES=400` permits a complete bounded source
+review; the default 100-page limit now records skipped pages explicitly. Only verified current/
+next-month dates import. Annual month/season/TBD dates remain held without invented days.
+
+All 21 fresh annual profiles match 57/57 reviewed edition checks. WSO's annual page recovered;
+Manito Ahbee now yields its dated festival and actual Canada Life Centre venue. Its month-clipped
+annual edition links to the calendar record, preserving the prior alias as hidden history.
+Address-only event locations are accepted from evidence, including CP Holiday Train's crossing.
+The Leaf After Dark preserves `0 -$15.60` with unknown fixed price. Private photos support the
+source's listings/GIF paths. Failed refreshes retain known details and times; transient page
+failures retry once, including the original POST date filter.
+
+Duplicate productions require matching title, venue, substantial description and overlapping
+visits. Covered cards are suppressed; a partial range retains its original ID/history and gains
+stable unique-day children, with inherited owner state. Thirteen overlapping ranges are resolved
+without deleting original dates or choosing disputed closing bounds. New and later owner edits
+are verified through database integration.
+
+The final import reviews 224 pages: 203 enrichments, 3 undated annual fallbacks and 18 review-only
+profiles. Two initial token-limit failures recovered separately with a larger explicit allowance.
+Repeat: 224 cache hits, no paid calls, 206 unchanged current records. All 203 private photo objects
+verify; two published 404 images remain reported as unavailable. See [final acceptance](../28-event-extraction-acceptance.md)
+for exact counts, budget estimates, remaining source limits and reproducible pilot labels.
