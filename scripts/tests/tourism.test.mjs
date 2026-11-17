@@ -379,3 +379,18 @@ test('bounded Tourism samples report incomplete coverage and do not fetch remain
   assert.ok(result.failedPages.some((page) => /detail limit reached/.test(page.error)));
   assert.equal(result.completeSchedules, false);
 });
+
+test('Tourism parser fallback retains known clock times and IDs without filling calendar gaps', async () => {
+  const rows = [entry('2026-10-28'), entry('2026-11-04')];
+  const baseline = await collect(rows);
+  const item = baseline.items[0];
+  Object.assign(item.occurrences[0], {
+    startAt: '2026-10-28T18:00:00.000Z',
+    endAt: '2026-10-28T22:00:00.000Z',
+    time: '12–4 PM',
+    endTimeKnown: true,
+    timeZone: 'America/Winnipeg',
+  });
+  const repeat = await collect(rows, { knownListings: new Map([[item.id, item]]) });
+  assert.deepEqual(repeat.items[0].occurrences, item.occurrences);
+});

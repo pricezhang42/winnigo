@@ -405,3 +405,80 @@ test('supported ticket tiers clear a prior single price rather than inventing on
   assert.equal(item.price, null);
   assert.equal(item.admission, 'Ticket options: $10 and $15');
 });
+
+async function calendarFixture() {
+  const [item] = (await preview()).items;
+  const first = item.occurrences[0];
+  return {
+    ...item,
+    recurring: true,
+    occurrences: ['2026-11-20', '2026-11-22'].map((day) => ({
+      id: `calendar-${day}`,
+      start: day,
+      end: day,
+      status: 'active',
+      time: '',
+      url: first.url,
+      basis: 'calendar',
+    })),
+  };
+}
+
+test('calendar enrichment retains every published day and ID, adding only supported times', async () => {
+  const calendarListing = await calendarFixture();
+  const [item] = (await preview(single, context, { calendarListing })).items;
+  assert.deepEqual(
+    item.occurrences.map((o) => o.id),
+    calendarListing.occurrences.map((o) => o.id),
+  );
+  assert.deepEqual(
+    item.occurrences.map((o) => o.start),
+    ['2026-11-20', '2026-11-22'],
+  );
+  assert.equal(item.occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
+  assert.equal(item.occurrences[1].startAt, undefined);
+  assert.equal(item.runDates, undefined);
+  assert.equal(item.extraction.scheduleAuthority, 'calendar');
+});
+
+test('calendar enrichment accepts metadata despite schedule review and never invents opening dates', async () => {
+  const calendarListing = await calendarFixture();
+  const value = changed((e) => {
+    e.schedule.dates = [];
+    e.reviewReasons = [{ field: 'schedule', reason: 'Conflicting detail dates' }];
+  });
+  const [item] = (await preview(value, context, { calendarListing })).items;
+  assert.deepEqual(item.occurrences, calendarListing.occurrences);
+  assert.equal(item.runDates, undefined);
+  assert.equal(item.extraction.scheduleReview.length, 1);
+  calendarListing.runDates = { start: '2026-09-01', end: '2027-03-01', sourceUrl: context.pageUrl };
+  const [verified] = (await preview(value, context, { calendarListing })).items;
+  assert.deepEqual(verified.runDates, calendarListing.runDates);
+  value.event.reviewReasons = [{ field: 'title', reason: 'Unclear main event' }];
+  assert.equal((await preview(value, context, { calendarListing })).items.length, 0);
+  calendarListing.occurrences = [];
+  assert.equal(
+    (await preview(single, context, { calendarListing })).review[0].reason,
+    'calendar-schedule-unavailable',
+  );
+});
+
+test('calendar enrichment leaves ambiguous showtimes unknown and retains prior precise slots', async () => {
+  const multiple = example('multiple');
+  const calendarListing = await calendarFixture();
+  const [ambiguous] = (await preview(multiple.result, multiple.context, { calendarListing })).items;
+  assert.equal(ambiguous.occurrences[0].startAt, undefined);
+  assert.equal(ambiguous.extraction.timingReview.length, 1);
+  const [old] = (await preview(multiple.result, multiple.context)).items;
+  old.occurrences = old.occurrences.filter((o) => o.start === '2026-11-20');
+  const [retained] = (
+    await preview(single, context, { calendarListing, knownListings: new Map([[old.id, old]]) })
+  ).items;
+  assert.deepEqual(retained.occurrences.slice(0, 2), old.occurrences);
+  assert.equal(retained.occurrences.length, 3);
+  calendarListing.occurrences[0].status = 'cancelled';
+  const [cancelled] = (
+    await preview(single, context, { calendarListing, knownListings: new Map([[old.id, old]]) })
+  ).items;
+  assert.ok(cancelled.occurrences.slice(0, 2).every((o) => o.status === 'cancelled'));
+});

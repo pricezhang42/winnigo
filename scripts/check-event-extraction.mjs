@@ -256,6 +256,73 @@ async function checkTourismShadow() {
   const fallback = await run('tourism-shadow-failed-provider', broken);
   assert.equal(fallback.status, 'ok');
   assert.equal(fallback.counts.extraction, undefined);
+  // A cached write enriches known date-only rows without changing their identities.
+  model.event.schedule.dates[0].startTime = '12:00';
+  model.event.schedule.dates[0].endTime = '16:00';
+  model.event.schedule.dates[0].quote = 'October 28, 2026 at 12–4 PM';
+  const writeConfig = { ...env, WINNIGO_EXTRACTION_SOURCES: 'tourism-winnipeg=write' };
+  const writer = configureExtractionRollout(writeConfig, {
+    createService: () =>
+      createEventExtractionService(
+        {
+          model: 'qa-tourism-clock-model',
+          extractionVersion: 'tourism-clock-v1',
+          countInput: async () => 100,
+          generate: async (input) => ({
+            status: 'completed',
+            text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+            usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 0 },
+          }),
+        },
+        { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+      ),
+  });
+  const writeCollect = async (source, checkedAt, options) => {
+    const capture = options.onEventPage;
+    return collect(source, checkedAt, {
+      ...options,
+      onEventPage: (page) =>
+        capture({
+          ...page,
+          html: page.html.replace('October 28, 2026', 'October 28, 2026 at 12–4 PM'),
+        }),
+    });
+  };
+  const writeRun = (id, extraction = writer) =>
+    runCollection(
+      'tourism-winnipeg',
+      { id, data: { trigger: 'manual' } },
+      {
+        pool,
+        repository: repo,
+        collect: writeCollect,
+        extraction,
+        now: () => '2026-10-26T12:00:00Z',
+      },
+    );
+  const written = await writeRun('tourism-clock-write');
+  assert.equal(written.counts.extraction.imported, 1);
+  assert.equal(written.counts.extraction.fallback, 1);
+  const enriched = (await repo.knownSourceListings('tourism-winnipeg')).get(item.id);
+  assert.equal(enriched.occurrences[0].id, item.occurrences[0].id);
+  assert.equal(enriched.occurrences[0].startAt, '2026-10-28T17:00:00.000Z');
+  assert.equal(enriched.occurrences[0].endAt, '2026-10-28T21:00:00.000Z');
+  assert.equal(
+    (await repo.detail(item.id, { admin: true, principal: owner })).title,
+    'Owner Tourism shadow correction',
+  );
+  assert.equal(await repo.detail(item.id, { principal: owner }), null);
+  const writtenRepeat = await writeRun('tourism-clock-repeat');
+  assert.equal(writtenRepeat.counts.extraction.cacheHits, 2);
+  assert.equal(writtenRepeat.counts.updated, 0);
+  const failedWriter = configureExtractionRollout(writeConfig, {
+    createService: () => {
+      throw Error('unavailable');
+    },
+  });
+  await writeRun('tourism-clock-provider-failure', failedWriter);
+  const afterFailure = (await repo.knownSourceListings('tourism-winnipeg')).get(item.id);
+  assert.deepEqual(afterFailure.occurrences, enriched.occurrences);
   console.log(
     'Tourism shadow compares fetched calendar/annual details, preserves parser records and owner edits, caches repeats and survives provider failure.',
   );

@@ -23,7 +23,10 @@ test('rollout is off by default and only accepts shadow mode for supported sourc
     readExtractionRollout(env('tourism-winnipeg=shadow')).get('tourism-winnipeg'),
     'shadow',
   );
-  assert.throws(() => readExtractionRollout(env('tourism-winnipeg=write')), /shadow mode only/);
+  assert.equal(
+    readExtractionRollout(env('tourism-winnipeg=write')).get('tourism-winnipeg'),
+    'write',
+  );
   assert.equal(readExtractionRollout(env('wag=write')).get('wag'), 'write');
   assert.equal(readExtractionRollout(env('manitoba-museum=write')).get('manitoba-museum'), 'write');
   for (const [value, message] of [

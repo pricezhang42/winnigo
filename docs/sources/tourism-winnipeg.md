@@ -74,7 +74,7 @@ manual-only and uses the shared listing/occurrence and private-media repository.
 To compare already-fetched detail pages, configure the existing provider/key/model/budget settings
 and `WINNIGO_EXTRACTION_SOURCES=tourism-winnipeg=shadow` in the worker environment. Enqueue a
 manual collection with `npm run collect:tourism -- --enqueue`; the CLI dry run remains parser-only.
-`tourism-winnipeg=write` is rejected until date/time refinements are reviewed. Extraction defaults
+`tourism-winnipeg=write` opts into calendar-authoritative enrichment described below. Extraction defaults
 to off. Tourism has no organization venue fallback: locations must come from event evidence.
 
 Captured context contains focused event/profile content, only matching calendar records, and a
@@ -114,7 +114,25 @@ photos; a verified exhibition also displayed its overall run separately from its
 Raw pages, inputs, outputs and QA environment stay local and ignored. No production destination,
 audience or schedule changed.
 
-Before enabling writes, define how date-only sessions can gain verified times while preserving
-occurrence IDs, owner edits and every published visiting day. Resolve the exhibition boundary and
-remaining quote/schedule cases above, then rerun the source comparison. The shared write guard is
-kept in place while these measured differences remain open.
+## Calendar-authoritative AI enrichment — November 17, 2026
+
+The reviewed date cases now use one simple rule: collected calendar visits define the dates;
+AI enriches event details and supplies an unambiguous, supported time on those same dates.
+The calendar retains every visit, closure gap, stable occurrence ID, cancellation and verified
+run bounds. A detail page's next available date cannot invent an exhibition opening. Multiple
+possible showtimes or conflicts with saved precise times require review. Other blocking model
+reviews or provider failures retain parser data; schedule-only reviews are diagnostic because
+the calendar supplies the dates. Unverified annual/TBD entries still cannot be published by AI.
+
+Both shadow and write modes preview this policy; write mode additionally persists the enrichment.
+Saved precise times survive later parser-only or failed-AI collections. Photos remain private
+collector-owned assets, and owner edits/hidden state are preserved.
+
+The six previously saved real Luna responses were replayed into the isolated QA database:
+**6 accepted enrichments, 81 visits, unchanged occurrence IDs and photo references**. Six visits
+gained supported times. Dalnavert retains both calendar days at noon–4 p.m.; its unsupported date
+quote is still rejected and retained in diagnostics. Omalluq (43 visits) and Staycation (31)
+retain their calendar visiting days and unknown original opening dates. A repeat made zero paid
+calls, used six cache hits and changed no records. Provider-failure fallback retained the times.
+These are bounded replay checks, not new live model accuracy or full-site coverage results.
+A full-cycle review remains required before enabling outside local QA.
