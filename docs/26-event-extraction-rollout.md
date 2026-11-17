@@ -1,5 +1,7 @@
 # Event extraction rollout
 
+Current verification and remaining source limits: [final acceptance](28-event-extraction-acceptance.md). Earlier dated results below remain historical.
+
 Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
 [pilot](25-event-extraction-pilot.md). Every source starts in **shadow mode**. WAG, Manitoba Museum and Tourism Winnipeg support opt-in write mode after review.
 
@@ -9,7 +11,7 @@ Step 7 of Epic #33. Extraction is enabled per source, in stages, after the
 | --- | --- | --- |
 | off (default) | Parser | Nothing; no provider calls |
 | `shadow` | Parser | Extracts the event pages the collector already fetched, maps them with the shared importer and records a comparison |
-| `write` (WAG and Museum) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
+| `write` (WAG, Museum and Tourism) | Accepted extraction per page, otherwise parser | Checks existing identity/state, preserves collector media, records comparisons, imports through the normal repository |
 
 ## Enable shadow mode
 
@@ -38,7 +40,7 @@ the [cache](24-event-extraction-cache.md) and cost nothing on later runs.
 ## What a run records
 
 After the parser's listings are saved, each captured page is prepared, extracted (two at a time)
-and mapped without existing listings, so the candidate reflects extraction alone. The candidate
+and mapped without existing listings for model-only sources. Calendar-authoritative Tourism previews the same enrichment and identity checks as write mode. The candidate
 is compared with the parser listings produced from the same page:
 
 - title and venue (case and whitespace insensitive);
@@ -403,3 +405,14 @@ A simulated provider initialization failure retained the enriched timestamps.
 This is a bounded saved-evidence replay, not a fresh full-site collection or a new accuracy score.
 Review a full calendar cycle before enabling this source beyond local QA. Schedules and defaults
 have not changed.
+
+
+## Annual coverage and final acceptance
+
+Every fetched Tourism annual profile now reaches comparison, including editions outside the
+window and calendar-linked editions. Review-only pages retain raw outputs for audit and cannot
+publish or duplicate an existing event. Undated placeholders can become dated events only after
+validated extraction; owner edits remain separate. Limits are explicit: `WINNIGO_EXTRACTION_MAX_PAGES`
+is 1–400 (default 100); excess pages get `page-limit` skips. Review-only pages are counted separately
+from parser fallbacks. Budget/time caps still apply. See [acceptance](28-event-extraction-acceptance.md)
+for the final pilot, edition checks, operation and rollback.

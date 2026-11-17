@@ -46,6 +46,8 @@ npm run check:assets
 
 For another port use `WINNIGO_CHECK_ORIGIN=http://127.0.0.1:5174 npm run check:assets`. The script checks configured API access as well as styles/module MIME types. Basic mode protects pages, APIs, photos and static assets. New database-backed collector credentials permit only scoped import POSTs; they cannot read discoveries or make arbitrary admin edits. The old shared key is not accepted by Node. `/api/health` is an unauthenticated liveness check with no collection/configuration data.
 
+Opt-in event extraction setup is in [the rollout guide](docs/26-event-extraction-rollout.md); [acceptance results](docs/28-event-extraction-acceptance.md) cover the verified source modes and remaining limits.
+
 ## PostgreSQL and S3 development services
 
 Requires Docker Compose; these have separate `winnigo-node` volumes from P0 and legacy state.

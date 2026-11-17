@@ -20,6 +20,8 @@ const fields = new Set([
   'openWeekdays',
   'imageUrl',
   'review',
+  'price',
+  'availability',
 ]);
 
 function validateManifest(cases) {
@@ -57,10 +59,21 @@ function totals(scores) {
   return { cases: scores.length, missing, extra, fields };
 }
 
-const [manifestFile, reportFile] = process.argv.slice(2);
+const [manifestFile, reportFile, admissionFile] = process.argv.slice(2);
 if (!manifestFile || !reportFile || manifestFile === reportFile)
-  throw Error('Usage: check-event-extraction-pilot.mjs MANIFEST.json REPORT.json');
+  throw Error(
+    'Usage: check-event-extraction-pilot.mjs MANIFEST.json REPORT.json [ADMISSION_LABELS.json]',
+  );
 const cases = JSON.parse(await readFile(manifestFile, 'utf8'));
+if (admissionFile) {
+  const labels = JSON.parse(await readFile(admissionFile, 'utf8'));
+  for (const [id, facts] of Object.entries(labels)) {
+    const item = cases.find((c) => c.id === id && c.expected);
+    if (!item || Object.keys(facts).some((key) => !['price', 'availability'].includes(key)))
+      throw Error('Admission labels must match event cases and contain only price/availability');
+    item.expected = { ...item.expected, ...facts };
+  }
+}
 validateManifest(cases);
 const service = createConfiguredEventExtractionService({
   ...process.env,
@@ -90,6 +103,15 @@ async function evaluate({ id, context, expected, baseline }) {
     errorCode = error.code || 'pilot_error';
     httpStatus = error.status;
   }
+  // The archived parser reference did not measure admission fields. Do not
+  // count an unmeasured field as an incorrect prediction or an assumed unknown.
+  const parserExpected =
+    expected &&
+    Object.fromEntries(
+      Object.entries(expected).filter(
+        ([key]) => !['price', 'availability'].includes(key) || Object.hasOwn(baseline || {}, key),
+      ),
+    );
   return {
     id,
     source: context.source,
@@ -104,7 +126,7 @@ async function evaluate({ id, context, expected, baseline }) {
     // The validated model output, for diagnosing misses.
     raw,
     modelScore: score(expected, facts),
-    ...(baseline === undefined ? {} : { baseline, parserScore: score(expected, baseline) }),
+    ...(baseline === undefined ? {} : { baseline, parserScore: score(parserExpected, baseline) }),
   };
 }
 
