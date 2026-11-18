@@ -23,10 +23,12 @@ export default function ListingGallery({
   images,
   title,
   sourceUrl,
+  caption,
 }: {
   images: string[];
   title: string;
   sourceUrl: string;
+  caption?: string;
 }) {
   const photos = [...new Set(images.filter(Boolean))];
   const [open, setOpen] = useState(false);
@@ -68,7 +70,7 @@ export default function ListingGallery({
       <DialogContent className="photo-viewer">
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>
-          Photos from the original listing. Swipe or use the arrows to browse.
+          {caption || 'Photos from the original listing.'} Swipe or use the arrows to browse.
         </DialogDescription>
         <Carousel
           opts={{ loop: photos.length > 1 }}
@@ -128,6 +130,7 @@ export default function ListingGallery({
           </div>
         )}
       </DialogContent>
+      {caption && <p className="text-sm text-muted-foreground">{caption}</p>}
     </Dialog>
   );
 }

@@ -80,6 +80,7 @@ docker compose --env-file .env.local --profile app stop
 | `npm run dev` | Standard Next.js development server |
 | `npm run build` / `npm start` | Assemble and run standalone Node app |
 | `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
+| `npm run collect:music` | Manitoba Music parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
 | `npm run collect:tourism` | Tourism Winnipeg parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
 | `npm run collect:fortwhyte` | Dry-run current/next-month FortWhyte calendars with 60-second request spacing |
 | `npm run collect:clc -- --compare` | Dry-run the current/next-month Canada Life Centre feed and compare its calendar |

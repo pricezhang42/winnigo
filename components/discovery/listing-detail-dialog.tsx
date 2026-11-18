@@ -71,6 +71,7 @@ function ListingDetail({
           images={listing.images?.length ? listing.images : listing.image ? [listing.image] : []}
           title={listing.title}
           sourceUrl={listing.url}
+          caption={listing.imageCaption}
         />
       )}
       <span className="eyebrow">
