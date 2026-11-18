@@ -1,6 +1,7 @@
 'use client';
 import SocialOutingForm from '@/components/social-outing-form';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ArrowLeft, RefreshCw, ExternalLink, Search, EyeOff, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,9 +157,9 @@ export default function Admin() {
 
   return (
     <main className="admin-page">
-      <a href="/" className="back-link">
+      <Link href="/" className="back-link">
         <ArrowLeft size={16} /> Back to Winnigo
-      </a>
+      </Link>
       <div className="results-heading">
         <div>
           <div className="eyebrow">WINNIGO · COLLECTION DESK</div>

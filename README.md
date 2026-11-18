@@ -46,6 +46,8 @@ npm run check:assets
 
 For another port use `WINNIGO_CHECK_ORIGIN=http://127.0.0.1:5174 npm run check:assets`. The script checks configured API access as well as styles/module MIME types. Basic mode protects pages, APIs, photos and static assets. New database-backed collector credentials permit only scoped import POSTs; they cannot read discoveries or make arbitrary admin edits. The old shared key is not accepted by Node. `/api/health` is an unauthenticated liveness check with no collection/configuration data.
 
+Opt-in event extraction setup is in [the rollout guide](docs/26-event-extraction-rollout.md); [acceptance results](docs/28-event-extraction-acceptance.md) cover the verified source modes and remaining limits.
+
 ## PostgreSQL and S3 development services
 
 Requires Docker Compose; these have separate `winnigo-node` volumes from P0 and legacy state.
@@ -78,7 +80,8 @@ docker compose --env-file .env.local --profile app stop
 | `npm run dev` | Standard Next.js development server |
 | `npm run build` / `npm start` | Assemble and run standalone Node app |
 | `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
-| `npm run collect:music` | Preview Manitoba Music for this and next month; `-- --enqueue` explicitly imports via worker |
+| `npm run collect:music` | Manitoba Music parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
+| `npm run collect:tourism` | Tourism Winnipeg parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
 | `npm run collect:fortwhyte` | Dry-run current/next-month FortWhyte calendars with 60-second request spacing |
 | `npm run collect:clc -- --compare` | Dry-run the current/next-month Canada Life Centre feed and compare its calendar |
 | `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites) |

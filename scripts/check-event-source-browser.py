@@ -7,7 +7,9 @@ import tempfile
 from urllib.parse import quote, urlparse
 from selenium import webdriver
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 
 p = argparse.ArgumentParser()
@@ -18,6 +20,8 @@ p.add_argument('--evidence', required=True)
 p.add_argument('--env', default='.winnigo/p2-qa.env')
 p.add_argument('--single-event', action='store_true')
 p.add_argument('--image-caption')
+p.add_argument('--driver', help='Optional ChromeDriver executable')
+p.add_argument('--mode', choices=['basic', 'local'])
 a = p.parse_args()
 values = {}
 for filename in ['.env.local', a.env]:
@@ -25,6 +29,8 @@ for filename in ['.env.local', a.env]:
         if '=' in line:
             key, value = line.split('=', 1)
             values[key] = value.strip('"')
+mode = a.mode or values.get('WINNIGO_AUTH_MODE', 'basic')
+assert mode in ['basic', 'local'], 'Use a basic or local QA server'
 evidence = pathlib.Path(a.evidence)
 evidence.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
@@ -32,17 +38,18 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
     for arg in ['--headless=new', '--window-size=1440,1050', '--user-data-dir=' + profile]:
         options.add_argument(arg)
     options.set_capability('goog:loggingPrefs', {'browser': 'ALL'})
-    driver = webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(options=options, service=Service(a.driver) if a.driver else Service())
     wait = WebDriverWait(driver, 45, ignored_exceptions=(StaleElementReferenceException,))
     try:
         for origin in a.origins:
             parsed = urlparse(origin)
             assert parsed.hostname in ['127.0.0.1', 'localhost']
-            login = origin.replace(
-                '://',
-                f'://{quote(values["WINNIGO_ADMIN_USER"], safe="")}:{quote(values["WINNIGO_ADMIN_PASSWORD"], safe="")}@',
-            )
-            driver.get(login)
+            if mode == 'basic':
+                login = origin.replace(
+                    '://',
+                    f'://{quote(values["WINNIGO_ADMIN_USER"], safe="")}:{quote(values["WINNIGO_ADMIN_PASSWORD"], safe="")}@',
+                )
+                driver.get(login)
             driver.get(origin)
             search = wait.until(
                 lambda d: d.find_element(
@@ -124,6 +131,21 @@ with tempfile.TemporaryDirectory(prefix='winnigo-source-browser-') as profile:
                 )
             )
             driver.save_screenshot(str(evidence / f'detail-{parsed.port}.png'))
+            if a.image_caption:
+                driver.find_element(By.CSS_SELECTOR, '.detail-dialog .gallery-cover').click()
+                wait.until(
+                    lambda d: (
+                        a.image_caption in d.find_element(By.CSS_SELECTOR, '.photo-viewer').text
+                    )
+                )
+                wait.until(
+                    lambda d: d.execute_script(
+                        'return [...document.querySelectorAll(".photo-viewer img")].every(i=>i.complete&&i.naturalWidth>0)'
+                    )
+                )
+                driver.save_screenshot(str(evidence / f'gallery-{parsed.port}.png'))
+                driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+
             assert (
                 'Listings could not be loaded' not in driver.find_element(By.TAG_NAME, 'body').text
             )
