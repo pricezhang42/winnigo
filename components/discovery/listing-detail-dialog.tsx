@@ -14,7 +14,7 @@ import ListingGallery from '@/components/listing-gallery';
 import { collectionLabel, resolveMapLocation } from '@/lib/trail-locations';
 import type { Listing } from '@/lib/domain';
 import {
-  FORKS_IMAGE,
+  availabilityLabel,
   dateLabel,
   detailPriceLabel,
   directionsUrl,
@@ -68,7 +68,7 @@ function ListingDetail({
       ) : (
         <ListingGallery
           key={listing.id}
-          images={listing.images?.length ? listing.images : [listing.image || FORKS_IMAGE]}
+          images={listing.images?.length ? listing.images : listing.image ? [listing.image] : []}
           title={listing.title}
           sourceUrl={listing.url}
         />
@@ -85,6 +85,21 @@ function ListingDetail({
           {dateLabel(listing)}
           {listing.time ? ' · ' + listing.time : ''}
         </p>
+        {listing.runDates &&
+          (listing.runDates.start || listing.runDates.end || listing.runDates.endMonth) && (
+            <p>
+              <CalendarDays />
+              Full run:{' '}
+              {dateLabel({
+                ...listing,
+                start: listing.runDates.start,
+                end: listing.runDates.end,
+                endMonth: listing.runDates.endMonth,
+                recurring: false,
+                schedule: 'event',
+              })}
+            </p>
+          )}
         <p>
           <MapPin />
           {listing.address || listing.venue}
@@ -92,9 +107,14 @@ function ListingDetail({
         </p>
         <p>
           <Ticket />
-          {detailPriceLabel(listing.price)}
+          {listing.price === null && listing.admission
+            ? listing.admission
+            : detailPriceLabel(listing.price)}
         </p>
       </div>
+      {availabilityLabel(listing) && (
+        <p>{listing.availabilityText || availabilityLabel(listing)}</p>
+      )}
       {!!listing.occurrences?.length && (
         <details className="event-schedule">
           <summary>Dates and times ({listing.occurrences.length})</summary>

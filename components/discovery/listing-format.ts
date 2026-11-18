@@ -14,16 +14,8 @@ export const isCommunityPost = (item: Listing) =>
 export const isOuting = (item: Listing) =>
   ['manual', 'browser', 'official'].includes(item.provenance || '');
 
-/**
- * Community, official-trail and municipal records without their own photo show an icon
- * placeholder rather than a stock photo that could be mistaken for the place.
- */
-export const usesPlaceholderImage = (item: Listing) =>
-  (item.source === 'manitoba-museum' ||
-    ['manual', 'browser', 'official', 'municipal', 'ical', 'calendar'].includes(
-      item.provenance || '',
-    )) &&
-  !item.image;
+/** Missing photos use a neutral placeholder rather than an unrelated destination. */
+export const usesPlaceholderImage = (item: Listing) => !item.image;
 
 /** "Oct 3 – Oct 5", a season note, or a fallback when the source gives no dates. */
 export function dateLabel(item: Listing) {
@@ -98,4 +90,16 @@ export function directionsUrl(item: Listing) {
     'https://www.google.com/maps/search/?api=1&query=' +
     encodeURIComponent(item.venue + ' ' + region)
   );
+}
+
+export function availabilityLabel(item: Listing) {
+  if (item.availability === 'sold-out') return 'Sold out';
+  if (item.availability === 'unavailable') return 'No longer available';
+  if (item.availability === 'available') return 'Available';
+  if (
+    item.availabilityText ||
+    (item.type === 'Event' && typeof item.price === 'number' && item.price > 0)
+  )
+    return 'Check availability';
+  return '';
 }

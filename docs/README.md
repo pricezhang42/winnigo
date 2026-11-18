@@ -35,6 +35,13 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [15 — P2 storage](15-p2-storage.md) | PostgreSQL/S3 implementation and migration rehearsal. |
 | [16 — P3 accounts](16-p3-accounts.md) | Accounts, grants, provider setup and acceptance evidence. |
 | [17 — P5 collection jobs](17-p5-collection.md) | Job queue, schedules, run history, failure handling and evidence. |
+| [20 — Event extraction contract](20-event-extraction-contract.md) | Shared JSON Schema, types, evidence, schedule facts and mapping for LLM-assisted extraction. |
+| [21 — Event page preparation](21-event-page-preparation.md) | Prepare public HTML, schedules and source links for the extraction contract. |
+| [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
+| [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
+| [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
+| [25 — Event extraction pilot](25-event-extraction-pilot.md) | Compare reviewed public pages with model and parser results. |
+| [26 — Event extraction rollout](26-event-extraction-rollout.md) | Enable shadow extraction per source, review comparisons and add a source. |
 
 ## Fastest path to running it
 
