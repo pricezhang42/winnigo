@@ -55,7 +55,8 @@ Then use **Refresh sources** on `/admin`. To enable schedules permanently, set
 
 ## Evidence
 
-- `npm run check:p5` (temporary app and job schemas, fake sources, no network): queueing and
+- `npm run check:p5` (temporary app and job schemas, fake sources, no network; the process clock
+  starts at 2026-10-14 12:00 UTC to match its dated fixtures, see `scripts/fixed-clock.mjs`): queueing and
   duplicate refusal; saved listings, report and run record; unchanged re-collection not counted
   or audited and owner corrections kept; changes counted; ordinary sources keep missing listings;
   parser failures and empty pages not retried and previous listings kept; network failure retried

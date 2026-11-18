@@ -197,7 +197,9 @@ test('Tourism preserves organizer run dates and date-only daily cards for contin
         organizer +
         '">Visit Website</a></div><div class="body">',
     );
+  const captured = [];
   const r = await collect([listing], {
+    onEventPage: (page) => captured.push(page),
     fetchImpl: async (u) =>
       new Response(
         u === C
@@ -216,6 +218,8 @@ test('Tourism preserves organizer run dates and date-only daily cards for contin
   assert.equal(item.start, '2026-08-27');
   assert.equal(item.end, '2026-11-20');
   assert.equal(item.runDates.sourceUrl, organizer);
+  const capturedMain = captured.find((page) => page.id === item.id);
+  assert.equal(capturedMain.supportingPages.find((page) => page.url === organizer).html, official);
   assert.equal(item.occurrences.length, 51);
   assert.equal(item.occurrences[0].start, '2026-10-01');
   assert.equal(item.occurrences.at(-1).start, '2026-11-20');
@@ -304,7 +308,9 @@ test('Tourism combines a verified organizer exhibition with its homepage alias w
         JSON.stringify(alias) +
         '</script></div>',
     );
+  const captured = [];
   const r = await collect([primary, alias], {
+    onEventPage: (page) => captured.push(page),
     fetchImpl: async (u) =>
       new Response(
         u === C
@@ -321,6 +327,7 @@ test('Tourism combines a verified organizer exhibition with its homepage alias w
       ),
   });
   assert.equal(r.organizerAliases, 1);
+  assert.ok(!captured.some((page) => page.url === aliasUrl));
   const shows = r.items.filter((e) => e.type === 'Event');
   assert.equal(shows.length, 1);
   assert.equal(shows[0].occurrences.length, 51);
@@ -337,4 +344,233 @@ test('Tourism recognizes gallery collections without an English exhibition keywo
       '<div class="contact-details">Venue: Art Gallery<br>URL: example</div><div class="body">',
     );
   assert.equal(parseTourismDetail(page, event).isExhibition, true);
+});
+
+test('Tourism captures each retained detail page once without fetching during extraction', async () => {
+  const pages = [];
+  const unrelated = event.replace('/100/', '/101/');
+  const result = await collect(
+    [entry('2026-10-28'), entry('2026-10-29', '2026-10-29', { url: unrelated })],
+    { onEventPage: (page) => pages.push(page) },
+  );
+  assert.equal(pages.length, result.items.length);
+  const main = pages.find((page) => page.url === event);
+  assert.equal(main.id, result.items[0].id);
+  assert.deepEqual(main.itemIds, [result.items[0].id]);
+  assert.equal(main.html, detail());
+  assert.equal(main.supportingPages.length, 1);
+  assert.equal(main.supportingPages[0].url, C);
+  assert.match(main.supportingPages[0].html, /2026-10-28/);
+  assert.ok(!main.supportingPages[0].html.includes(unrelated));
+  assert.ok(!main.supportingPages[0].html.includes('2026-10-29'));
+  assert.match(main.selector, /event-description-block/);
+  const { sources } = await import('../../lib/connectors.mjs');
+  assert.equal(sources.find((s) => s.id === 'tourism-winnipeg').defaultVenue, undefined);
+});
+
+test('bounded Tourism samples report incomplete coverage and do not fetch remaining details', async () => {
+  const pages = [];
+  const result = await collect([entry('2026-10-28')], {
+    maxEvents: 1,
+    onEventPage: (page) => pages.push(page),
+  });
+  assert.equal(result.eventPagesRead, 1);
+  assert.equal(pages.length, 1);
+  assert.ok(result.failedPages.some((page) => /detail limit reached/.test(page.error)));
+  assert.equal(result.completeSchedules, false);
+});
+
+test('Tourism parser fallback retains known clock times and IDs without filling calendar gaps', async () => {
+  const rows = [entry('2026-10-28'), entry('2026-11-04')];
+  const baseline = await collect(rows);
+  const item = baseline.items[0];
+  Object.assign(item.occurrences[0], {
+    startAt: '2026-10-28T18:00:00.000Z',
+    endAt: '2026-10-28T22:00:00.000Z',
+    time: '12–4 PM',
+    endTimeKnown: true,
+    timeZone: 'America/Winnipeg',
+  });
+  const repeat = await collect(rows, { knownListings: new Map([[item.id, item]]) });
+  assert.deepEqual(repeat.items[0].occurrences, item.occurrences);
+});
+
+test('annual coverage captures out-of-window editions and links month-clipped editions', async () => {
+  const pages = [];
+  const outside = await collect([entry('2026-10-28')], {
+    onEventPage: (p) => pages.push(p),
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([entry('2026-10-28')])
+          : u === A
+            ? directory
+            : detail(u === festival, u === festival ? 'July 10–11, 2027' : 'October 28, 2026'),
+      ),
+  });
+  assert.equal(outside.items.length, 1);
+  assert.equal(pages.find((p) => p.url === festival).reviewOnly, 'annual-edition-outside-window');
+  const linkedPages = [];
+  const linked = await collect([entry('2026-10-01', '2026-10-02', { name: 'Annual Festival' })], {
+    onEventPage: (p) => linkedPages.push(p),
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([entry('2026-10-01', '2026-10-02', { name: 'Annual Festival' })])
+          : u === A
+            ? directory
+            : detail(
+                u === festival,
+                u === festival ? 'September 30–October 2, 2026' : 'October 1–2, 2026',
+              ).replace('Test exhibition', 'Annual Festival'),
+      ),
+  });
+  assert.equal(linked.annualMatched, 1);
+  assert.equal(linkedPages.find((p) => p.url === festival).reviewOnly, 'annual-edition-linked');
+});
+
+test('annual fetch retries one transient server failure, but never retries a missing page', async () => {
+  let attempts = 0;
+  const r = await collect([entry('2026-10-28')], {
+    fetchImpl: async (u) => {
+      if (u === festival && ++attempts === 1) return new Response('Temporary', { status: 520 });
+      return new Response(
+        u === C ? calendar([entry('2026-10-28')]) : u === A ? directory : detail(u === festival),
+      );
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(r.failedPages.length, 0);
+});
+
+test('verified duplicate productions suppress only overlapping cards and preserve every original ID', async () => {
+  const { combineTourismDuplicates } = await import('../../lib/server/tourism-duplicates.mjs');
+  const a = {
+      id: 'a',
+      title: "Grandpa's Home Alone",
+      venue: 'Test Stage',
+      description: 'The same substantial production description. '.repeat(10),
+      occurrences: [{ id: 'a-1', start: '2026-11-19', end: '2026-11-22', status: 'active' }],
+    },
+    b = {
+      ...structuredClone(a),
+      id: 'b',
+      title: 'Grandpa’s Home Alone',
+      occurrences: [
+        {
+          id: 'b-1',
+          start: '2026-11-19',
+          end: '2026-11-19',
+          status: 'active',
+          hidden: true,
+          override: { time: 'Owner time' },
+        },
+        { id: 'b-2', start: '2026-12-17', end: '2026-12-17', status: 'active' },
+      ],
+    };
+  const r = { items: [a, b] };
+  combineTourismDuplicates(r);
+  assert.equal(r.duplicateVisits, 1);
+  assert.equal(b.occurrences[0].status, 'superseded');
+  assert.deepEqual(b.occurrences[0].override, { time: 'Owner time' });
+  assert.equal(b.occurrences[1].status, 'active');
+  assert.deepEqual(
+    b.occurrences.map((o) => o.id),
+    ['b-1', 'b-2'],
+  );
+  assert.equal(b.status, undefined); // its unique visiting day remains visible
+});
+
+test('annual listing GIF photos use the shared private image pipeline and three-photo limit', async () => {
+  const url = 'https://www.tourismwinnipeg.com/uploads/listings/festival.gif';
+  const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64');
+  const r = await collect([entry('2026-10-28')], {
+    fetchImpl: async (u) =>
+      new Response(
+        u === C
+          ? calendar([entry('2026-10-28')])
+          : u === A
+            ? directory
+            : u === url
+              ? gif
+              : detail(
+                  u === festival,
+                  u === festival ? 'November 7–8, 2026' : 'October 28, 2026',
+                ).replace('https://www.tourismwinnipeg.com/uploads/event_image/show.png', url),
+      ),
+    storePhoto: async ({ contentType }) => {
+      assert.equal(contentType, 'image/gif');
+      return stored;
+    },
+  });
+  assert.equal(r.items.find((i) => i.url === festival).image, stored);
+});
+
+test('failed detail refresh keeps verified fields while retaining the current calendar dates', async () => {
+  const baseline = await collect([entry('2026-10-28')]);
+  const old = baseline.items[0];
+  old.price = 25;
+  old.description = 'Previously verified full description';
+  let attempts = 0;
+  const current = await collect([entry('2026-10-29')], {
+    knownListings: new Map([[old.id, old]]),
+    fetchImpl: async (u) => {
+      if (u === event) {
+        attempts++;
+        throw new TypeError('fetch failed');
+      }
+      return new Response(
+        u === C ? calendar([entry('2026-10-29')]) : u === A ? directory : detail(true, 'TBD'),
+      );
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(current.items[0].price, 25);
+  assert.equal(current.items[0].description, old.description);
+  assert.equal(current.items[0].occurrences[0].start, '2026-10-29');
+  assert.ok(current.failedPages.length);
+});
+
+test('a transient first calendar read retries with its original date-filter request', async () => {
+  let attempts = 0;
+  const r = await collect([entry('2026-10-28')], {
+    fetchImpl: async (u, init) => {
+      if (u === C) {
+        attempts++;
+        assert.equal(init.method, 'POST');
+        if (attempts === 1) throw new TypeError('fetch failed');
+      }
+      return new Response(
+        u === C ? calendar([entry('2026-10-28')]) : u === A ? directory : detail(u === festival),
+      );
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(r.failedPages.length, 0);
+});
+
+test('partial duplicate ranges retain their original ID and split only unique visiting days', async () => {
+  const { combineTourismDuplicates } = await import('../../lib/server/tourism-duplicates.mjs');
+  const common = {
+    title: 'Same show',
+    venue: 'Same venue',
+    description: 'Verified matching production copy. '.repeat(10),
+  };
+  const a = {
+      ...common,
+      id: 'a',
+      occurrences: [{ id: 'a-1', start: '2026-11-12', end: '2026-11-14', status: 'active' }],
+    },
+    b = {
+      ...common,
+      id: 'b',
+      occurrences: [{ id: 'b-1', start: '2026-11-14', end: '2026-11-15', status: 'active' }],
+    };
+  combineTourismDuplicates({ items: [a, b] });
+  assert.equal(b.occurrences[0].id, 'b-1');
+  assert.equal(b.occurrences[0].status, 'superseded');
+  assert.deepEqual(
+    b.occurrences.slice(1).map((o) => [o.start, o.end, o.derivedFrom]),
+    [['2026-11-15', '2026-11-15', 'b-1']],
+  );
 });

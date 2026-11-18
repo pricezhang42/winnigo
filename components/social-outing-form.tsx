@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,15 +26,15 @@ const BLANK_FORM = {
  * normalises it (lib/social.mjs). Opens automatically from `/admin?add=social`.
  */
 export default function SocialOutingForm({ onAdded }: { onAdded: () => void }) {
-  const [open, setOpen] = useState(false);
+  // `/admin?add=social` opens the form until the owner closes it.
+  const requested = useSearchParams().get('add') === 'social';
+  const [openState, setOpen] = useState<boolean | null>(null);
+  const open = openState ?? requested;
   const [form, setForm] = useState(BLANK_FORM);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
 
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('add') === 'social') setOpen(true);
-  }, []);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);

@@ -14,7 +14,7 @@ Both annual-directory pages and their detail pages are read. An explicit year is
 
 At most three event-specific photos pass through common private storage. Published calendar thumbnails are fallback candidates when detail images fail; no image URL is invented. Existing verified images are reused, and failed enrichment retains previous media. An image failure makes the run partial while a completely verified calendar can still update its own dates. Partial calendars preserve prior dates and owner overrides.
 
-Requests are serial, with one-second start spacing, 30-second individual timeouts, an 800-request/19-minute bound, and a 20-minute worker lease. HTML caps at 2 MB and images at 8 MB. Redirects and non-allowlisted source URLs are rejected.
+Requests are serial, with one-second start spacing, 30-second individual timeouts, an 800-request/19-minute bound, and a 25-minute worker lease (including bounded AI comparison time). HTML caps at 2 MB and images at 8 MB. Redirects and non-allowlisted source URLs are rejected.
 
 ## October–November 2026 verification
 
@@ -63,3 +63,141 @@ batch has **258 shared records and 684 dates** after removing the duplicate exhi
 The QA date refresh reused existing private photos, retained 253 photographed records and
 verified that owner edits/visibility were preserved. It did not change the normal database or
 collection schedules. Raw audit pages/results remain in the ignored local runtime directory.
+
+
+## AI shadow onboarding — November 16, 2026
+
+This epic integration ports the existing Tourism collector from PR #32 and its shared HTTP/media
+helper from PR #31, without merging the Music collector or changing those PRs. The source stays
+manual-only and uses the shared listing/occurrence and private-media repository.
+
+To compare already-fetched detail pages, configure the existing provider/key/model/budget settings
+and `WINNIGO_EXTRACTION_SOURCES=tourism-winnipeg=shadow` in the worker environment. Enqueue a
+manual collection with `npm run collect:tourism -- --enqueue`; the CLI dry run remains parser-only.
+`tourism-winnipeg=write` opts into calendar-authoritative enrichment described below. Extraction defaults
+to off. Tourism has no organization venue fallback: locations must come from event evidence.
+
+Captured context contains focused event/profile content, only matching calendar records, and a
+validated specific organizer page when the parser already fetched it. The calendar-document
+helper is shared with Museum. Calendar evidence is capped at eight documents plus the primary
+and organizer pages; at most 100 retained event pages are compared. No model step re-fetches
+pages. Calendar/annual aliases removed by verified deduplication do not create duplicate model
+comparisons. A configurable detail limit makes bounded QA samples explicitly partial.
+
+Date and clock excerpts can come from separate documents. Every excerpt must match supplied text;
+the app records a separate citation for each document. Unsupported excerpts still reject the
+whole fact. This changes neither the model JSON schema nor the database model.
+
+The bounded live QA sample read one filtered November–December calendar page, one annual directory
+page and six calendar-event details. It saved **6 parser events / 81 sessions**, each with a private
+photo; annual detail extraction and full-site coverage were not measured by this live sample.
+The initial detail-only comparison highlighted time enrichment and clipped exhibition labels.
+With matching calendar context and exact cross-document citations, the final saved-response model
+pass produced **3 differing candidates / 3 withheld**, with zero provider failures:
+
+- First Friday, Sustainability Tour and UnCommon Pours add time precision; Sustainability Tour
+  also proposes a free admission amount that needs review.
+- Second Saturdays is held because its quote reformats an ISO calendar date into wording absent
+  from the supplied text. The evidence matcher intentionally does not accept that substitution.
+- Staycation and Omalluq are held for inconsistent or missing usable schedule facts. The calendar
+  includes visiting days before the detail page's November 18 label; that label must not become
+  an invented original opening date. Parser visiting days remain intact.
+
+The final model pass cost an estimated US$0.006061 at configured rates. A repeat from saved inputs
+used **6/6 cache hits, zero provider calls/cost, 0 added / 6 unchanged**, preserving all 81 sessions
+and verifying all six photo hashes. These are comparison outcomes, not a scored accuracy pilot.
+Historical full-pilot figures were not rerun or replaced for this source/context change.
+
+199 unit tests, typecheck/build, extraction/P2/P5 integration, dev/built asset checks and seeded
+browser regression passed. Chrome confirmed a completed Tourism card grid with loaded private
+photos; a verified exhibition also displayed its overall run separately from its selected day.
+Raw pages, inputs, outputs and QA environment stay local and ignored. No production destination,
+audience or schedule changed.
+
+## Calendar-authoritative AI enrichment — November 17, 2026
+
+The reviewed date cases now use one simple rule: collected calendar visits define the dates;
+AI enriches event details and supplies an unambiguous, supported time on those same dates.
+The calendar retains every visit, closure gap, stable occurrence ID, cancellation and verified
+run bounds. A detail page's next available date cannot invent an exhibition opening. Multiple
+possible showtimes or conflicts with saved precise times require review. Other blocking model
+reviews or provider failures retain parser data; schedule-only reviews are diagnostic because
+the calendar supplies the dates. Unverified annual/TBD entries still cannot be published by AI.
+
+Both shadow and write modes preview this policy; write mode additionally persists the enrichment.
+Saved precise times survive later parser-only or failed-AI collections. Photos remain private
+collector-owned assets, and owner edits/hidden state are preserved.
+
+The six previously saved real Luna responses were replayed into the isolated QA database:
+**6 accepted enrichments, 81 visits, unchanged occurrence IDs and photo references**. Six visits
+gained supported times. Dalnavert retains both calendar days at noon–4 p.m.; its unsupported date
+quote is still rejected and retained in diagnostics. Omalluq (43 visits) and Staycation (31)
+retain their calendar visiting days and unknown original opening dates. A repeat made zero paid
+calls, used six cache hits and changed no records. Provider-failure fallback retained the times.
+These are bounded replay checks, not new live model accuracy or full-site coverage results.
+A full-cycle review remains required before enabling outside local QA.
+
+## Broad live AI test — November 17, 2026
+
+A fresh November–December source attempt read 25 calendar/directory pages, 224 event details and
+one organizer page: **207 retained records / 501 visits**. A local QA harness tested all retained
+pages in batches through the shared production extraction components; the worker's normal
+100-page cap was unchanged. One service shared a US$0.50 configured budget across batches.
+
+GPT-6 Luna returned **204 fresh responses plus 3 cache hits**. **202 enrichments were accepted,
+5 used parser fallback**, with no provider/validation failures. Input/output usage was
+832,989 / 152,799 tokens, including 80,979 reasoning tokens; estimated cost **US$0.159797** at
+configured rates. This is an import/validation result, not a scored accuracy percentage.
+
+All **501 occurrence dates and IDs** and photo references survived. Precise visits increased
+from 6 to 171. No duplicate slots within a parent or wholly outside-window dates were found.
+204 records have photos; all 203 unique private photo objects passed integrity checks. A saved-input
+repeat used **207 cache hits, zero paid calls/cost, 0 added / 207 unchanged**. Only `checkedAt`
+refreshed on enriched records. Chrome verified dated/timed cards, exhibition visiting days and
+loaded photos without severe console errors.
+
+Review findings remain:
+
+- **The Leaf After Dark:** AI turned the quoted `0 -$15.60` range into a definite $15.60. No
+  general ticket tier is stated; the amount should remain unknown with the range preserved.
+- **Manito Ahbee annual page:** AI returned no event despite a named, dated festival. Parser
+  fallback retained it. The calendar and annual record also need verified deduplication.
+- **Grandpa’s Home Alone:** two source IDs have matching descriptions/venue and six overlapping
+  days, but different closing dates. Flag likely duplicates without choosing a closing date.
+- **CP Holiday Train:** the model supplies a crossing address but no venue name. The importer
+  requires a name, so parser fallback remains. Three annual entries without verified dates
+  stay held; TROLLS and Zoo lights retain existing visiting-day review holds.
+- Two source photos return HTTP 404 (Laura Ramoso and Mundane Problems: Holiday Edition),
+  confirmed on one retry. The annual Manito Ahbee profile has no collector photo. The annual
+  WSO New Music Festival page returned HTTP 520. The collection is therefore partial.
+
+This test uses the separate Tourism QA database/media prefix. Raw source/model outputs and
+review reports remain ignored and local. No production audience, destination or schedules changed.
+
+
+## Annual coverage and resolved test findings
+
+The final workflow reviews every fetched annual profile, including outside-window editions and
+calendar-linked profiles. `WINNIGO_EXTRACTION_MAX_PAGES=400` permits a complete bounded source
+review; the default 100-page limit now records skipped pages explicitly. Only verified current/
+next-month dates import. Annual month/season/TBD dates remain held without invented days.
+
+All 21 fresh annual profiles match 57/57 reviewed edition checks. WSO's annual page recovered;
+Manito Ahbee now yields its dated festival and actual Canada Life Centre venue. Its month-clipped
+annual edition links to the calendar record, preserving the prior alias as hidden history.
+Address-only event locations are accepted from evidence, including CP Holiday Train's crossing.
+The Leaf After Dark preserves `0 -$15.60` with unknown fixed price. Private photos support the
+source's listings/GIF paths. Failed refreshes retain known details and times; transient page
+failures retry once, including the original POST date filter.
+
+Duplicate productions require matching title, venue, substantial description and overlapping
+visits. Covered cards are suppressed; a partial range retains its original ID/history and gains
+stable unique-day children, with inherited owner state. Thirteen overlapping ranges are resolved
+without deleting original dates or choosing disputed closing bounds. New and later owner edits
+are verified through database integration.
+
+The final import reviews 224 pages: 203 enrichments, 3 undated annual fallbacks and 18 review-only
+profiles. Two initial token-limit failures recovered separately with a larger explicit allowance.
+Repeat: 224 cache hits, no paid calls, 206 unchanged current records. All 203 private photo objects
+verify; two published 404 images remain reported as unavailable. See [final acceptance](../28-event-extraction-acceptance.md)
+for exact counts, budget estimates, remaining source limits and reproducible pilot labels.

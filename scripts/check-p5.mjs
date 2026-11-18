@@ -1,3 +1,6 @@
+// Must be the first import: the fixtures below are dated October 2026.
+import './check-p5-clock.mjs';
+import { collectMusic } from '../lib/server/manitoba-music.mjs';
 import {
   collectTourism,
   TOURISM_CALENDAR,
@@ -10,7 +13,7 @@ import {
   detail as tourismDetail,
   festival as tourismFestival,
 } from './fixtures/tourism/pages.mjs';
-import { collectMusic } from '../lib/server/manitoba-music.mjs';
+
 import { collectFortwhyte } from '../lib/server/fortwhyte.mjs';
 // P5 integration check (npm run check:p5): collection jobs against a temporary PostgreSQL schema
 // and a temporary pg-boss schema. Sources are faked, so no live website is contacted.
@@ -488,7 +491,7 @@ try {
   ({ outcome, row: guarded } = await runOnce('wag'));
   assert.equal(outcome.status, 'partial');
   assert.equal(outcome.counts.reviewRequired, 1);
-  assert.match(guarded.error, /withheld for verification/);
+  assert.match(guarded.error, /withheld for date review/);
   responses.wag = Error('WAG calendar layout changed');
   ({ outcome } = await runOnce('wag'));
   assert.equal(outcome.status, 'error');

@@ -106,3 +106,11 @@ Run with:
 node --test scripts/tests/*.test.mjs
 npx tsc --noEmit   # type check
 ```
+
+### Shared HTML extraction
+
+The eight HTML event adapters support opt-in extraction through the same contract and repository;
+see [rollout](26-event-extraction-rollout.md). This includes Manitoba Music's manual calendar/detail
+collector (`npm run collect:music`), ported with its numeric identities and private media. Rotary
+discovers event links through its public ClubRunner JSON calendar when the old home widget is
+absent; only the linked public event HTML goes to the model. Structured dates remain native.

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 type Session = { token: string; createdAt: string; userAgent?: string };
 
 /**
@@ -21,12 +22,23 @@ export default function AccountSettings({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function load() {
+  async function fetchSessions(): Promise<Session[] | null> {
     const response = await fetch('/api/auth/list-sessions');
-    if (response.ok) setSessions(await response.json());
+    return response.ok ? response.json() : null;
+  }
+  async function load() {
+    const list = await fetchSessions();
+    if (list) setSessions(list);
   }
   useEffect(() => {
-    if (!legacy) void load();
+    if (legacy) return;
+    let current = true;
+    fetchSessions().then((list) => {
+      if (current && list) setSessions(list);
+    });
+    return () => {
+      current = false;
+    };
   }, [legacy]);
   /** POSTs to a Better Auth endpoint, then follows up: sign-out leaves, others refresh. */
   async function action(path: string, body: Record<string, unknown> = {}) {
@@ -56,7 +68,7 @@ export default function AccountSettings({
   }
   return (
     <main className="account-shell">
-      <a href="/">Back to Winnigo</a>
+      <Link href="/">Back to Winnigo</Link>
       <h1>Your account</h1>
       <p>
         {name || 'Local owner'}

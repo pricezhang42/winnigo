@@ -189,3 +189,41 @@ test('Music keeps numeric identity through slug changes and preserves explicit c
   });
   assert.ok(cancelled.items.flatMap((e) => e.occurrences).some((o) => o.status === 'cancelled'));
 });
+
+test('Music captures matching detail/calendar evidence only when opted in and preserves calendar authority', async () => {
+  const pages = [],
+    requests = [];
+  const result = await collect({
+    onEventPage: (page) => pages.push(page),
+    fetchImpl: async (url) => {
+      requests.push(url);
+      return new Response(
+        url.includes('/display,event/')
+          ? '<main><article>Public concert. Tickets $20.</article></main>'
+          : html,
+      );
+    },
+  });
+  assert.equal(pages.length, result.items.filter((i) => i.status !== 'hidden').length);
+  assert.ok(pages.every((p) => p.calendarSchedule === 'dates'));
+  assert.ok(pages.every((p) => p.sourceIdentity.startsWith('music:')));
+  assert.ok(
+    pages.every(
+      (p) => new Set(p.supportingPages.map((d) => d.url)).size === p.supportingPages.length,
+    ),
+  );
+  assert.ok(pages.every((p) => p.supportingPages.some((d) => d.html.includes('event-item'))));
+  const failed = await collect({
+    onEventPage: () => assert.fail(),
+    fetchImpl: async (url) =>
+      new Response(url.includes('/display,event/') ? 'Down' : html, {
+        status: url.includes('/display,event/') ? 503 : 200,
+      }),
+  });
+  assert.equal(failed.items.length, result.items.length);
+  assert.deepEqual(
+    failed.items.map((i) => i.occurrences),
+    result.items.map((i) => i.occurrences),
+  );
+  assert.ok(failed.failedPages.length > 0);
+});
