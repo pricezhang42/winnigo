@@ -26,6 +26,7 @@ import {
   configureExtractionRollout,
 } from '../lib/server/extraction-rollout.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { runAiReview } from '../lib/server/ai-sources.mjs';
 import { serviceConfig } from './check-services.mjs';
 import { context, examples, single } from './fixtures/event-extraction.mjs';
 
@@ -1108,6 +1109,96 @@ async function checkShadow() {
   );
 }
 
+// A configurable AI source saves review rows only: candidates and reference comparisons, cached
+// on repeat, with no listings written.
+async function checkAiReview() {
+  let generations = 0;
+  const service = () =>
+    createEventExtractionService(
+      {
+        model: 'qa-ai-source-model',
+        extractionVersion: 'ai-source-v1',
+        countInput: async () => 100,
+        async generate() {
+          generations++;
+          return {
+            status: 'completed',
+            text: JSON.stringify(single),
+            usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 5 },
+          };
+        },
+      },
+      { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
+    );
+  const origin = 'https://events.example.test';
+  const body =
+    '<main><h1>QA Concert</h1><p>QA Concert. November 20, 2026 at 7 PM. QA Hall.</p></main>';
+  const site = {
+    '/events/': '<a href="/events/one/">One</a><a href="/events/two/">Two</a>',
+    '/events/one/': body,
+    '/events/two/': body,
+  };
+  const fetchImpl = async (url) =>
+    new Response(site[new URL(url).pathname] ?? '', {
+      status: site[new URL(url).pathname] ? 200 : 404,
+    });
+  const definition = {
+    id: 'qa-ai-review',
+    name: 'QA AI review',
+    allowedOrigin: origin,
+    startUrls: [origin + '/events/'],
+    eventLinkPattern: '^/events/[a-z]+/$',
+    maxListPages: 1,
+    maxEventPages: 5,
+  };
+  const reference = [
+    {
+      id: 'qa-reference-one',
+      url: origin + '/events/one/',
+      title: 'QA Concert',
+      venue: 'Another Hall',
+      start: '2026-11-20',
+      startAt: '2026-11-21T01:00:00.000Z',
+    },
+  ];
+  const listingsBefore = (await pool.query('SELECT count(*)::int AS n FROM listings')).rows[0].n;
+  const review = () =>
+    runAiReview(definition, {
+      pool,
+      extractor: cacheEventExtraction(pool, service()),
+      checkedAt: context.checkedAt,
+      reference,
+      fetchImpl,
+      pauseMs: 0,
+    });
+  const first = await review();
+  assert.equal(first.counts.candidate, 1);
+  assert.equal(first.counts.differ, 1);
+  const rows = (
+    await pool.query(
+      "SELECT page_url, outcome, reason, run_id, raw FROM event_extraction_comparisons WHERE source='qa-ai-review' ORDER BY page_url",
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r) => [new URL(r.page_url).pathname, r.outcome, r.reason, r.run_id]),
+    [
+      ['/events/one/', 'differ', 'venue', null],
+      ['/events/two/', 'candidate', null, null],
+    ],
+  );
+  assert.deepEqual(rows[1].raw, single);
+  const second = await review();
+  assert.equal(second.counts.cacheHits, 2);
+  assert.equal(generations, 2);
+  assert.equal(
+    (await pool.query('SELECT count(*)::int AS n FROM listings')).rows[0].n,
+    listingsBefore,
+  );
+  console.log(
+    'Configurable AI sources save review candidates and reference comparisons, reuse the cache and write no listings.',
+  );
+}
+
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
   const migrations = new URL('../migrations/postgres/', import.meta.url);
@@ -1122,6 +1213,7 @@ try {
   await checkPageLimits();
   await checkDerivedEditorial();
   await checkHtmlWrites();
+  await checkAiReview();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };
