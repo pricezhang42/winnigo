@@ -43,7 +43,8 @@
     "collect:clc": "node scripts/collect-clc.mjs",
     "collect:fortwhyte": "node scripts/collect-fortwhyte.mjs",
     "collect:tourism": "node scripts/collect-tourism.mjs",
-    "collect:music": "node scripts/collect-music.mjs"
+    "collect:music": "node scripts/collect-music.mjs",
+    "collect:ai": "node scripts/collect-ai-source.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1137.0",
