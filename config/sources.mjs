@@ -34,6 +34,10 @@ const TOURISM_ORGANIZERS = [
   { origin: 'https://www.royalaviationmuseum.com', pattern: '^/event/[^/]+/$' },
 ];
 
+// The Events Calendar series pages: the summary block lists every session; the full page is
+// too long to send with the event page.
+const SERIES_SUMMARY = '.tribe-events-pro-summary';
+
 /** The Events Calendar (WordPress): one link per date, and a series page with every session. */
 const eventsCalendar = (origin, listPath, monthPath) => ({
   method: 'pages',
@@ -78,7 +82,13 @@ export const EVENT_SOURCES = [
     fetch: eventsCalendar('https://www.fortwhyte.org', '/events/', '/events/month/'),
     supportingPages: {
       maxPerPage: 1,
-      sites: [{ origin: 'https://www.fortwhyte.org', pattern: '^/series/[^/]+/$' }],
+      sites: [
+        {
+          origin: 'https://www.fortwhyte.org',
+          pattern: '^/series/[^/]+/$',
+          selector: SERIES_SUMMARY,
+        },
+      ],
     },
     extraction: { maxInputTokens: 20000 },
   },
@@ -112,7 +122,13 @@ export const EVENT_SOURCES = [
     fetch: eventsCalendar('https://manitobamuseum.ca', '/whats-on/', '/whats-on/month/'),
     supportingPages: {
       maxPerPage: 1,
-      sites: [{ origin: 'https://manitobamuseum.ca', pattern: '^/series/[^/]+/$' }],
+      sites: [
+        {
+          origin: 'https://manitobamuseum.ca',
+          pattern: '^/series/[^/]+/$',
+          selector: SERIES_SUMMARY,
+        },
+      ],
     },
     extraction: { maxInputTokens: 20000 },
   },
