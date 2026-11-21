@@ -97,7 +97,7 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
 
   const schema = counted.text.format.schema;
   assert.equal(schema.type, 'object');
-  assert.deepEqual(Object.keys(schema.properties), ['event']);
+  assert.deepEqual(Object.keys(schema.properties), ['events']);
   assert.match(counted.instructions, /one event/);
   assert.match(counted.instructions, /activities within that window are not separate occurrences/);
   assert.match(counted.instructions, /prefer an explicitly printed event date or time/);
@@ -131,7 +131,7 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
     node.anyOf?.forEach(inspect);
   }
   inspect(schema);
-  assert.deepEqual(Object.keys(eventExtractionJsonSchema.properties), ['event']);
+  assert.deepEqual(Object.keys(eventExtractionJsonSchema.properties), ['events']);
   assert.deepEqual(result.usage, {
     inputTokens: 1000,
     outputTokens: 50,
@@ -145,8 +145,8 @@ test('opt-in adapter uses the same prepared input, instructions and strict schem
   assert.equal(service.budget().accountedUsd, 0.0011);
 });
 
-test('accepts one main event or none and returns raw model output without retries', async () => {
-  const empty = { event: null };
+test('accepts a list of events (possibly empty) and returns raw model output without retries', async () => {
+  const empty = { events: [] };
   assert.deepEqual(
     (
       await mockProvider({ generate: () => Response.json(response(empty)) }).service.extract(
@@ -156,13 +156,13 @@ test('accepts one main event or none and returns raw model output without retrie
     empty,
   );
   const timed = structuredClone(single);
-  timed.event.schedule.dates[0].endTime = '21:00';
+  timed.events[0].schedule.dates[0].endTime = '21:00';
   const { calls, service } = mockProvider({ generate: () => Response.json(response(timed)) });
   const result = await service.extract(context);
   assert.deepEqual(result.result, timed);
   assert.equal(calls.length, 2);
   assert.equal(result.attempts.length, 1);
-  const extra = { ...single, events: [single.event, single.event] };
+  const extra = { ...single, event: single.events[0] }; // the old single-event shape
   const rejected = mockProvider({ generate: () => Response.json(response(extra)) });
   await assert.rejects(rejected.service.extract(context), isError('invalid_extraction'));
   assert.equal(rejected.calls.length, 2);
@@ -233,7 +233,7 @@ test('simultaneous requests cannot reserve the same remaining budget', async () 
 
 test('model refusal, incomplete output and invalid facts fail without returning candidate events', async () => {
   const invalid = structuredClone(single);
-  invalid.event.sourceUrl = 'https://invented.example.test/event';
+  invalid.events[0].sourceUrl = 'https://invented.example.test/event';
   for (const [code, value] of [
     [
       'refused',

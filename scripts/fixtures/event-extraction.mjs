@@ -1,4 +1,4 @@
-// Synthetic contract examples (model output format v2). No scraped pages, private data or model calls.
+// Synthetic contract examples (model output format v4). No scraped pages, private data or model calls.
 export const date = (month, day, year = 2026) => ({ year, month, day });
 const pageUrl = 'https://events.example.test/concert';
 const showtime = (start, startTime, quote, endTime = null) => ({
@@ -10,9 +10,10 @@ const showtime = (start, startTime, quote, endTime = null) => ({
   quote,
 });
 export const context = {
-  schemaVersion: '1',
+  schemaVersion: '2',
   source: 'qa-events',
   pageUrl,
+  pageKind: 'event',
   checkedAt: '2026-11-06T18:00:00Z',
   timeZone: 'America/Winnipeg',
   window: { from: '2026-11-01', to: '2026-12-31' },
@@ -25,7 +26,8 @@ export const context = {
   ],
 };
 export const single = {
-  event: {
+  events: [
+  {
     title: 'QA Concert',
     titleQuote: 'QA Concert',
     venue: { name: 'QA Hall', address: null, online: false, quote: 'QA Hall' },
@@ -42,13 +44,15 @@ export const single = {
       exceptions: [],
     },
     reviewReasons: [],
+    url: null,
   },
+  ],
 };
 function example(name, text, change) {
   const input = structuredClone(context),
     result = structuredClone(single);
   input.documents[0].text = text;
-  change(result.event, input);
+  change(result.events[0], input);
   return { name, context: input, result };
 }
 export const examples = [

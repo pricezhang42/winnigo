@@ -16,7 +16,7 @@ const preview = (value = single, input = context, extra = {}) =>
 const example = (prefix) => structuredClone(examples.find((e) => e.name.startsWith(prefix)));
 const changed = (change) => {
   const value = structuredClone(single);
-  change(value.event, value);
+  change(value.events[0], value);
   return value;
 };
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -47,7 +47,7 @@ test('maps one event using source identity, provenance and an unknown end time, 
   assert.equal(item.occurrencesComplete, false);
   assert.equal(item.occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
   assert.equal(item.occurrences[0].endTimeKnown, false);
-  assert.equal(item.extraction.schemaVersion, '3');
+  assert.equal(item.extraction.schemaVersion, '4');
   assert.deepEqual(
     item.extraction.evidence.map((e) => e.quote),
     ['QA Concert', 'QA Hall', 'November 20, 2026 at 7 PM'],
@@ -57,8 +57,8 @@ test('maps one event using source identity, provenance and an unknown end time, 
 
 test('separates same-day showtimes, clips occurrences and records missing-year assumptions', async () => {
   const multiple = example('multiple');
-  multiple.result.event.schedule.dates.push({
-    ...multiple.result.event.schedule.dates[0],
+  multiple.result.events[0].schedule.dates.push({
+    ...multiple.result.events[0].schedule.dates[0],
     start: date(1, 1, 2027),
   });
   const [item] = (await preview(multiple.result, multiple.context)).items;
@@ -107,20 +107,22 @@ test('expands weekly and first-Friday rules with Winnipeg DST and shared identit
   // Listed dates without times confirm the timed rule instead of adding date-only cards.
   const listed = example('first Friday');
   listed.context.documents[0].text += ' November 6, 2026. December 4, 2026. December 12, 2026.';
-  listed.result.event.schedule.dates = ['November 6, 2026', 'December 4, 2026'].map((quote, i) => ({
-    start: date(11 + i, i ? 4 : 6),
-    end: null,
-    startTime: null,
-    endTime: null,
-    cancelled: false,
-    quote,
-  }));
+  listed.result.events[0].schedule.dates = ['November 6, 2026', 'December 4, 2026'].map(
+    (quote, i) => ({
+      start: date(11 + i, i ? 4 : 6),
+      end: null,
+      startTime: null,
+      endTime: null,
+      cancelled: false,
+      quote,
+    }),
+  );
   const [confirmed] = (await preview(listed.result, listed.context)).items;
   assert.deepEqual(
     confirmed.occurrences.map((o) => o.startAt),
     ['2026-11-07T01:00:00.000Z', '2026-12-05T01:00:00.000Z'],
   );
-  listed.result.event.schedule.dates.push({
+  listed.result.events[0].schedule.dates.push({
     start: date(12, 12),
     end: null,
     startTime: null,
@@ -133,7 +135,7 @@ test('expands weekly and first-Friday rules with Winnipeg DST and shared identit
     extra.occurrences.map((o) => o.startAt ?? o.start),
     ['2026-11-07T01:00:00.000Z', '2026-12-05T01:00:00.000Z', '2026-12-12'],
   );
-  monthly.result.event.schedule.recurrence[0].interval = 2;
+  monthly.result.events[0].schedule.recurrence[0].interval = 2;
   assert.equal(
     (await preview(monthly.result, monthly.context)).review[0].reason,
     'missing-recurrence-anchor',
@@ -150,7 +152,7 @@ test('uses one exhibition card per visiting day and retains closing-month precis
   assert.equal(new Set(item.occurrences.map((o) => o.start)).size, item.occurrences.length);
   assert.deepEqual(item.scheduleCoverage, []);
   assert.equal(item.visitingSchedule, undefined);
-  e.result.event.schedule.hours[0].weekly[0].endTime = null;
+  e.result.events[0].schedule.hours[0].weekly[0].endTime = null;
   assert.equal((await preview(e.result, e.context)).review[0].reason, 'unconfirmed-visiting-hours');
 });
 
@@ -190,7 +192,7 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
   for (const [result, reason] of [
     [await preview(conflict.result, conflict.context), 'source-facts-need-review'],
     [await preview(null), 'invalid-extraction'],
-    [await preview({ event: null }), 'no-event-candidates'],
+    [await preview({ events: [] }), 'no-event-candidates'],
     [await preview(single, context, { identifyEvent: () => null }), 'unapproved-event-url'],
     [
       await preview(
@@ -223,15 +225,17 @@ test('ambiguous, invalid and unauthorized facts produce partial results with no 
   );
 });
 
-test('withholds a context with more than one event before looking up its source identity', async () => {
+test('an event page maps only its first event', async () => {
   const multiple = changed((event, value) => {
-    value.events = [event, structuredClone(event)];
+    const other = structuredClone(event);
+    other.title = other.titleQuote = 'QA Hall';
+    value.events = [event, other];
   });
-  const result = await preview(multiple, context, {
-    identifyEvent: () => assert.fail('Only a single event can reach the source adapter'),
-  });
-  assert.deepEqual(result.items, []);
-  assert.equal(result.review[0].reason, 'invalid-extraction');
+  const result = await preview(multiple);
+  assert.deepEqual(
+    result.items.map((item) => item.title),
+    ['QA Concert'],
+  );
 });
 
 test('reuses verified parent and occurrence IDs and withholds a conflicting same-day change', async () => {
@@ -276,16 +280,16 @@ test('stores up to three published photos and keeps a stored cover on later runs
   const e = example('photo and ticket links');
   const [withoutPhotos] = (await preview(e.result, e.context)).items;
   assert.deepEqual(withoutPhotos.images, []);
-  assert.equal(withoutPhotos.ticketUrl, e.result.event.ticketUrl);
+  assert.equal(withoutPhotos.ticketUrl, e.result.events[0].ticketUrl);
   const [stored] = (await preview(e.result, e.context, { photos: photoPolicy() })).items;
   assert.deepEqual(stored.images, [photo]);
   assert.equal(stored.imageCaption, undefined);
-  assert.deepEqual(stored.sourceImages, [e.result.event.imageUrls[0]]);
+  assert.deepEqual(stored.sourceImages, [e.result.events[0].imageUrls[0]]);
   const knownListings = new Map([[stored.id, stored]]);
   const next = structuredClone(e);
   const newUrl = 'https://events.example.test/photos/other.png';
   next.context.documents[0].urls.push(newUrl);
-  next.result.event.imageUrls.unshift(newUrl);
+  next.result.events[0].imageUrls.unshift(newUrl);
   let read = false;
   const kept = await preview(next.result, next.context, {
     knownListings,
@@ -384,7 +388,7 @@ test('paid but unavailable events retain their price, status wording and source 
       (e) => e.fields.includes('/availability') && e.quote === 'No longer available',
     ),
   );
-  value.event.availability.quote = 'Invented sold-out notice';
+  value.events[0].availability.quote = 'Invented sold-out notice';
   const [unsupported] = (await preview(value, input)).items;
   assert.equal(unsupported.availability, 'unknown');
   assert.equal(unsupported.price, 125);
@@ -454,7 +458,7 @@ test('calendar enrichment accepts metadata despite schedule review and never inv
   calendarListing.runDates = { start: '2026-09-01', end: '2027-03-01', sourceUrl: context.pageUrl };
   const [verified] = (await preview(value, context, { calendarListing })).items;
   assert.deepEqual(verified.runDates, calendarListing.runDates);
-  value.event.reviewReasons = [{ field: 'title', reason: 'Unclear main event' }];
+  value.events[0].reviewReasons = [{ field: 'title', reason: 'Unclear main event' }];
   assert.equal((await preview(value, context, { calendarListing })).items.length, 0);
   calendarListing.occurrences = [];
   assert.equal(

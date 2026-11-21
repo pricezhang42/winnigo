@@ -1,4 +1,6 @@
 // Repository integration against a temporary PostgreSQL schema using synthetic extraction facts.
+// Must be the first import: the fixtures below are dated November 2026.
+import './check-event-extraction-clock.mjs';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { Pool } from 'pg';
@@ -26,7 +28,6 @@ import {
   configureExtractionRollout,
 } from '../lib/server/extraction-rollout.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
-import { runAiReview } from '../lib/server/ai-sources.mjs';
 import { serviceConfig } from './check-services.mjs';
 import { context, examples, single } from './fixtures/event-extraction.mjs';
 
@@ -346,9 +347,9 @@ async function checkCache() {
 async function checkTourismShadow() {
   let generations = 0;
   const model = structuredClone(single);
-  model.event.title = model.event.titleQuote = 'Test exhibition';
-  model.event.venue = { name: 'Test Hall', address: null, online: false, quote: 'Test Hall' };
-  model.event.schedule.dates = [
+  model.events[0].title = model.events[0].titleQuote = 'Test exhibition';
+  model.events[0].venue = { name: 'Test Hall', address: null, online: false, quote: 'Test Hall' };
+  model.events[0].schedule.dates = [
     {
       start: { year: 2026, month: 10, day: 28 },
       end: null,
@@ -378,7 +379,7 @@ async function checkTourismShadow() {
             generations++;
             return {
               status: 'completed',
-              text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+              text: JSON.stringify(input.pageUrl === tourismFestival ? { events: [] } : model),
               usage: {
                 inputTokens: 100,
                 outputTokens: 50,
@@ -455,9 +456,9 @@ async function checkTourismShadow() {
   assert.equal(fallback.status, 'ok');
   assert.equal(fallback.counts.extraction, undefined);
   // A cached write enriches known date-only rows without changing their identities.
-  model.event.schedule.dates[0].startTime = '12:00';
-  model.event.schedule.dates[0].endTime = '16:00';
-  model.event.schedule.dates[0].quote = 'October 28, 2026 at 12–4 PM';
+  model.events[0].schedule.dates[0].startTime = '12:00';
+  model.events[0].schedule.dates[0].endTime = '16:00';
+  model.events[0].schedule.dates[0].quote = 'October 28, 2026 at 12–4 PM';
   const writeConfig = { ...env, WINNIGO_EXTRACTION_SOURCES: 'tourism-winnipeg=write' };
   const writer = configureExtractionRollout(writeConfig, {
     createService: () =>
@@ -468,7 +469,7 @@ async function checkTourismShadow() {
           countInput: async () => 100,
           generate: async (input) => ({
             status: 'completed',
-            text: JSON.stringify(input.pageUrl === tourismFestival ? { event: null } : model),
+            text: JSON.stringify(input.pageUrl === tourismFestival ? { events: [] } : model),
             usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 0 },
           }),
         },
@@ -530,7 +531,7 @@ async function checkTourismShadow() {
     owner,
   );
   const annualModel = structuredClone(model);
-  annualModel.event.title = annualModel.event.titleQuote = 'Annual Festival';
+  annualModel.events[0].title = annualModel.events[0].titleQuote = 'Annual Festival';
   const lateDatesCollect = (source, checkedAt, options) =>
     collectTourism(source, checkedAt, {
       ...options,
@@ -571,7 +572,7 @@ async function checkTourismShadow() {
             maxMs: 10000,
             extractor: {
               extract: async (input) => ({
-                result: input.pageUrl === tourismFestival ? annualModel : { event: null },
+                result: input.pageUrl === tourismFestival ? annualModel : { events: [] },
               }),
             },
           }),
@@ -708,8 +709,8 @@ async function checkMuseumWrite() {
   // An AI date absent from the calendar cannot replace the verified calendar sessions.
   detailDay = 21;
   modelResult = structuredClone(single);
-  modelResult.event.schedule.dates[0].start.day = 21;
-  modelResult.event.schedule.dates[0].quote = 'November 21, 2026 at 7 PM';
+  modelResult.events[0].schedule.dates[0].start.day = 21;
+  modelResult.events[0].schedule.dates[0].quote = 'November 21, 2026 at 7 PM';
   const conflict = await run('museum-write-conflict');
   assert.equal(conflict.counts.extraction.imported, 0);
   assert.equal(conflict.counts.extraction.fallback, 1);
@@ -768,7 +769,7 @@ async function checkWrite() {
   const extractor = {
     async extract(context) {
       if (context.pageUrl === url('broken')) throw Error('provider unavailable');
-      return { result: context.pageUrl === url('withheld') ? { event: null } : single };
+      return { result: context.pageUrl === url('withheld') ? { events: [] } : single };
     },
   };
   const extraction = {
@@ -1109,96 +1110,6 @@ async function checkShadow() {
   );
 }
 
-// A configurable AI source saves review rows only: candidates and reference comparisons, cached
-// on repeat, with no listings written.
-async function checkAiReview() {
-  let generations = 0;
-  const service = () =>
-    createEventExtractionService(
-      {
-        model: 'qa-ai-source-model',
-        extractionVersion: 'ai-source-v1',
-        countInput: async () => 100,
-        async generate() {
-          generations++;
-          return {
-            status: 'completed',
-            text: JSON.stringify(single),
-            usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 0, reasoningTokens: 5 },
-          };
-        },
-      },
-      { inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxOutputTokens: 60, budgetUsd: 0.01 },
-    );
-  const origin = 'https://events.example.test';
-  const body =
-    '<main><h1>QA Concert</h1><p>QA Concert. November 20, 2026 at 7 PM. QA Hall.</p></main>';
-  const site = {
-    '/events/': '<a href="/events/one/">One</a><a href="/events/two/">Two</a>',
-    '/events/one/': body,
-    '/events/two/': body,
-  };
-  const fetchImpl = async (url) =>
-    new Response(site[new URL(url).pathname] ?? '', {
-      status: site[new URL(url).pathname] ? 200 : 404,
-    });
-  const definition = {
-    id: 'qa-ai-review',
-    name: 'QA AI review',
-    allowedOrigin: origin,
-    startUrls: [origin + '/events/'],
-    eventLinkPattern: '^/events/[a-z]+/$',
-    maxListPages: 1,
-    maxEventPages: 5,
-  };
-  const reference = [
-    {
-      id: 'qa-reference-one',
-      url: origin + '/events/one/',
-      title: 'QA Concert',
-      venue: 'Another Hall',
-      start: '2026-11-20',
-      startAt: '2026-11-21T01:00:00.000Z',
-    },
-  ];
-  const listingsBefore = (await pool.query('SELECT count(*)::int AS n FROM listings')).rows[0].n;
-  const review = () =>
-    runAiReview(definition, {
-      pool,
-      extractor: cacheEventExtraction(pool, service()),
-      checkedAt: context.checkedAt,
-      reference,
-      fetchImpl,
-      pauseMs: 0,
-    });
-  const first = await review();
-  assert.equal(first.counts.candidate, 1);
-  assert.equal(first.counts.differ, 1);
-  const rows = (
-    await pool.query(
-      "SELECT page_url, outcome, reason, run_id, raw FROM event_extraction_comparisons WHERE source='qa-ai-review' ORDER BY page_url",
-    )
-  ).rows;
-  assert.deepEqual(
-    rows.map((r) => [new URL(r.page_url).pathname, r.outcome, r.reason, r.run_id]),
-    [
-      ['/events/one/', 'differ', 'venue', null],
-      ['/events/two/', 'candidate', null, null],
-    ],
-  );
-  assert.deepEqual(rows[1].raw, single);
-  const second = await review();
-  assert.equal(second.counts.cacheHits, 2);
-  assert.equal(generations, 2);
-  assert.equal(
-    (await pool.query('SELECT count(*)::int AS n FROM listings')).rows[0].n,
-    listingsBefore,
-  );
-  console.log(
-    'Configurable AI sources save review candidates and reference comparisons, reuse the cache and write no listings.',
-  );
-}
-
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
   const migrations = new URL('../migrations/postgres/', import.meta.url);
@@ -1213,7 +1124,6 @@ try {
   await checkPageLimits();
   await checkDerivedEditorial();
   await checkHtmlWrites();
-  await checkAiReview();
 
   // Run the extraction preview through the existing import path in this temporary schema.
   const extractionSource = { id: 'qa-extracted-events', name: 'Synthetic event extraction' };
@@ -1221,7 +1131,7 @@ try {
   const extractionContext = extractionFixture.context;
   extractionContext.source = extractionSource.id;
   const extractionValue = extractionFixture.result;
-  const extractionEvent = extractionValue.event;
+  const extractionEvent = extractionValue.events[0];
   const imageUrl = 'https://events.example.test/photos/poster.png';
   extractionContext.documents[0].urls.push(imageUrl);
   extractionEvent.imageUrls = [imageUrl];
@@ -1292,7 +1202,7 @@ try {
   const before = await occurrenceRows();
   assert.equal(before.length, extracted.occurrences.length);
   const partialValue = structuredClone(extractionValue);
-  partialValue.event.schedule.dates.length = 1;
+  partialValue.events[0].schedule.dates.length = 1;
   for (let attempt = 0; attempt < 2; attempt++) {
     const partial = await prepareExtractedCollection(partialValue, extractionContext, {
       source: extractionSource,

@@ -40,8 +40,8 @@ test('a disputed date stays explicitly unknown when only an end is supported', (
 test('published open weekdays can be represented as timed weekly rules', () => {
   const input = structuredClone(context),
     value = structuredClone(single);
-  value.event.schedule.dates = [];
-  value.event.schedule.recurrence = [
+  value.events[0].schedule.dates = [];
+  value.events[0].schedule.recurrence = [
     {
       frequency: 'weekly',
       interval: 1,

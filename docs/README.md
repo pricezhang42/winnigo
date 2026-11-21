@@ -42,7 +42,6 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
 | [25 — Event extraction pilot](25-event-extraction-pilot.md) | Compare reviewed public pages with model and parser results. |
 | [26 — Event extraction rollout](26-event-extraction-rollout.md) | Enable shadow extraction per source, review comparisons and add a source. |
-| [29 — Configurable AI sources](29-configurable-ai-sources.md) | A settings entry plus a shared crawler; extracted events saved for review only. |
 | [30 — Event collection redesign](30-event-collection-redesign.md) | Plan: AI extraction from a source list, publish-then-review, fresh event schema, parser removal. |
 
 ## Fastest path to running it

@@ -1,8 +1,11 @@
 # Event extraction contract
 
-Context version 1, model output version 3. Version 2 (issue #44) removes fields the app knows
+Context version 2, model output version 4. Version 2 (issue #44) removes fields the app knows
 or derives and replaces per-field evidence paths with one quote per fact. Version 3 makes each
-model review reason name the fact it affects.
+model review reason name the fact it affects. Version 4 (issue #69) returns `{ events: [...] }`
+instead of `{ event | null }`: the context's `pageKind` is `event` (one event's own page; only
+the first returned event is kept) or `listing` (a page listing several events, each with an
+optional `url` to its own detail page, kept only when that link is on the page).
 
 Issue #34, step 1 of Epic #33. This is an intermediate public-event format, independent of
 the LLM provider and the database. Fetching, model calls and repository integration come later.

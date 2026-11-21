@@ -19,22 +19,31 @@ the parsers, the parser comparison or the legacy import is removed.
 ## Source list
 
 `config/sources.mjs` holds one entry per event source, reviewed in code like any other change
-to what the app fetches. It is a generalization of PR #68's `AI_SOURCES`.
+to what the app fetches. `lib/server/event-sources.mjs` validates it (`npm test` checks the
+checked-in list).
 
 | Field | Meaning |
 | --- | --- |
-| `id`, `name`, `notes` | Slug, label and free-form notes for the owner |
-| `status` | `active`, `paused`, or `blocked` (the site refuses automated requests; no workarounds) |
-| `schedule` | `daily`, `weekly` or `manual`; registered only with `WINNIGO_SCHEDULES=enabled` |
+| `id`, `name`, `notes` | Slug (the existing source id), label and notes for the owner |
+| `status` | `active`, `paused` (not collected; the notes say why), or `blocked` (the site refuses automated requests; never worked around) |
+| `schedule` | `manual` or a cron expression in America/Winnipeg; registered only with `WINNIGO_SCHEDULES=enabled` |
 | `defaultVenue` | Venue used when a page omits it |
-| `fetch.method` | `pages` (a list links to one page per event), `single-page` (one page lists many events), `browser` (pages built with JavaScript, fetched with a headless browser) |
-| `fetch.allowedOrigin`, `startUrls` | The only https origin fetched, and the list pages to start from |
-| `fetch.eventLinkPattern`, `nextLinkPattern` | Anchored patterns for event links and "next page" links |
+| `fetch.method` | `pages` (a list links to one page per event), `single-page` (each list page lists several events), `browser` (pages built with JavaScript; not supported yet) |
+| `fetch.allowedOrigin`, `startUrls` | The only https origin for list and event pages, and the list pages to start from. Start URLs may contain `{today}`, `{from}`, `{to}` (YYYY-MM-DD) or `{fromUnix}`, `{toUnix}` so calendar requests ask for the collection window only |
+| `fetch.eventLinkPattern` | Anchored pattern (path and query) for event links, found in anchors or as absolute URLs in the page text (calendar feeds, embedded JSON) |
+| `fetch.eventKeyPattern` | Optional pattern with one capture group: links with the same key are one event (for calendars that link every date) |
+| `fetch.nextLinkPattern` | A "next page" link (`rel=next`, a `next` class, or a Next / › label) must match it |
+| `fetch.pageLinkPattern` | Numbered pagination: every matching list link is read, up to `maxListPages` |
 | `fetch.selector`, `exclude` | Content region sent to the model |
-| `fetch.maxListPages`, `maxEventPages` | Limits |
-| `followOrganizer` | For listing sites: `{ when, allowedOrigins, eventPathPatterns, selectors }`. Organizer event pages on approved origins are fetched as supporting documents. |
+| `fetch.maxListPages`, `maxEventPages` | Limits (at most 20 and 100) |
+| `supportingPages` | `{ maxPerPage, sites: [{ origin, pattern, selector? }] }`: links on an event page to fetch with it, such as the organizer's own event page or the same site's series page listing every session |
+| `extraction` | Optional `maxInputTokens` / `maxOutputTokens` for sources with long pages or many events per page |
 
-The `sources` table holds only runtime state (last run, last error).
+Redirects are followed only while they stay on the source's approved origins.
+
+`npm run collect -- --list` prints the list; `npm run collect -- <id>` crawls a source without
+calling the model; `--extract` also extracts every page and writes the results to
+`.winnigo/collect/` (nothing is stored in the database until step 2).
 
 ## Pipeline
 
@@ -48,8 +57,9 @@ fetch (code) → prepare text → unchanged page? skip → AI extract → propos
 - A page's content hash replaces the extraction cache: an unchanged page is not sent again.
 - The extraction contract returns `events[]` instead of `event | null`, so `single-page` sources
   work.
-- When a source follows organizer pages, the organizer's dates and times win over the listing
-  site's. A listing range that starts on the day it was read is treated as a rolled-forward
+- Supporting pages are found by code on the event page (approved origin and path pattern) and
+  sent as extra documents in the same request. An organizer's dates and times win over the
+  listing site's. A listing range that starts on the day it was read is treated as a rolled-forward
   start, not a conflict.
 - Values the model cannot quote stay empty. Events with unresolved conflicts still publish, with
   the uncertainty shown, and are marked for review.
@@ -83,8 +93,8 @@ Migrations `0001`–`0012` are squashed into one baseline.
 Each step is one PR.
 
 1. **Source list and fetching.** `config/sources.mjs` and its validation; `pages` and
-   `single-page` fetchers; organizer following; the `events[]` contract and the organizer rule.
-   Folds in PR #68.
+   `single-page` fetchers; supporting pages; the `events[]` contract (`pageKind` in the context)
+   and the organizer rule. Folds in PR #68, without its review-mode table.
 2. **Schema and review.** Fresh baseline migration; repository and API read path for `events`;
    review list in the admin screen; `npm run collect -- <source>`.
 3. **One side-by-side run.** Every source collected by both paths once; the owner reviews the
