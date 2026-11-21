@@ -66,11 +66,43 @@ fetch (code) → prepare text → unchanged page? skip → AI extract → propos
 - An event that disappears from its source page is marked `gone` (hidden from discovery), never
   deleted.
 
+## Storage and discovery (step 2)
+
+Migration `0012_events.sql` adds the tables below next to the existing ones; the squash into one
+baseline waits for step 4, once the parser tables can go, so local databases are reset once.
+
+`npm run collect -- <id> --publish` crawls, extracts and publishes one run:
+
+- A page whose prepared content, model and extraction version are unchanged reuses its stored
+  output (`source_pages`), so an unchanged source costs nothing.
+- Events are matched to stored ones by identity (`source_key`): the source's event key, the
+  event's own URL, or listing page plus title and venue. Entries for the same event on several
+  pages share their sessions.
+- Sessions inside the collection window are replaced; earlier sessions are kept as history.
+- An event missing from a page read in full (or from a complete crawl) is marked `gone`; failed
+  or skipped pages protect their events. An event whose sessions are all over is retired without
+  a review entry.
+
+Discovery projects events into the same listing document the UI already uses (one card per event
+with its next session; every session in `occurrences`; owner edits applied; source images held
+back until they are copied privately). A source switches over on its first publish: its parser
+listings are then left out of discovery, so the two paths never show the same event twice.
+
 ## Review list
 
-The admin screen lists every published change with its kind (`new`, `changed`, `gone`), a field
-and session diff, and the page quote for each value. For each change the owner can mark it
-reviewed, revert it, or edit the event. Edits are stored as owner edits and survive later runs.
+The admin page's "Collected event changes" section lists every published change with its kind
+(`new`, `changed`, `gone`), the field and session differences and any model review notes. For
+each change the owner (or an admin) can:
+
+- **Looks right**: mark it checked.
+- **Undo**: hide a new event; restore a changed event's previous values as owner edits and its
+  previous sessions (later runs then leave those sessions alone until the owner lets collection
+  update them again); keep a vanished event listed.
+- **Correct details** or **Hide event**: owner edits survive later runs; typing the collected
+  value back removes a correction.
+
+The API is `/api/event-changes` (same-origin, signed-in owner or admin). `npm run check:events`
+covers publishing, reuse, merging, undo, edits and the gone rules in a temporary schema.
 
 ## Tables
 

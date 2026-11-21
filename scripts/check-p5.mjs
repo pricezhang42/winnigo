@@ -108,6 +108,9 @@ try {
     '0007_typed_occurrence_schedule.sql',
     '0008_exhibition_visiting_cards.sql',
     '0009_typed_listing_fields.sql',
+    '0010_event_extraction_cache.sql',
+    '0011_event_extraction_comparisons.sql',
+    '0012_events.sql',
   ])
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
   boss = bossFor({ migrate: true });

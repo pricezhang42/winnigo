@@ -1,5 +1,6 @@
 'use client';
 import SocialOutingForm from '@/components/social-outing-form';
+import EventReview from '@/components/event-review';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, ExternalLink, Search, EyeOff, Eye } from 'lucide-react';
@@ -191,6 +192,7 @@ export default function Admin() {
       )}
       <SocialOutingForm onAdded={load} />
       <RunHistory version={runsVersion} onAvailable={setCollectionAvailable} onSettled={load} />
+      <EventReview />
       <div className="admin-sources">
         {reports.map((report) => (
           <SourceStatus key={report.id} report={report} />
