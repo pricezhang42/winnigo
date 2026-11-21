@@ -199,3 +199,50 @@ test('all HTML event sources accept rollout modes while native structured feeds 
       /not available/,
     );
 });
+
+test('reference comparison matches sessions by local day and ignores values the reference lacks', () => {
+  const parser = {
+    title: 'Astronomy Night',
+    venue: 'FortWhyte Alive',
+    price: null,
+    occurrences: [{ start: '2026-11-05' }, { start: '2026-12-03' }],
+  };
+  const candidate = {
+    title: 'Astronomy Night',
+    venue: 'FortWhyte Alive',
+    price: 0,
+    runDates: { start: '2026-11-18', end: '2027-03-01' },
+    // 18:00 in Winnipeg on December 3 is already December 4 in UTC.
+    occurrences: [{ start: '2026-12-03', startAt: '2026-12-04T00:00:00.000Z' }],
+  };
+  assert.deepEqual(compareExtraction(candidate, [parser], { reference: true }), []);
+  // Shadow comparison (the default) is unchanged.
+  assert.deepEqual(
+    compareExtraction(candidate, [parser]).map((d) => d.field),
+    ['occurrences', 'runDates', 'price'],
+  );
+  const extraDay = {
+    ...candidate,
+    occurrences: [
+      ...candidate.occurrences,
+      { start: '2026-12-10', startAt: '2026-12-11T00:00:00.000Z' },
+    ],
+  };
+  assert.deepEqual(compareExtraction(extraDay, [parser], { reference: true })[0], {
+    field: 'occurrences',
+    parser: ['2026-11-05', '2026-12-03'],
+    extraction: ['2026-12-11T00:00:00.000Z'],
+  });
+  // A reference with times disagrees with a different time on the same day.
+  const timed = {
+    ...parser,
+    occurrences: [{ start: '2026-12-03', startAt: '2026-12-04T01:00:00.000Z' }],
+  };
+  assert.equal(compareExtraction(candidate, [timed], { reference: true })[0].field, 'occurrences');
+  // Run dates and prices count when the reference has them.
+  const priced = { ...parser, price: 10, runDates: { start: '2026-11-01', end: '2027-03-01' } };
+  assert.deepEqual(
+    compareExtraction(candidate, [priced], { reference: true }).map((d) => d.field),
+    ['runDates', 'price'],
+  );
+});
