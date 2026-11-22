@@ -3,6 +3,8 @@ import test from 'node:test';
 import { EVENT_SOURCES } from '../../config/sources.mjs';
 import { parseEventExtraction } from '../../lib/contracts/event-extraction.mjs';
 import {
+  cityMatch,
+  eventKey,
   crawlSource,
   extractPages,
   sourceUrl,
@@ -308,4 +310,36 @@ test('numbered pagination and dated start URLs read the window', async () => {
   assert.equal(crawl.listPagesRead, 3);
   assert.equal(requested.filter((u) => u.includes('page:3')).length, 1);
   assert.equal(crawl.discovered, 1);
+});
+
+test('city filter: named city or postal area is in, another town is out, otherwise unknown', () => {
+  const city = { name: 'Winnipeg', postalPrefixes: ['R2', 'R3'] };
+  const place = (address, venue = 'Hall', quote = '') => ({
+    address,
+    venue,
+    evidence: quote ? [{ fields: ['/venue'], quote }] : [],
+  });
+  assert.equal(cityMatch(city, place('555 Main St, Winnipeg, Manitoba R3B 1C3')), 'in');
+  assert.equal(cityMatch(city, place('525 Wardlaw Ave.', 'Hall', 'Hall, Winnipeg R3L 0L9')), 'in');
+  assert.equal(cityMatch(city, place('10 Centre St, Gimli, Manitoba R0C 1B1')), 'out');
+  assert.equal(cityMatch(city, place('5353 Portage Avenue, Headingley, Manitoba')), 'out');
+  assert.equal(cityMatch(city, place('1175 18th St', 'Curling Club')), 'unknown');
+  assert.equal(cityMatch(city, { ...place('1175 18th St'), locality: 'Brandon' }), 'out');
+  assert.equal(cityMatch(city, { ...place('611 Main Street'), locality: 'Winnipeg' }), 'in');
+  assert.throws(() => validateSource(variant((d) => (d.city = { name: 'Winnipeg' }))));
+  assert.ok(validateSource(variant((d) => (d.city = city))));
+});
+
+test('listing entries that link each date of one event share its key', () => {
+  const config = validateSource(base);
+  const entry = (date) =>
+    eventKey(config, {
+      url: `${origin}/event/42/${date}`,
+      pageUrl: origin + '/events',
+      kind: 'listing',
+      title: 'QA',
+      venue: 'Hall',
+    });
+  assert.equal(entry('2026-11-21'), entry('2026-12-05'));
+  assert.equal(entry('2026-11-21'), 'key:42');
 });

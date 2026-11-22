@@ -88,6 +88,26 @@ with its next session; every session in `occurrences`; owner edits applied; sour
 back until they are copied privately). A source switches over on its first publish: its parser
 listings are then left out of discovery, so the two paths never show the same event twice.
 
+## Side-by-side comparison (step 3)
+
+On 2026-11-21 every active source was collected once by its parser (in memory) and once by the AI
+path (nothing published), and every disagreement from today to the end of next month went on a
+review page for the owner's verdicts. Canada Life Centre agreed fully. The differences led to six
+changes:
+
+| Finding | Change |
+| --- | --- |
+| FortWhyte event pages show one date each (often an earlier one) and its series pages load sessions with JavaScript | FortWhyte is read from its list view as listing pages; links to each date of an event share its key |
+| Zoo Lights and TROLLS live outside `/events/event/<n>` | Assiniboine Park's event-link pattern includes `/events/zoolights` and `/trolls` |
+| 26 Manitoba Music pages have the generic heading "Manitoba Live Music Event" | A page with a generic heading but its own event details is still that event, named by its title field or performers |
+| Travel Manitoba lists events across the province | Source option `city`: an event whose address, venue or event page's structured address (`addressLocality`) names another town or postal area is dropped (and never reported as gone); one whose place is not stated stays, flagged for review |
+| The same page gave different answers between runs (free swim youth swims, a Museum series) | Listing entries with different names at one venue are separate events; every session a supporting calendar shows is listed |
+| The model took "Show: 8:00 PM" from the description over the page's Date field (owner verdicts: the Date field is right) | An event's own date/time field gives the start time; description times do not replace it |
+
+Tourism Winnipeg timed out under sustained crawling during the run (both paths lost most pages)
+and is compared from the 2026-11-20 review instead. Pages that need JavaScript (Royal MTC's
+schedules) are still unreadable; corrections go through the review list.
+
 ## Review list
 
 The admin page's "Collected event changes" section lists every published change with its kind
