@@ -343,3 +343,23 @@ test('listing entries that link each date of one event share its key', () => {
   assert.equal(entry('2026-11-21'), entry('2026-12-05'));
   assert.equal(entry('2026-11-21'), 'key:42');
 });
+
+test("an event page's own series page wins over other series it links", async () => {
+  const series = variant((d) => {
+    d.supportingPages = { maxPerPage: 1, sites: [{ origin, pattern: '^/series/[^/]+/$' }] };
+  });
+  const { requested, fetchImpl } = site({
+    [origin + '/events']: '<a href="/event/1/worlds-of-ice">A</a>',
+    [origin + '/event/1/worlds-of-ice']: eventHtml(
+      '<a href="/series/legends-of-the-sky/">« Previous show</a>' +
+        '<a href="/series/worlds-of-ice-planetarium/">All dates</a>',
+    ),
+    [origin + '/series/worlds-of-ice-planetarium/']: '<main>November 24 @ 3:00 pm</main>',
+  });
+  const crawl = await crawlSource(series, { fetchImpl, pauseMs: 0 });
+  assert.deepEqual(
+    crawl.pages[0].supporting.map((s) => s.url),
+    [origin + '/series/worlds-of-ice-planetarium/'],
+  );
+  assert.ok(!requested.some((u) => u.includes('legends')));
+});
