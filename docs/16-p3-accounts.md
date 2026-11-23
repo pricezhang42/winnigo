@@ -50,7 +50,7 @@ These are trusted filesystem/operator operations, not public HTTP endpoints. Dis
 
 ## Email and Google configuration
 
-Email/password login requires verified email. Verification, reset and confirmed account deletion are implemented. Passwords require at least 12 characters; reset revokes existing sessions. Logout, listing/revoking sessions and signing out other devices are available at `/account`.
+Email/password login requires verified email. Verification, reset and confirmed account deletion are implemented. Passwords require at least 8 characters; reset revokes existing sessions. Logout, listing/revoking sessions and signing out other devices are available at `/account`.
 
 For actual delivery, configure `WINNIGO_MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_PORT` (465 or the provider's STARTTLS port), `SMTP_FROM`, and optional `SMTP_USER` / `SMTP_PASSWORD`. TLS certificate checks remain enabled. The file outbox refuses non-loopback hosts/origins and is never served by an API. Configure SMTP before enabling invitations on a hosted app. Delivery failures do not create a usable unverified login; provider error detail is not returned to clients.
 

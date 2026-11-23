@@ -1,23 +1,21 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 type Mode = 'login' | 'signup' | 'reset';
 
 // Better Auth endpoint and wording for each form mode.
-const MODES: Record<Mode, { endpoint: string; heading: string; submit: string; done?: string }> = {
+const MODES: Record<Mode, { endpoint: string; heading: string; submit: string }> = {
   login: { endpoint: 'sign-in/email', heading: 'Welcome back', submit: 'Sign in' },
   signup: {
     endpoint: 'sign-up/email',
     heading: 'Accept your invitation',
     submit: 'Create account',
-    done: 'Check your email to verify your account before signing in.',
   },
   reset: {
     endpoint: 'request-password-reset',
     heading: 'Reset your password',
     submit: 'Send reset link',
-    done: 'If that account exists, a password reset link has been sent.',
   },
 };
 
@@ -39,6 +37,17 @@ export default function AccountLogin({
 }) {
   const [mode, setMode] = useState<Mode>('login');
   const [message, setMessage] = useState('');
+  // After a sign-up or reset request: the address the link went to.
+  const [sentTo, setSentTo] = useState<{ email: string; kind: Mode } | null>(null);
+
+  // The verification link returns here with ?verified=1.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (new URLSearchParams(window.location.search).has('verified'))
+        setMessage('Your email is verified. You can sign in now.');
+    });
+    return () => clearTimeout(timer);
+  }, []);
   const [busy, setBusy] = useState(false);
   const copy =
     mode === 'signup' && openSignup
@@ -80,14 +89,46 @@ export default function AccountLogin({
     const result = await request(copy.endpoint, body);
     if (!result) return;
     if (mode === 'login') window.location.assign('/');
-    else setMessage(copy.done!);
+    else setSentTo({ email, kind: mode });
   }
 
   /** Switches to `target`, or back to sign-in if already there. */
   function toggleMode(target: Mode) {
     setMode(mode === target ? 'login' : target);
     setMessage('');
+    setSentTo(null);
   }
+
+  // The same answer whether or not the address already has an account, so the page never
+  // reveals which addresses are registered.
+  if (sentTo)
+    return (
+      <main className="account-shell">
+        <Link className="brand" href="/">
+          winnigo.
+        </Link>
+        <h1>Check your inbox</h1>
+        <p role="status">
+          {sentTo.kind === 'signup' ? (
+            <>
+              We sent a link to <strong>{sentTo.email}</strong> to verify your address. Open it,
+              then sign in here.
+            </>
+          ) : (
+            <>
+              If an account uses <strong>{sentTo.email}</strong>, we sent it a link to choose a new
+              password.
+            </>
+          )}
+        </p>
+        <p className="account-terms">
+          Nothing after a few minutes? Check your spam folder.{' '}
+          {sentTo.kind === 'signup' &&
+            'If you already have an account with this address, sign in instead, with “Continue with Google” if you created it with Google.'}
+        </p>
+        <button onClick={() => toggleMode('login')}>Back to sign in</button>
+      </main>
+    );
   return (
     <main className="account-shell">
       <Link className="brand" href="/">
@@ -120,14 +161,16 @@ export default function AccountLogin({
               name="password"
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               required
-              minLength={mode === 'signup' ? 12 : 1}
+              minLength={mode === 'signup' ? 8 : 1}
               maxLength={128}
             />
           </label>
         )}
+        {mode === 'signup' && <small>At least 8 characters.</small>}
         <button disabled={busy || (!mail && mode !== 'login')} type="submit">
           {busy ? 'Please wait…' : copy.submit}
         </button>
+        {message && <p role="status">{message}</p>}
       </form>
       {google && (mode === 'login' || (mode === 'signup' && openSignup)) && (
         <button
@@ -167,7 +210,6 @@ export default function AccountLogin({
         </p>
       )}
       {!mail && <p>Email verification and reset are awaiting email delivery configuration.</p>}
-      {message && <p role="status">{message}</p>}
     </main>
   );
 }

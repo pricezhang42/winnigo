@@ -337,6 +337,16 @@ try {
     env: { ...env, WINNIGO_SIGNUP: 'open' },
     sendMail: async (m) => mail.push(m),
   });
+  await pool.query('TRUNCATE auth_rate_limit');
+  // Passwords need at least 8 characters.
+  const short = { ...credentials, email: 'short@example.test', password: 'Abc1234' };
+  assert.equal((await call('sign-up/email', short)).status, 400);
+  assert.equal(
+    (await call('sign-up/email', { ...short, password: 'Abc12345' })).status,
+    200,
+    'eight characters are enough',
+  );
+  await pool.query('TRUNCATE auth_rate_limit');
   const stranger = { ...credentials, email: 'stranger@example.test', role: 'owner' };
   reply = await call('sign-up/email', stranger);
   assert.equal(reply.status, 200, await reply.clone().text());

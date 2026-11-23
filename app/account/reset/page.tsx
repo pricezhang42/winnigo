@@ -37,7 +37,7 @@ export default function ResetPassword() {
             type="password"
             name="password"
             required
-            minLength={12}
+            minLength={8}
             maxLength={128}
             autoComplete="new-password"
           />
