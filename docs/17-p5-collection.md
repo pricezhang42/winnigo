@@ -17,7 +17,9 @@ Facebook schedule is ever active.
   supervises leases and runs the schedule clock. `npm run worker:check` verifies storage and the
   queue and exits.
 - **Schedules** ([`lib/server/job-queue.mjs`](../lib/server/job-queue.mjs)), America/Winnipeg:
-  public sources daily at 06:00; free swim at 06:00 and 15:00. They are registered only when
+  each active source's `schedule` in the source list (`config/sources.mjs`; places in
+  `lib/connectors.mjs`). Currently The Forks, Assiniboine Park, Travel Manitoba and The Forks
+  places daily at 06:00; free swim at 06:00 and 15:00. They are registered only when
   `WINNIGO_SCHEDULES=enabled`; otherwise the worker removes them and runs manual refreshes only, so
   development never contacts live sites unasked. After downtime, pg-boss's `missed: 'once'` policy
   sends one catch-up job per source rather than replaying every missed slot.

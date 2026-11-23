@@ -13,7 +13,7 @@ import { applyAction } from '../lib/server/actions.mjs';
 import { ensureSource, runCollection } from '../lib/server/collection.mjs';
 import {
   COLLECTION_QUEUE,
-  SCHEDULES,
+  scheduledSources,
   TIMEZONE,
   createBoss,
   enqueueCollection,
@@ -69,7 +69,8 @@ const report = async (id) =>
   (await pool.query('SELECT report FROM sources WHERE id = $1', [id])).rows[0]?.report;
 const send = (sourceId, options = {}) =>
   boss.send(COLLECTION_QUEUE, { sourceId, trigger: 'schedule' }, options);
-const active = Object.keys(SCHEDULES).filter((id) => id !== 'winnipeg-rotary');
+const active = scheduledSources().map((source) => source.id);
+const cron = Object.fromEntries(scheduledSources().map((source) => [source.id, source.schedule]));
 
 const checks = [];
 let boss;
@@ -203,9 +204,19 @@ try {
 
   // 9. Schedules: one per active source in Winnipeg time, correct across daylight-saving changes,
   //     and removed when schedules are disabled.
+  // A schedule left by an earlier version for a source that is now paused is removed.
+  await boss.schedule(
+    COLLECTION_QUEUE,
+    '0 6 * * *',
+    { sourceId: 'winnipeg-rotary' },
+    {
+      tz: TIMEZONE,
+      key: 'winnipeg-rotary',
+    },
+  );
   await syncSchedules(boss, { WINNIGO_SCHEDULES: 'enabled' });
   const schedules = await boss.getSchedules(COLLECTION_QUEUE);
-  // Paused sources (Rotary) keep their cron entry but are not scheduled.
+  // Only active sources with a cron schedule in the source list are registered.
   assert.deepEqual(schedules.map((schedule) => schedule.key).sort(), [...active].sort());
   assert.ok(schedules.every((schedule) => schedule.timezone === TIMEZONE));
   // Event sources keep their longer lease when a schedule sends the job.
@@ -216,21 +227,23 @@ try {
       .previewSchedule(cron, { tz: TIMEZONE, from: new Date(from), count: 4 })
       .map((d) => d.toISOString());
   // Fall back (Nov 1, 2026): 06:00 CDT = 11:00Z before, 06:00 CST = 12:00Z after.
-  assert.deepEqual(preview(SCHEDULES.forks, '2026-10-31T00:00:00Z').slice(0, 2), [
+  assert.deepEqual(preview(cron.forks, '2026-10-31T00:00:00Z').slice(0, 2), [
     '2026-10-31T11:00:00.000Z',
     '2026-11-01T12:00:00.000Z',
   ]);
   // Spring forward (Mar 14, 2027): 06:00 CST = 12:00Z before, 06:00 CDT = 11:00Z after.
-  assert.deepEqual(preview(SCHEDULES.forks, '2027-03-13T00:00:00Z').slice(0, 2), [
+  assert.deepEqual(preview(cron.forks, '2027-03-13T00:00:00Z').slice(0, 2), [
     '2027-03-13T12:00:00.000Z',
     '2027-03-14T11:00:00.000Z',
   ]);
   // Free swim runs at 06:00 and 15:00 local.
-  assert.deepEqual(preview(SCHEDULES['winnipeg-free-swim'], '2026-10-20T00:00:00Z').slice(0, 2), [
+  assert.deepEqual(preview(cron['winnipeg-free-swim'], '2026-10-20T00:00:00Z').slice(0, 2), [
     '2026-10-20T11:00:00.000Z',
     '2026-10-20T20:00:00.000Z',
   ]);
-  checks.push('Schedules registered per source in America/Winnipeg, correct across DST');
+  checks.push(
+    'Schedules come from the source list in America/Winnipeg, correct across DST; stale ones removed',
+  );
 
   // 10. After three days of downtime the scheduler sends one catch-up job per source, not three.
   await pool.query(`DELETE FROM ${jobsSchema}.job WHERE name = $1`, [COLLECTION_QUEUE]);

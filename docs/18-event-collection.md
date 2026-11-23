@@ -209,8 +209,11 @@ npm run collect -- <id> --publish         # crawl, extract and publish one run
 
 The worker (`npm run worker`) runs the same job for queued refreshes. "Refresh sources" in the
 admin page queues every active source with a schedule; the API also accepts one source. Paused
-and blocked sources are refused. Schedules are registered only with `WINNIGO_SCHEDULES=enabled`
-(still the fixed table in `lib/server/job-queue.mjs` until per-source schedules replace it). A
+and blocked sources are refused. Each active source's `schedule` (a cron expression in America/Winnipeg; places use the entry in
+`lib/connectors.mjs`) is registered only with `WINNIGO_SCHEDULES=enabled`; `manual`, paused
+and blocked sources are never scheduled, and schedules left by a source that changed are removed
+when the worker starts. A unit test pins the scheduled set and times, so changing a schedule is a
+reviewed change. A
 network failure before anything was read is retried by the queue; any other failure records an
 error and keeps what the source had.
 
