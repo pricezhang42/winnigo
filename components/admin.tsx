@@ -43,17 +43,20 @@ type Run = {
   status: string;
   trigger: string | null;
   attempts: number;
+  // Places runs count listings; event runs count published changes (docs/30).
   counts: Partial<
     Record<
       | 'found'
       | 'added'
       | 'updated'
-      | 'unchanged'
-      | 'cancelled'
-      | 'merged'
-      | 'rejected'
       | 'pages'
-      | 'eventPages',
+      | 'events'
+      | 'new'
+      | 'changed'
+      | 'gone'
+      | 'reused'
+      | 'failed'
+      | 'estimatedCostUsd',
       number
     >
   >;
@@ -345,17 +348,25 @@ const formatTime = (value: string) =>
   new Date(value).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' });
 
 function summarizeCounts(counts: Run['counts']) {
+  if (counts.events !== undefined) {
+    const parts = [
+      `${counts.events} events`,
+      `${counts.new || 0} new`,
+      `${counts.changed || 0} changed`,
+    ];
+    if (counts.gone) parts.push(`${counts.gone} gone`);
+    if (counts.pages) parts.push(`${counts.pages} pages (${counts.reused || 0} unchanged)`);
+    if (counts.failed) parts.push(`${counts.failed} failed`);
+    if (counts.estimatedCostUsd) parts.push(`US$${counts.estimatedCostUsd.toFixed(3)}`);
+    return parts.join(' · ');
+  }
   if (counts.found === undefined) return '';
   const parts = [
     `${counts.found} found`,
     `${counts.added || 0} new`,
     `${counts.updated || 0} changed`,
   ];
-  if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
-  if (counts.merged) parts.push(`${counts.merged} duplicates merged`);
-  if (counts.rejected) parts.push(`${counts.rejected} rejected`);
   if (counts.pages && counts.pages > 1) parts.push(`${counts.pages} pages`);
-  if (counts.eventPages) parts.push(`${counts.eventPages} event pages`);
   return parts.join(' · ');
 }
 

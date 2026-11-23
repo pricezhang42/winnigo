@@ -3,7 +3,6 @@ node_modules/
 .next/
 vendor/
 legacy/
-spikes/
 drizzle/
 examples/
 components/ui/

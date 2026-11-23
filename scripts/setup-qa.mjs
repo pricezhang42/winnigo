@@ -19,8 +19,6 @@ try {
 url.pathname = '/' + name;
 const overrides = {
   DATABASE_URL: url.href,
-  WINNIGO_REPOSITORY: 'postgres',
-  WINNIGO_STORAGE: 's3',
   S3_PREFIX: 'qa-photos/',
   WINNIGO_SEED_PROFILE: 'qa',
   WINNIGO_AUTH_MODE: 'basic',

@@ -30,8 +30,6 @@ services:
     image: winnigo-node:p3
     env_file: .env.local
     environment:
-      WINNIGO_REPOSITORY: postgres
-      WINNIGO_STORAGE: s3
       DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
       S3_ENDPOINT: http://storage:8333
       WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
@@ -53,8 +51,6 @@ services:
     image: winnigo-node:p3
     env_file: .env.local
     environment:
-      WINNIGO_REPOSITORY: postgres
-      WINNIGO_STORAGE: s3
       DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
       S3_ENDPOINT: http://storage:8333
       WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}

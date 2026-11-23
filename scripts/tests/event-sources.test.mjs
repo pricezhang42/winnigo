@@ -58,7 +58,7 @@ test('definitions with an unsafe or incomplete scope are refused', () => {
     (d) => (d.fetch.eventLinkPattern = '/event/'),
     (d) => delete d.fetch.eventLinkPattern,
     (d) => (d.fetch.eventKeyPattern = '^/event/\\d+'),
-    (d) => (d.fetch.maxEventPages = 101),
+    (d) => (d.fetch.maxEventPages = 201),
     (d) => (d.fetch.startUrls = ['https://other.example.test/events']),
     (d) => (d.supportingPages.sites[0].pattern = 'shows'),
     (d) => (d.extraction = { maxOutputTokens: 100000 }),

@@ -2,7 +2,7 @@
 // grants, collector credentials and rate limits in a temporary PostgreSQL schema.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { serviceConfig } from './check-services.mjs';
 import { createAccounts } from '../lib/server/accounts.mjs';
@@ -27,8 +27,6 @@ const origin = 'http://127.0.0.1:5193',
   env = {
     ...process.env,
     WINNIGO_AUTH_MODE: 'session',
-    WINNIGO_REPOSITORY: 'postgres',
-    WINNIGO_STORAGE: 's3',
     WINNIGO_ORIGIN: origin,
     BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
   };
@@ -59,20 +57,9 @@ const cookieOf = (reply) =>
     .join('; ');
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
-  for (const migration of [
-    '0001_foundation.sql',
-    '0002_discovery.sql',
-    '0003_accounts.sql',
-    '0004_restrict_community.sql',
-    '0005_collection_runs.sql',
-    '0006_event_occurrences.sql',
-    '0007_typed_occurrence_schedule.sql',
-    '0008_exhibition_visiting_cards.sql',
-    '0009_typed_listing_fields.sql',
-    '0010_event_extraction_cache.sql',
-    '0011_event_extraction_comparisons.sql',
-    '0012_events.sql',
-  ])
+  for (const migration of (await readdir('migrations/postgres'))
+    .filter((f) => f.endsWith('.sql'))
+    .sort())
     await pool.query(await readFile('migrations/postgres/' + migration, 'utf8'));
   auth = createAccounts({ pool, env, sendMail: async (m) => mail.push(m) });
   assert.ok([200, 403].includes((await call('sign-up/email', credentials)).status));
@@ -175,44 +162,29 @@ try {
   assert.equal((await repo.search({ principal: member })).total, 2);
   await pool.query('DELETE FROM source_grants WHERE user_id=$1', [userId]);
   assert.equal((await repo.search({ principal: { ...member, role: 'admin' } })).total, 1);
-  // A grant to one restricted session must not reveal sibling dates or coverage.
-  const shared = {
-    ...make('private-program', 'public-source').payload,
-    sourceVisibility: 'private',
-    recurring: true,
-    occurrenceMode: 'sessions',
-    occurrences: [
-      { id: 'private-program-a', start: '2099-06-01', end: '2099-06-01', time: '10am' },
-      { id: 'private-program-b', start: '2099-06-02', end: '2099-06-02', time: '11am' },
-    ],
-    scheduleCoverage: [
-      { from: '2099-06-01', to: '2099-06-30', complete: true, checkedAt: new Date().toISOString() },
-    ],
-  };
-  await repo.applySourceCollection('public-source', [shared], {
-    checkedAt: new Date().toISOString(),
-    preserveHistory: true,
-  });
+  // Collected events follow the same access rules: a restricted event needs a grant.
+  await pool.query("INSERT INTO sources(id) VALUES('private-events')");
   await pool.query(
-    "INSERT INTO occurrence_grants VALUES($1,'private-program','private-program-a')",
-    [userId],
+    `INSERT INTO events(id,source,source_key,page_url,event_url,title,category,visibility,checked_at)
+     VALUES('private-program','private-events','key:1','https://example.test/p',
+       'https://example.test/p','Private program','Experiences','restricted',now())`,
   );
-  const granted = await repo.search({ principal: member, query: 'private-program' });
-  assert.deepEqual(
-    granted.items.map((i) => i.id),
-    ['private-program-a'],
+  await pool.query(
+    "INSERT INTO event_sessions VALUES('private-program','a','2099-06-01','2099-06-01')",
   );
-  assert.equal(granted.items[0].occurrences.length, 1);
-  assert.equal(granted.items[0].scheduleCoverage.length, 0);
-  assert.equal(await repo.detail('private-program-b', { principal: member }), null);
+  assert.equal((await repo.search({ principal: member, query: 'Private program' })).total, 0);
+  assert.equal(await repo.detail('private-program', { principal: member }), null);
+  assert.equal((await repo.search({ principal: owner, query: 'Private program' })).total, 1);
+  await pool.query("INSERT INTO source_grants VALUES($1,'private-events')", [userId]);
   assert.equal(
-    (await repo.availability('private-program-a', '2099-06-02', { principal: member })).status,
-    'unknown',
+    (await repo.availability('private-program', '2099-06-01', { principal: member })).status,
+    'available',
   );
   assert.equal(
-    (await repo.search({ principal: otherPrincipal, query: 'private-program' })).total,
+    (await repo.search({ principal: otherPrincipal, query: 'Private program' })).total,
     0,
   );
+  await pool.query('DELETE FROM source_grants WHERE user_id=$1', [userId]);
   const token = await issueCredential({ source: 'facebook', label: 'QA' }, pool);
   assert.ok(
     (await serviceCredential(new Headers({ 'x-winnigo-collector-key': token.token }), pool)).id,

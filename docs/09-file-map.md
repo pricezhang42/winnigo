@@ -39,9 +39,8 @@ Annotated map of the meaningful files. Ignore `node_modules/`, `dist/`, `.next/`
 
 | File | Purpose |
 | --- | --- |
-| [`lib/store.ts`](../lib/store.ts) | **Core.** D1 access: `initialize`, `refreshSources`, `getCollection`, `database`. |
-| [`lib/connectors.mjs`](../lib/connectors.mjs) | Venue source registry + HTML parsers + `localDay`/`dedupe`/`clean`. |
-| [`lib/free-swim.mjs`](../lib/free-swim.mjs) | City free-swim parser + pool-closure application. |
+| [`config/sources.mjs`](../config/sources.mjs) | Event source list read by AI extraction ([18](18-event-collection.md)). |
+| [`lib/connectors.mjs`](../lib/connectors.mjs) | Text/date helpers (`clean`, `summarize`, `localDay`) and The Forks places parser. |
 | [`lib/social.mjs`](../lib/social.mjs) | Community sources + `normalizeSocial` + `normalizeHikingBatch`. |
 | [`lib/auth-policy.mjs`](../lib/auth-policy.mjs) / [`lib/auth.ts`](../lib/auth.ts) | Access gate + owner identity (see above). |
 | [`lib/trail-locations.ts`](../lib/trail-locations.ts) | `resolveMapLocation` + `collectionLabel` (derived read-time fields). |

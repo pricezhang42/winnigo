@@ -17,15 +17,13 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Setup creates ignored `.env.local` configuration; it preserves an existing file. For an existing P1 checkout, set `WINNIGO_REPOSITORY=postgres` and `WINNIGO_STORAGE=s3` there before migrating and seeding. Subsequent starts need the services running and `npm run dev`.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Setup creates ignored `.env.local` configuration; it preserves an existing file. Subsequent starts need the services running and `npm run dev`. A database created before the 2026-11-23 schema baseline is refused by `db:migrate`; reset it once with `npm run db:reset -- --yes` (local data is removed), then migrate and seed again.
 
 Fresh checkouts use invitation-only session authentication. See [account setup and owner bootstrap](docs/16-p3-accounts.md) before signing in. This checkout retains the owner's requested `WINNIGO_AUTH_MODE="local"`, so no password is required on loopback. Basic owner authentication remains available as a compatibility mode. Setup generates the private authentication secret without overwriting existing configuration. `.env.example` lists provider settings without real credentials.
 
 Account login, email verification/reset, logout and session management are available in `session` mode at `/login` and `/account`. Google login requires OAuth credentials; real email requires SMTP configuration. A private local mail outbox supports loopback testing. Public signup and public browsing remain disabled.
 
-The seed adds missing committed public snapshots and official trails without replacing existing records or owner corrections. Private Facebook posts/photos remain in legacy storage until an explicit migration. The `qa` seed profile adds synthetic community/gallery records for tests only; use a separate QA database. Live collection and scheduled jobs arrive in P5. Page reads never scrape sources.
-
-The P1 file adapters remain available by explicitly setting both adapters to `fixture`, then running `npm run db:seed`. This does not require Docker and does not migrate records between backends. Existing `.winnigo/node` files remain intact.
+The seed adds the official trails without replacing existing records or owner corrections. Events and places come from collection: `npm run collect -- <source> --publish` or the worker (see [event collection](docs/18-event-collection.md)). The `qa` seed profile adds synthetic community/gallery records for tests only; use a separate QA database. Page reads never scrape sources.
 
 ## Production build locally
 
@@ -46,7 +44,7 @@ npm run check:assets
 
 For another port use `WINNIGO_CHECK_ORIGIN=http://127.0.0.1:5174 npm run check:assets`. The script checks configured API access as well as styles/module MIME types. Basic mode protects pages, APIs, photos and static assets. New database-backed collector credentials permit only scoped import POSTs; they cannot read discoveries or make arbitrary admin edits. The old shared key is not accepted by Node. `/api/health` is an unauthenticated liveness check with no collection/configuration data.
 
-Opt-in event extraction setup is in [the rollout guide](docs/26-event-extraction-rollout.md); [acceptance results](docs/28-event-extraction-acceptance.md) cover the verified source modes and remaining limits.
+Events are collected by AI extraction from the source list in `config/sources.mjs`; configuration, the review list and operations are in [event collection](docs/18-event-collection.md).
 
 ## PostgreSQL and S3 development services
 
@@ -58,7 +56,7 @@ npm run services:check
 npm run db:migrate
 ```
 
-PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. Setup writes their credentials to `.env.local`: PostgreSQL uses the fixed local login `winnigo` / `winnigo` (database `winnigo`), which is safe only because the port is bound to loopback; the S3 keys and auth secret are random. `db:migrate` applies the numbered domain migrations transactionally. `db:seed` adds missing public snapshots to the selected repository and preserves corrections; it does not migrate production data. PostgreSQL applies the password only when its volume is first created; to change it later, run `ALTER USER` and update `POSTGRES_PASSWORD` and `DATABASE_URL` together.
+PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. Setup writes their credentials to `.env.local`: PostgreSQL uses the fixed local login `winnigo` / `winnigo` (database `winnigo`), which is safe only because the port is bound to loopback; the S3 keys and auth secret are random. `db:migrate` applies the schema baseline and any later numbered migrations transactionally. `db:seed` adds the official trails and preserves corrections; it does not migrate production data. PostgreSQL applies the password only when its volume is first created; to change it later, run `ALTER USER` and update `POSTGRES_PASSWORD` and `DATABASE_URL` together.
 
 Stop the services with `npm run services:down`. To run the web app and its separate worker in containers:
 
@@ -80,14 +78,13 @@ docker compose --env-file .env.local --profile app stop
 | `npm run dev` | Standard Next.js development server |
 | `npm run build` / `npm start` | Assemble and run standalone Node app |
 | `npm run worker` | Collection worker: manual refreshes; daily source schedules with `WINNIGO_SCHEDULES=enabled` |
-| `npm run collect:music` | Manitoba Music parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
-| `npm run collect:tourism` | Tourism Winnipeg parser dry run; `-- --enqueue` queues a manual import; optional AI shadow/enrichment |
-| `npm run collect:fortwhyte` | Dry-run current/next-month FortWhyte calendars with 60-second request spacing |
-| `npm run collect:clc -- --compare` | Dry-run the current/next-month Canada Life Centre feed and compare its calendar |
-| `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites) |
+| `npm run collect -- --list` | Event sources; `-- <id>` crawls only, `--extract` extracts to a file, `--publish` stores events for review |
+| `npm run check:p5` | Collection-job integration check (temporary schemas, no live sites or model) |
+| `npm run check:events` | Event publishing and review integration check (temporary schema) |
 | `npm run worker:check` | Validate the selected store and exit |
-| `npm run db:seed` | Add missing snapshots/QA fixtures; preserve existing records |
+| `npm run db:seed` | Add official trails (and QA fixtures with the `qa` profile); preserve existing records |
 | `npm run db:migrate` | Apply pending PostgreSQL migrations |
+| `npm run db:reset -- --yes` | Empty the local database (loopback or Compose only) before migrating from the baseline |
 | `npm run services:up` / `services:down` | Start/stop local PostgreSQL and SeaweedFS |
 | `npm run services:check` | Authenticated PostgreSQL and S3 connectivity checks |
 | `npm test` / `npm run typecheck` | Regression tests and TypeScript checks |
@@ -99,9 +96,7 @@ docker compose --env-file .env.local --profile app stop
 | `npm run media:cleanup` | Dry-run orphan photo cleanup; add `-- --apply` to delete eligible objects |
 | `npm run check:boundary` | Basic-mode QA regression; use the QA database environment as described in P2/P3 docs |
 
-Shared listing columns and source/effective read views are documented in [Typed listings](docs/19-typed-listings.md).
-
-P3 account setup and verification are in [P3 accounts](docs/16-p3-accounts.md). P2 storage, migration, browser QA and limits are in [P2 evidence](docs/15-p2-storage.md). Historical foundation checks are in [P1 evidence](docs/14-p1-foundation.md). The fixture adapter uses atomic snapshots and a cross-process write lock; it is for single-host development, not production storage. An interrupted write can leave `.winnigo/node/write.lock`; stop all processes before removing that stale lock. Never delete a live writer's lock.
+P3 account setup and verification are in [P3 accounts](docs/16-p3-accounts.md). P2 storage, migration, browser QA and limits are in [P2 evidence](docs/15-p2-storage.md). Historical foundation checks are in [P1 evidence](docs/14-p1-foundation.md).
 
 ## Legacy app and collector
 

@@ -11,8 +11,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   if (id.length > 300) return new Response('Not found', { status: 404 });
   try {
-    const repo = repository();
-    const result = repo.availability ? await repo.availability(id, date, { principal }) : null;
+    const result = await repository().availability(id, date, { principal });
     return result
       ? Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
       : new Response('Not found', { status: 404 });

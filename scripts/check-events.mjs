@@ -98,43 +98,6 @@ try {
     await pool.query(await readFile(new URL(f, dir), 'utf8'));
   const repo = new PostgresRepository(pool);
 
-  // A parser listing for the same source, published before the switch-over.
-  await repo.importRecords(
-    [
-      {
-        id: 'forks-parser-skating',
-        source: 'forks',
-        hidden: false,
-        override: {},
-        payload: {
-          id: 'forks-parser-skating',
-          source: 'forks',
-          sourceName: 'The Forks',
-          title: 'Parser skating party',
-          type: 'Event',
-          category: 'Outdoors',
-          venue: 'The Forks',
-          address: '',
-          neighbourhood: '',
-          url: 'https://www.theforks.com/events/skating',
-          start: '2026-11-20',
-          end: '2026-11-20',
-          time: '',
-          image: '',
-          checkedAt,
-          price: null,
-          family: false,
-          indoor: false,
-          description: '',
-          schedule: 'event',
-          status: 'active',
-        },
-      },
-    ],
-    [],
-  );
-  assert.equal((await repo.search({ query: 'Parser skating', principal: owner })).total, 1);
-
   // First run: two pages list the same event (sessions merge) and one other event.
   const concert = event('QA Concert', ['2026-11-20T01:00:00.000Z'], { price: 10 });
   const market = event('QA Market', ['2026-11-21', '2026-11-28']);
@@ -151,11 +114,6 @@ try {
   assert.equal(found.items[0].occurrences.length, 2, 'sessions from both pages merge');
   assert.equal(found.items[0].sourceName, 'The Forks');
   assert.equal(found.items[0].image, '', 'source images are not shown directly');
-  assert.equal(
-    (await repo.search({ query: 'Parser skating', principal: owner })).total,
-    0,
-    'parser listings leave discovery once the source publishes events',
-  );
   assert.equal((await repo.search({ query: 'QA', principal: reader })).total, 2);
   const onDay = await repo.search({ date: '2026-11-28', principal: owner, query: 'QA' });
   assert.deepEqual(

@@ -17,12 +17,10 @@ test('P3 authorization fails closed and distinguishes admin from private-content
   assert.equal(isAdmin({ role: 'user' }), false);
   assert.equal(isAdmin({ role: 'admin' }), true);
 });
-test('P3 session mode requires durable storage, a secret and HTTPS off loopback', () => {
-  assert.throws(() => readConfig({ WINNIGO_AUTH_MODE: 'session' }), /PostgreSQL/);
+test('P3 session mode requires storage, a secret and HTTPS off loopback', () => {
+  assert.throws(() => readConfig({ WINNIGO_AUTH_MODE: 'session' }), /Missing DATABASE_URL/);
   const env = {
     WINNIGO_AUTH_MODE: 'session',
-    WINNIGO_REPOSITORY: 'postgres',
-    WINNIGO_STORAGE: 's3',
     BETTER_AUTH_SECRET: 'x'.repeat(32),
     DATABASE_URL: 'postgres://example/test',
     S3_ENDPOINT: 'https://s3.example',
@@ -32,6 +30,7 @@ test('P3 session mode requires durable storage, a secret and HTTPS off loopback'
     S3_SECRET_KEY: 'test',
     WINNIGO_ORIGIN: 'http://example.com',
   };
+  assert.throws(() => readConfig({ ...env, BETTER_AUTH_SECRET: 'short' }), /BETTER_AUTH_SECRET/);
   assert.throws(() => readConfig(env), /HTTPS/);
   assert.equal(readConfig({ ...env, WINNIGO_ORIGIN: 'https://example.com' }).mode, 'session');
 });

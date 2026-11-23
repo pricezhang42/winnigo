@@ -1,31 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSource, parsePlaces, dedupe, localDay } from '../../lib/connectors.mjs';
+import { readFileSync } from 'node:fs';
+import { listingDedupeKey, localDay, parsePlaces } from '../../lib/connectors.mjs';
 test('Winnipeg day stays correct around midnight and DST', () => {
   assert.equal(localDay(new Date('2026-09-17T02:00:00Z')), '2026-09-16');
   assert.equal(localDay(new Date('2026-01-01T05:00:00Z')), '2025-12-31');
 });
-test('Forks date ranges cross the year boundary', () => {
-  const [e] = parseSource(
-    'forks',
-    '<div class="event-listing"><p class="dates">Thursday, Dec 31 to Friday, Jan 1</p><h3><a href="/events/calendar-of-events/event/1">New Year</a></h3><p class="hours">7 PM</p>',
-    '2026-12-15T18:00:00Z',
-  );
-  assert.equal(e.start, '2026-12-31');
-  assert.equal(e.end, '2027-01-01');
-  assert.equal(e.price, null);
-});
-test('Park recurrence is a series, never an every-day event', () => {
-  const [e] = parseSource(
-    'park',
-    '<div class="event-item leaf"><a href="/events/event/1"><img src="/one.jpg"></a><h3><a href="/events/event/1">Gardener Chats</a></h3><time datetime="2026-09-17T00:00:00+00:00"></time><time datetime="2027-01-09T00:00:00+00:00"></time>',
-  );
-  assert.equal(e.schedule, 'series');
-  assert.equal(e.end, '2027-01-09');
-});
-test('identical listings merge but different venues remain', () => {
+test('identical listings share a duplicate key but different venues do not', () => {
   const a = { title: 'One event', start: '2026-09-19', venue: 'Venue A' };
-  assert.equal(dedupe([a, { ...a }, { ...a, venue: 'Venue B' }]).length, 2);
+  assert.equal(listingDedupeKey(a), listingDedupeKey({ ...a, title: 'One Event!' }));
+  assert.notEqual(listingDedupeKey(a), listingDedupeKey({ ...a, venue: 'Venue B' }));
+});
+test('the saved Forks places page parses to valid evergreen places', () => {
+  const html = readFileSync(new URL('../fixtures/pages/forks-attractions.html', import.meta.url));
+  const places = parsePlaces(String(html), '2026-10-08T12:00:00Z');
+  assert.equal(places.length, 26);
+  for (const place of places) {
+    assert.equal(place.source, 'attractions');
+    assert.equal(place.schedule, 'evergreen');
+    assert.match(place.url, /^https?:\/\//);
+    assert.ok(place.title && !place.start);
+  }
 });
 test('closed places are hidden and unsafe seasonal assumptions excluded', () => {
   const [e] = parsePlaces(
@@ -34,9 +29,8 @@ test('closed places are hidden and unsafe seasonal assumptions excluded', () => 
   assert.equal(e.status, 'hidden');
   assert.equal(e.price, null);
 });
-test('source layout failures yield no invented listings', () => {
-  assert.deepEqual(parseSource('park', '<p>Maintenance</p>'), []);
-  assert.deepEqual(parseSource('manitoba', '<p>Maintenance</p>'), []);
+test('a changed places layout yields no invented listings', () => {
+  assert.deepEqual(parsePlaces('<p>Maintenance</p>'), []);
 });
 import { normalizeSocial, normalizeHikingBatch } from '../../lib/social.mjs';
 const social = {

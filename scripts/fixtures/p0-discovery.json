@@ -1,7 +1,5 @@
 {
   "notice": "Entirely synthetic examples; no copied private posts or author information.",
-  "calendarHtml": "<div class=\"event-listing\"><p class=\"dates\">Thursday, Dec 31 to Friday, Jan 1</p><h3><a href=\"/events/calendar-of-events/event/999999\">P0 calendar fixture</a></h3><p class=\"hours\">7 PM</p>",
-  "swimHtml": "<h2 class=\"card-title\"><a href=\"/recreation-leisure/pools/indoor-pools/fixture\">Fixture Pool</a></h2><div class=\"field--name-field-card-body\"><p>1 Example Street</p><p>September 20 \u2013 September 20, 2026</p><p>Sunday<br>1 \u2013 2 p.m.<br>3 \u2013 4 p.m. Youth swim (ages 9\u201319)</p></div>",
   "community": {
     "title": "P0 Betula Lake outing",
     "description": "Synthetic fixture. Exact trail entrance is unknown.",

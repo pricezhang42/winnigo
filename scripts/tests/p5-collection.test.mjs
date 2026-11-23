@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isTransient, localSources } from '../../lib/server/collection.mjs';
+import { EVENT_SOURCES } from '../../config/sources.mjs';
+import { collectableSources, isTransient } from '../../lib/server/collection.mjs';
 import { SCHEDULES, jobsSchema, schedulesEnabled } from '../../lib/server/job-queue.mjs';
 
 test('P5 retries network trouble but not source changes', () => {
@@ -13,20 +14,17 @@ test('P5 retries network trouble but not source changes', () => {
   assert.equal(isTransient(Error('Source returned HTTP 429')), true);
   assert.equal(isTransient(Error('Source returned HTTP 404')), false);
   assert.equal(isTransient(Error('Unexpected source size')), false);
-  assert.equal(isTransient(Error('No listings found; the calendar may have changed')), false);
+  assert.equal(isTransient(Error('No places found; the page may have changed')), false);
+  assert.equal(isTransient(Error('Event extraction is not configured')), false);
   assert.equal(isTransient(undefined), false);
 });
 
-test('P5 schedules cover exactly the HTTP sources and never Facebook', () => {
-  assert.deepEqual(
-    Object.keys(SCHEDULES).sort(),
-    localSources
-      .filter((s) => !s.manualOnly)
-      .map((s) => s.id)
-      .sort(),
-  );
+test('P5 schedules name collectable sources only and never Facebook or blocked sites', () => {
+  const ids = new Set(collectableSources.map((s) => s.id));
+  for (const id of Object.keys(SCHEDULES)) assert.ok(ids.has(id), id);
   assert.equal('facebook' in SCHEDULES, false);
-  assert.equal('wag' in SCHEDULES, false);
+  for (const blocked of EVENT_SOURCES.filter((s) => s.status === 'blocked'))
+    assert.equal(ids.has(blocked.id), false, blocked.id);
   for (const cron of Object.values(SCHEDULES)) assert.match(cron, /^0 [\d,]+ \* \* \*$/);
 });
 

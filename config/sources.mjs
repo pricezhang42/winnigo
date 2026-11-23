@@ -69,7 +69,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/festivals-and-events/upcoming-events/display,event/(\\d+)',
       nextLinkPattern: '^/festivals-and-events/upcoming-events(?:/page:\\d+)?/?$',
       maxListPages: 15,
-      maxEventPages: 100,
+      maxEventPages: 150,
       selector: '#content',
     },
     supportingPages: { maxPerPage: 1, sites: TOURISM_ORGANIZERS },
@@ -164,7 +164,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/livemusic/display,event/(\\d+)',
       pageLinkPattern: '^/livemusic/from:\\d{4}-\\d\\d-\\d\\d/page:\\d+$',
       maxListPages: 6,
-      maxEventPages: 100,
+      maxEventPages: 150,
     },
   },
   {
