@@ -7,6 +7,7 @@ import { ArrowLeft, RefreshCw, ExternalLink, Search, EyeOff, Eye } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { dateTimeLabel } from '@/lib/time-zone.mjs';
 import { Textarea } from '@/components/ui/textarea';
 
 type Item = {
@@ -344,8 +345,7 @@ function RunHistory({
   );
 }
 
-const formatTime = (value: string) =>
-  new Date(value).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' });
+const formatTime = (value: string) => dateTimeLabel(value, { year: true });
 
 function summarizeCounts(counts: Run['counts']) {
   if (counts.events !== undefined) {
@@ -383,10 +383,7 @@ function SourceStatus({ report }: { report: Report }) {
       <h3>{report.name}</h3>
       <p>{report.count} listings</p>
       <small>
-        {report.checkedAt
-          ? 'Checked ' +
-            new Date(report.checkedAt).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' })
-          : 'No successful check yet'}
+        {report.checkedAt ? 'Checked ' + formatTime(report.checkedAt) : 'No successful check yet'}
       </small>
       {report.error && <p className="notice">{report.error}</p>}
     </div>

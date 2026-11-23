@@ -150,6 +150,16 @@ structured `addressLocality` decides, then the postal prefix; a ", Town, Provinc
 another town. An event whose place is not stated stays and is flagged for review. Dropped events
 are counted and never reported as gone.
 
+## Winnipeg time
+
+Every conversion between Winnipeg wall time and an instant (session times, labels, "today", the
+collection window and the job scheduler's zone) uses `lib/time-zone.mjs` with the checked-in
+table in `lib/data/time-zone.mjs`, never the copy of the time zone database bundled with Node,
+PostgreSQL or the browser. Those copies can lag behind the law: Manitoba kept UTC−5 on 2026-11-01
+(tzdata 2026f), while Node 22 bundles 2026a and still falls back to UTC−6, which made evening
+times an hour late. After the operating system's tzdata updates, `npm run tz:update` regenerates
+the table; review the diff like any other change.
+
 ## Storage
 
 | Table | Holds |

@@ -214,7 +214,7 @@ test('extraction keeps events with sessions in the window, counts the rest and r
   assert.equal(first.events[0].url, origin + '/event/1');
   assert.deepEqual(
     first.events[0].sessions.map((s) => s.startAt),
-    ['2026-11-21T01:00:00.000Z'],
+    ['2026-11-21T00:00:00.000Z'],
   );
   assert.equal(second.outcome, 'outside-window');
   assert.equal(second.outsideWindow, 1);
@@ -290,7 +290,7 @@ test('numbered pagination and dated start URLs read the window', async () => {
     delete d.fetch.nextLinkPattern;
     delete d.supportingPages;
   });
-  const start = origin + '/events/from:2026-11-21?start=1793509200&end=1798783200';
+  const start = origin + '/events/from:2026-11-21?start=1793509200&end=1798779600';
   // Winnipeg midnight on Nov 1 (CDT) and on Jan 1 (CST).
   const { requested, fetchImpl } = site({
     [start]: `<a href="/events/from:2026-11-21/page:2">2</a><a href="/events/from:2026-11-21/page:3">3</a>`,

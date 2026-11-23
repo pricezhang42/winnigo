@@ -94,7 +94,7 @@ test('verified place hours honor closed Mondays, exceptional openings, holiday c
   );
   assert.equal(
     place.occurrences.find((o) => o.start === '2026-11-03').startAt,
-    '2026-11-03T16:00:00.000Z',
+    '2026-11-03T15:00:00.000Z', // UTC−5 after 2026-11-01
   );
 });
 

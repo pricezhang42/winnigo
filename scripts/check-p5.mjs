@@ -109,7 +109,9 @@ try {
   const owner = { userId: 'p5-owner', role: 'owner' };
   const page = await repo.search({ principal: owner, query: 'QA Concert' });
   assert.equal(page.total, 1);
-  assert.equal(page.items[0].occurrences[0].startAt, '2026-11-21T01:00:00.000Z');
+  // November 20 at 7 PM; Winnipeg keeps UTC−5 after 2026-11-01 (lib/data/time-zone.mjs).
+  assert.equal(page.items[0].occurrences[0].startAt, '2026-11-21T00:00:00.000Z');
+  assert.equal(page.items[0].occurrences[0].time, '7:00 p.m.');
   checks.push('Event source run publishes extracted events and records the run and report');
 
   // 3. An unchanged page reuses its stored extraction: no model call, nothing changed.
@@ -226,14 +228,14 @@ try {
     boss
       .previewSchedule(cron, { tz: TIMEZONE, from: new Date(from), count: 4 })
       .map((d) => d.toISOString());
-  // Fall back (Nov 1, 2026): 06:00 CDT = 11:00Z before, 06:00 CST = 12:00Z after.
+  // Manitoba kept UTC−5 on Nov 1, 2026 (tzdata 2026f): 06:00 stays 11:00Z, with no fall-back.
   assert.deepEqual(preview(cron.forks, '2026-10-31T00:00:00Z').slice(0, 2), [
     '2026-10-31T11:00:00.000Z',
-    '2026-11-01T12:00:00.000Z',
+    '2026-11-01T11:00:00.000Z',
   ]);
-  // Spring forward (Mar 14, 2027): 06:00 CST = 12:00Z before, 06:00 CDT = 11:00Z after.
+  // ...and no spring-forward in March 2027.
   assert.deepEqual(preview(cron.forks, '2027-03-13T00:00:00Z').slice(0, 2), [
-    '2027-03-13T12:00:00.000Z',
+    '2027-03-13T11:00:00.000Z',
     '2027-03-14T11:00:00.000Z',
   ]);
   // Free swim runs at 06:00 and 15:00 local.
@@ -242,7 +244,7 @@ try {
     '2026-10-20T20:00:00.000Z',
   ]);
   checks.push(
-    'Schedules come from the source list in America/Winnipeg, correct across DST; stale ones removed',
+    'Schedules come from the source list in Winnipeg time (UTC−5 since 2026-11-01); stale ones removed',
   );
 
   // 10. After three days of downtime the scheduler sends one catch-up job per source, not three.
