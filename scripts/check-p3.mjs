@@ -9,6 +9,13 @@ import { createAccounts } from '../lib/server/accounts.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { listUsers, removeUnverifiedAccounts, updateUser } from '../lib/server/users.mjs';
 import {
+  hasAccount,
+  importItems,
+  savedIds,
+  saveItem,
+  unsaveItem,
+} from '../lib/server/saved-items.mjs';
+import {
   bootstrapOwner,
   issueCredential,
   serviceCredential,
@@ -252,7 +259,28 @@ try {
   reply = await call('sign-out', {}, newCookie);
   assert.equal(reply.status, 200);
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie: newCookie }) }), null);
-  // Email-confirmed account deletion cascades access and sessions.
+  // Saved items (docs/31): only what the account can see, separate per account, kept when the
+  // item later disappears, and deleted with the account.
+  await saveItem(pool, repo, member, 'public');
+  await saveItem(pool, repo, member, 'public');
+  await assert.rejects(saveItem(pool, repo, member, 'private'), /Not found/);
+  await assert.rejects(saveItem(pool, repo, member, 'missing-item'), /Not found/);
+  assert.deepEqual(await savedIds(pool, userId), ['public']);
+  assert.deepEqual(await savedIds(pool, other.user.id), []);
+  assert.deepEqual(
+    await importItems(pool, repo, otherPrincipal, ['public', 'private', 'missing-item', 'public']),
+    { added: 1, skipped: 2 },
+  );
+  await assert.rejects(importItems(pool, repo, otherPrincipal, 'public'), /at most/);
+  await pool.query("UPDATE listings SET hidden=true WHERE id='public'");
+  assert.deepEqual(await savedIds(pool, userId), ['public'], 'a hidden item stays saved');
+  assert.equal((await repo.search({ principal: member, tab: 'Saved', ids: ['public'] })).total, 0);
+  await pool.query("UPDATE listings SET hidden=false WHERE id='public'");
+  await unsaveItem(pool, userId, 'public');
+  assert.deepEqual(await savedIds(pool, userId), []);
+  assert.equal(hasAccount({ userId: 'local-owner', role: 'owner', legacy: true }), false);
+  assert.equal(hasAccount({ role: 'visitor' }), false);
+  // Email-confirmed account deletion cascades access, sessions and saved items.
   await pool.query("INSERT INTO source_grants VALUES($1,'facebook')", [other.user.id]);
   reply = await call('delete-user', { callbackURL: origin + '/login' }, otherCookie);
   assert.equal(reply.status, 200, await reply.clone().text());
@@ -267,6 +295,7 @@ try {
     (await pool.query('SELECT 1 FROM source_grants WHERE user_id=$1', [other.user.id])).rowCount,
     0,
   );
+  assert.deepEqual(await savedIds(pool, other.user.id), []);
   const ownerCookie = cookieOf(await call('sign-in/email', ownerCred));
   reply = await call('delete-user', { callbackURL: origin + '/login' }, ownerCookie);
   assert.ok([200, 403].includes(reply.status));
@@ -387,7 +416,7 @@ try {
   assert.equal((await listUsers(pool)).total, accountsBefore - 1);
 
   console.log(
-    'P3 integration passed: invitations, open sign-up, users panel, unverified cleanup, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
+    'P3 integration passed: invitations, open sign-up, users panel, saved items, unverified cleanup, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
   );
 } finally {
   await pool.end();

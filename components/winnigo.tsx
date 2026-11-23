@@ -100,11 +100,21 @@ export default function Winnigo() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  // Saved-item messages are kept apart from `notice`, which each results refresh replaces.
+  const [savedNotice, setSavedNotice] = useState('');
 
   const router = useRouter();
-  const { saved, canSave, canImport, role, known, toggleSaved } = useSavedListings(() =>
-    setNotice('Your browser could not save this list.'),
-  );
+  const {
+    saved,
+    canSave,
+    canImport,
+    role,
+    known,
+    browserItems,
+    importBrowserItems,
+    dismissImport,
+    toggleSaved,
+  } = useSavedListings(setSavedNotice);
 
   useEffect(() => {
     const timer = setInterval(() => setToday(localDay()), 60000);
@@ -138,6 +148,15 @@ export default function Winnigo() {
     setter(value);
     setOffset(0);
   }
+
+  // With no filter active, a Saved tab shorter than the saved list means some are no longer listed.
+  const unfiltered =
+    query === DEFAULT_FILTERS.query &&
+    quick === DEFAULT_FILTERS.quick &&
+    category === DEFAULT_FILTERS.category &&
+    area === DEFAULT_FILTERS.area &&
+    collection === DEFAULT_FILTERS.collection &&
+    !visitDate;
 
   function save(id: string) {
     // A visitor without an account signs in to save (public browsing, docs/31).
@@ -317,6 +336,45 @@ export default function Winnigo() {
           {notice && (
             <p className="notice" role="status">
               {notice}
+            </p>
+          )}
+          {savedNotice && (
+            <p className="notice" role="status">
+              {savedNotice}
+            </p>
+          )}
+          {browserItems > 0 && (
+            <div className="notice saved-import" role="status">
+              <span>
+                This browser has {browserItems} saved{' '}
+                {browserItems === 1 ? 'discovery' : 'discoveries'} from before. Add{' '}
+                {browserItems === 1 ? 'it' : 'them'} to your account to see{' '}
+                {browserItems === 1 ? 'it' : 'them'} on every device?
+              </span>
+              <Button
+                onClick={async () => {
+                  const result = await importBrowserItems();
+                  if (result)
+                    setSavedNotice(
+                      `Added ${result.added} to your account.` +
+                        (result.skipped
+                          ? ` ${result.skipped} ${result.skipped === 1 ? 'was' : 'were'} already saved or no longer listed.`
+                          : ''),
+                    );
+                }}
+              >
+                Add to my account
+              </Button>
+              <Button variant="ghost" onClick={dismissImport}>
+                Not now
+              </Button>
+            </div>
+          )}
+          {tab === 'Saved' && !loading && unfiltered && total < saved.length && (
+            <p className="source-note">
+              {saved.length - total} saved{' '}
+              {saved.length - total === 1 ? 'discovery is' : 'discoveries are'} no longer listed:
+              finished, removed by the source, or hidden.
             </p>
           )}
           {tab === 'Trail map' ? (

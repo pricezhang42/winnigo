@@ -86,6 +86,12 @@ Done on 2026-11-23 (`WINNIGO_SIGNUP`, `lib/server/users.mjs`, `/api/users`, the 
 
 ### 3. Saved items in the account
 
+Done on 2026-11-23 (`0003_saved_items.sql`, `lib/server/saved-items.mjs`, `/api/me/saved`). An
+account keeps up to 1,000 saved items; the Saved tab reads them on the server, so there is no
+longer a limit of 200 in the request. Verified with `check:p3`, the HTTP check in three setups
+and a browser session (sign-up, verification, sign-in, import of an earlier browser list, save
+and unsave).
+
 - Migration `0003_saved_items.sql`: `saved_items(user_id → auth_user ON DELETE CASCADE,
   item_id, saved_at, PRIMARY KEY(user_id, item_id))`. An item is a listing or an event ID;
   saving checks that the user can see it. A saved item that later disappears stays saved and is
@@ -110,8 +116,10 @@ Done on 2026-11-23 (`WINNIGO_SIGNUP`, `lib/server/users.mjs`, `/api/users`, the 
   `profile` scopes only. With only those basic scopes the app needs no security review; in
   Google's "Testing" status only listed test users can sign in, so publish it ("In production")
   before launch. Showing a logo on the consent screen adds a short brand review.
-- Run the account acceptance against the real providers on a test host (verification and reset
-  emails arrive; Google sign-up and sign-in work), then close #6.
+- Run `npm run accounts:check-providers -- you@example.com` on the test host: it sends a test
+  email through the configured provider and prints the exact Google redirect URI and consent
+  screen links to register. Then run the account acceptance against the real providers
+  (verification and reset emails arrive; Google sign-up and sign-in work) and close #6.
 
 This step needs your accounts with the email provider and Google Cloud; nothing is created or
 paid for without you.

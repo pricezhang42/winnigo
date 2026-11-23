@@ -10,7 +10,7 @@ Remaining activation work is provider configuration and a live Google/SMTP accep
 
 ## Account mode and first owner
 
-With `WINNIGO_SIGNUP=open` (default `invitation`), anyone can create an account with a verified email; see [31](31-public-access-and-accounts.md). The owner's Users panel on the admin page changes roles and disables accounts.
+With `WINNIGO_SIGNUP=open` (default `invitation`), anyone can create an account with a verified email; see [31](31-public-access-and-accounts.md). The owner's Users panel on the admin page changes roles and disables accounts. Saved discoveries belong to the account (`/api/me/saved`) and are deleted with it; the local and Basic owner modes keep them in the browser.
 
 The normal local app keeps the requested `WINNIGO_AUTH_MODE=local` password-free loopback experience. `basic` remains a compatibility mode. New setups default to `session`, backed by Better Auth 1.7.6 and PostgreSQL. Session mode exposes the login shell and static assets, but requires authentication for discovery, admin and media. Public browsing and unrestricted signup are disabled.
 

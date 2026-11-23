@@ -98,6 +98,33 @@ try {
   assert.ok(memberCookie.includes('session_token'));
   const owner = { Cookie: ownerCookie },
     member = { Cookie: memberCookie };
+  // Saved items in the account (docs/31): same origin, signed in, and the Saved tab reads them.
+  const publicItem = (await (await request('/api/listings', null, member)).json()).items[0].id;
+  const savePath = '/api/me/saved/' + encodeURIComponent(publicItem);
+  const put = (headers) => fetch(origin + savePath, { method: 'PUT', headers, redirect: 'manual' });
+  assert.equal((await put({ Origin: origin })).status, 401);
+  assert.equal((await put({ Origin: 'https://evil.example', ...member })).status, 403);
+  assert.equal((await put({ Origin: origin, ...member })).status, 200);
+  assert.deepEqual((await (await request('/api/me/saved', null, member)).json()).ids, [publicItem]);
+  const savedTab = await (await request('/api/listings?tab=Saved', null, member)).json();
+  assert.deepEqual(
+    savedTab.items.map((item) => item.id),
+    [publicItem],
+  );
+  assert.deepEqual((await (await request('/api/me/saved', null, owner)).json()).ids, []);
+  assert.equal(
+    (await fetch(origin + savePath, { method: 'DELETE', headers: { Origin: origin, ...member } }))
+      .status,
+    200,
+  );
+  assert.deepEqual((await (await request('/api/me/saved', null, member)).json()).ids, []);
+  const imported = await request(
+    '/api/me/saved',
+    { action: 'import', ids: [publicItem, 'not-a-listing'] },
+    member,
+  );
+  assert.deepEqual((await imported.json()).ids, [publicItem]);
+
   // The Users panel (docs/31): owner only, same origin only.
   const users = await request('/api/users', null, owner);
   assert.equal(users.status, 200);
@@ -255,7 +282,7 @@ try {
   console.log(
     (publicBrowsing ? 'Public browsing on. ' : '') +
       (openSignup ? 'Open sign-up on. ' : '') +
-      'P3 HTTP checks passed: session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
+      'P3 HTTP checks passed: saved items, users panel, session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
   );
 } finally {
   await pool.end();

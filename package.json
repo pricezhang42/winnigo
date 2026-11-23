@@ -35,6 +35,7 @@
     "check:events": "node scripts/check-events.mjs",
     "accounts:manage": "node scripts/manage-accounts.mjs",
     "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
+    "accounts:check-providers": "node scripts/check-providers.mjs",
     "collect": "node scripts/collect-source.mjs",
     "tz:update": "node scripts/update-time-zone.mjs"
   },
