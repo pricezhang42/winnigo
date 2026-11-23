@@ -145,6 +145,19 @@ try {
   assert.equal(await repo.detail('private', { principal: member }), null);
   assert.equal((await repo.search({ principal: owner })).total, 2);
   assert.equal((await repo.search()).total, 0);
+  // A visitor (public browsing, docs/31) sees public rows only, with matching facets and counts.
+  const visitor = { role: 'visitor' };
+  assert.deepEqual(
+    (await repo.search({ principal: visitor })).items.map((i) => i.id),
+    ['public'],
+  );
+  assert.deepEqual((await repo.search({ principal: visitor })).areas, ['Public Area']);
+  assert.equal(await repo.detail('private', { principal: visitor }), null);
+  assert.ok(await repo.detail('public', { principal: visitor }));
+  assert.ok(
+    !(await repo.search({ principal: visitor })).reports.some((r) => r.id === 'facebook'),
+    'visitors get no report for restricted sources',
+  );
   const photo = 'a'.repeat(64);
   await pool.query(
     "INSERT INTO media(id,object_key,content_type,size,status) VALUES($1,$2,'image/png',10,'ready')",
@@ -152,6 +165,14 @@ try {
   );
   await pool.query("INSERT INTO listing_media VALUES('private',$1,0)", [photo]);
   assert.equal(await canReadMedia(photo, member, pool), false);
+  assert.equal(await canReadMedia(photo, visitor, pool), false);
+  const publicPhoto = 'b'.repeat(64);
+  await pool.query(
+    "INSERT INTO media(id,object_key,content_type,size,status) VALUES($1,$2,'image/png',10,'ready')",
+    [publicPhoto, 'photos/' + publicPhoto],
+  );
+  await pool.query("INSERT INTO listing_media VALUES('public',$1,0)", [publicPhoto]);
+  assert.equal(await canReadMedia(publicPhoto, visitor, pool), true);
   await pool.query("INSERT INTO listing_grants VALUES($1,'private')", [userId]);
   assert.equal((await repo.search({ principal: member })).total, 2);
   assert.equal(await canReadMedia(photo, member, pool), true);

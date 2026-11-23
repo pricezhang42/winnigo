@@ -40,6 +40,10 @@ Each step is one PR with its own checks.
 
 ### 1. Public browsing
 
+Done on 2026-11-23 (`WINNIGO_PUBLIC_BROWSING`, `readerFromHeaders` and the visitor rule in
+`accessClause`). Verified with `check:p3`, the HTTP check with the setting on and off, and a
+signed-out browser session.
+
 - New setting `WINNIGO_PUBLIC_BROWSING=enabled` (default off). With it, the access gate
   (`proxy.ts`) lets anonymous requests reach the home page and the read-only discovery routes:
   `GET /api/listings`, `/api/listings/:id`, `/api/listings/:id/availability` and

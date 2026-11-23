@@ -4,19 +4,25 @@ import { useEffect, useState } from 'react';
 /**
  * Bookmarked listing IDs, stored in this browser's localStorage under the signed-in account.
  * The legacy owner modes (local/Basic) keep the original shared `winnigo-saved` key.
- * Saving is unavailable until the account is known. Server-side bookmarks arrive in P4.
+ * Saving is unavailable until the account is known, and for visitors without an account (public
+ * browsing, docs/31). `role` is the signed-in role, or null for a visitor.
  */
 export function useSavedListings(onStorageError: () => void) {
   const [saved, setSaved] = useState<string[]>([]);
   const [storageKey, setStorageKey] = useState<string | null>(null);
   const [canImport, setCanImport] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [known, setKnown] = useState(false);
 
   useEffect(() => {
     let active = true;
     fetch('/api/me')
       .then((response) => (response.ok ? response.json() : null))
       .then((principal) => {
-        if (!active || !principal) return;
+        if (!active) return;
+        setKnown(true);
+        if (!principal) return;
+        setRole(principal.role);
         setCanImport(principal.role === 'owner');
         const key = principal.legacy ? 'winnigo-saved' : 'winnigo-saved-' + principal.userId;
         setStorageKey(key);
@@ -44,5 +50,5 @@ export function useSavedListings(onStorageError: () => void) {
     });
   }
 
-  return { saved, canSave: storageKey !== null, canImport, toggleSaved };
+  return { saved, canSave: storageKey !== null, canImport, role, known, toggleSaved };
 }

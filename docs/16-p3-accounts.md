@@ -64,6 +64,9 @@ The implementation follows the pinned library's [database schema](https://better
 
 ## Content permissions
 
+With `WINNIGO_PUBLIC_BROWSING=enabled` (session mode only, default off), visitors without an
+account may browse public discoveries and their photos; see [31](31-public-access-and-accounts.md).
+
 - Owner: collection administration and access to restricted items/photos.
 - Admin: collection management for records they may read. Admin status alone does not reveal private community content, permit social imports or issue grants.
 - User: authenticated public-source discoveries plus explicitly granted source/listing access; no administration.

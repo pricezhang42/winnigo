@@ -1,9 +1,9 @@
 import { searchCollection } from '@/lib/server/paged-store';
 import { parseSearch } from '@/lib/server/search-query.mjs';
-import { getPrincipal } from '@/lib/auth';
+import { getReader } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
-  const principal = await getPrincipal();
+  const principal = await getReader();
   if (!principal) return Response.json({ error: 'Sign in required' }, { status: 401 });
   let query;
   try {

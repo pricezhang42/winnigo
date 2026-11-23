@@ -100,7 +100,7 @@ export default function Winnigo() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [notice, setNotice] = useState('');
 
-  const { saved, canSave, canImport, toggleSaved } = useSavedListings(() =>
+  const { saved, canSave, canImport, role, known, toggleSaved } = useSavedListings(() =>
     setNotice('Your browser could not save this list.'),
   );
 
@@ -138,6 +138,8 @@ export default function Winnigo() {
   }
 
   function save(id: string) {
+    // A visitor without an account signs in to save (public browsing, docs/31).
+    if (known && !role) return window.location.assign('/login');
     if (!canSave) return;
     if (tab === 'Saved') setOffset(0);
     toggleSaved(id);
@@ -188,8 +190,8 @@ export default function Winnigo() {
             </Button>
           ))}
         </nav>
-        <a href="/account" className="city">
-          Account
+        <a href={known && !role ? '/login' : '/account'} className="city">
+          {known && !role ? 'Sign in' : 'Account'}
         </a>
         <span className="city">
           <MapPin size={15} /> Winnipeg, MB
@@ -396,9 +398,11 @@ export default function Winnigo() {
         <p>Go find your Winnipeg.</p>
         <span>
           Made for the place we call home.{' '}
-          <a className="admin-link" href="/admin">
-            Manage listings
-          </a>
+          {(role === 'owner' || role === 'admin') && (
+            <a className="admin-link" href="/admin">
+              Manage listings
+            </a>
+          )}
         </span>
       </footer>
       <ListingDetailDialog

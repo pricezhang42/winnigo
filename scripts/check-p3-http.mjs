@@ -7,7 +7,9 @@ import { database } from '../lib/server/postgres.mjs';
 import { issueCredential, bootstrapOwner } from '../lib/server/access.mjs';
 loadLocalEnv();
 const origin = process.env.WINNIGO_ORIGIN,
-  pool = database();
+  pool = database(),
+  // With WINNIGO_PUBLIC_BROWSING=enabled (docs/31), signed-out reads see public discoveries only.
+  publicBrowsing = process.env.WINNIGO_PUBLIC_BROWSING === 'enabled';
 assert.ok(new URL(process.env.DATABASE_URL).pathname.endsWith('_p3_qa'));
 assert.ok(['localhost', '127.0.0.1'].includes(new URL(origin).hostname));
 const stamp = Date.now(),
@@ -46,8 +48,22 @@ try {
   await pool.query('TRUNCATE auth_rate_limit,request_limits');
   for (const email of [ownerEmail, memberEmail])
     await pool.query('INSERT INTO account_invitations(email) VALUES($1)', [email]);
-  assert.equal((await request('/api/listings')).status, 401);
-  assert.equal((await request('/')).status, 307);
+  if (publicBrowsing) {
+    const anonymous = await request('/api/listings');
+    assert.equal(anonymous.status, 200);
+    assert.equal(anonymous.headers.get('x-robots-tag'), 'noindex, nofollow');
+    const page = await anonymous.json();
+    assert.ok(page.items.every((item) => !['facebook', 'instagram'].includes(item.source)));
+    assert.ok(!page.communitySources.length, 'visitors are not shown community sources');
+    assert.equal((await request('/')).status, 200);
+    for (const path of ['/admin', '/account']) assert.equal((await request(path)).status, 307);
+    for (const path of ['/api/me', '/api/runs', '/api/event-changes', '/api/sources'])
+      assert.equal((await request(path)).status, 401, path);
+    assert.equal((await request('/api/sources', { action: 'refresh' })).status, 401);
+  } else {
+    assert.equal((await request('/api/listings')).status, 401);
+    assert.equal((await request('/')).status, 307);
+  }
   assert.equal((await request('/login')).status, 200);
   for (const email of [ownerEmail, memberEmail]) {
     const response = await request('/api/auth/sign-up/email', {
@@ -144,8 +160,16 @@ try {
   assert.equal((await request('/api/photos/import', { url: 'x'.repeat(8100) }, owner)).status, 413);
   const credential = await issueCredential({ source: 'facebook', label: 'HTTP QA' }, pool),
     collector = { 'x-winnigo-collector-key': credential.token };
-  for (const route of ['/api/listings', '/api/sources', photo])
-    assert.equal((await request(route, null, collector)).status, 401);
+  // A collector token is not a reader: refused, or only a visitor under public browsing.
+  if (publicBrowsing) {
+    const asVisitor = await request('/api/listings', null, collector);
+    assert.equal(asVisitor.status, 200);
+    assert.ok((await asVisitor.json()).items.every((item) => item.source !== 'facebook'));
+    assert.equal((await request('/api/sources', null, collector)).status, 401);
+    assert.equal((await request(photo, null, collector)).status, 404);
+  } else
+    for (const route of ['/api/listings', '/api/sources', photo])
+      assert.equal((await request(route, null, collector)).status, 401);
   assert.equal(
     (
       await request(
@@ -188,7 +212,9 @@ try {
     401,
   );
   await pool.query('DELETE FROM auth_session WHERE "userId"=$1', [me.userId]);
-  assert.equal((await request('/api/listings', null, member)).status, 401);
+  // A revoked session is signed out: refused, or a visitor when public browsing is enabled.
+  const revoked = await request('/api/listings', null, member);
+  assert.equal(revoked.status, publicBrowsing ? 200 : 401);
   await mkdir('.winnigo/p3-evidence', { recursive: true });
   await writeFile(
     '.winnigo/p3-evidence/browser-account.json',
@@ -196,7 +222,8 @@ try {
     { mode: 0o600 },
   );
   console.log(
-    'P3 HTTP checks passed: session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
+    (publicBrowsing ? 'Public browsing on. ' : '') +
+      'P3 HTTP checks passed: session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
   );
 } finally {
   await pool.end();
