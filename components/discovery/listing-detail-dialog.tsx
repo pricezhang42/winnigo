@@ -139,7 +139,7 @@ function ListingDetail({
       {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
           {listing.recurring
-            ? 'This is one occurrence of a recurring program. Check the organizer’s schedule before you go.'
+            ? 'This program runs on several dates; they are listed above. Check the organizer’s schedule before you go.'
             : 'This listing covers select dates. Check the organizer’s schedule before you go.'}
         </p>
       )}
