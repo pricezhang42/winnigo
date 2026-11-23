@@ -14,6 +14,7 @@ import {
   validateSources,
 } from '../lib/server/event-sources.mjs';
 import { finishRun, startRun } from '../lib/server/event-store.mjs';
+import { getStorage } from '../lib/server/adapters.mjs';
 import { database } from '../lib/server/postgres.mjs';
 import { loadLocalEnv } from './load-env.mjs';
 
@@ -55,7 +56,7 @@ const summarize = (c) =>
 try {
   if (publish) {
     // The same path as the worker: crawl, extract (reusing unchanged pages) and publish.
-    const run = await collectEventSource(pool, raw, { runId, checkedAt });
+    const run = await collectEventSource(pool, raw, { runId, checkedAt, storage: getStorage() });
     for (const f of run.crawl.failedPages) console.log(`  failed ${f.url}: ${f.error}`);
     console.log(summarize(run.result.counts));
     await finishRun(pool, runId, run.status, run.counts, run.note);
@@ -64,6 +65,11 @@ try {
       `Published: ${p.new} new, ${p.changed} changed, ${p.unchanged} unchanged, ${p.gone} gone. ` +
         'Review them in the admin page.',
     );
+    const ph = run.photos;
+    if (ph)
+      console.log(
+        `Photos: ${ph.copied} copied, ${ph.reused} reused, ${ph.notPhoto} not photos, ${ph.failed} failed.`,
+      );
     process.exit(0);
   }
 
