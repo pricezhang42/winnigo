@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { serviceConfig } from './check-services.mjs';
 import { createAccounts } from '../lib/server/accounts.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { listUsers, removeUnverifiedAccounts, updateUser } from '../lib/server/users.mjs';
 import {
   bootstrapOwner,
   issueCredential,
@@ -292,8 +293,101 @@ try {
   assert.equal(authorize.hostname, 'accounts.google.com');
   assert.equal(authorize.searchParams.get('redirect_uri'), origin + '/api/auth/callback/google');
   assert.ok(authorize.searchParams.get('state'));
+  // Open sign-up (docs/31): no invitation needed, verification still required, always a user.
+  await pool.query('TRUNCATE auth_rate_limit');
+  // Invitation mode refuses an uninvited email (the reply does not reveal it; no account is made).
+  await call('sign-up/email', { ...credentials, email: 'nobody@example.test' });
+  assert.equal(
+    (await pool.query("SELECT count(*)::int n FROM auth_user WHERE email='nobody@example.test'"))
+      .rows[0].n,
+    0,
+  );
+  const invitationAuth = auth;
+  auth = createAccounts({
+    pool,
+    env: { ...env, WINNIGO_SIGNUP: 'open' },
+    sendMail: async (m) => mail.push(m),
+  });
+  const stranger = { ...credentials, email: 'stranger@example.test', role: 'owner' };
+  reply = await call('sign-up/email', stranger);
+  assert.equal(reply.status, 200, await reply.clone().text());
+  assert.equal((await call('sign-in/email', stranger)).status, 403, 'verification first');
+  await auth.handler(
+    new Request(mail.find((m) => m.to === stranger.email && m.kind === 'verify').url),
+  );
+  const strangerCookie = cookieOf(await call('sign-in/email', stranger));
+  const strangerId = (
+    await auth.api.getSession({ headers: new Headers({ cookie: strangerCookie }) })
+  ).user.id;
+  assert.equal(
+    (await pool.query('SELECT role FROM user_access WHERE user_id=$1', [strangerId])).rows[0].role,
+    'user',
+  );
+  await call('sign-up/email', { ...credentials, email: 'lapsed@example.test' });
+  auth = invitationAuth;
+
+  // The owner's Users panel.
+  const ownerId = (await pool.query("SELECT user_id FROM user_access WHERE role='owner'")).rows[0]
+    .user_id;
+  const listed = await listUsers(pool, { query: 'stranger' });
+  assert.deepEqual(
+    listed.users.map((u) => [u.email, u.role, u.enabled, u.verified, u.methods]),
+    [['stranger@example.test', 'user', true, true, ['credential']]],
+  );
+  assert.ok(listed.users[0].lastSignIn);
+  const accountsBefore = (await listUsers(pool)).total;
+  await updateUser(pool, ownerId, strangerId, { role: 'admin' });
+  assert.equal(
+    (await pool.query('SELECT role FROM user_access WHERE user_id=$1', [strangerId])).rows[0].role,
+    'admin',
+  );
+  await updateUser(pool, ownerId, strangerId, { enabled: false });
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_session WHERE "userId"=$1', [strangerId]))
+      .rows[0].n,
+    0,
+    'disabling signs the account out everywhere',
+  );
+  assert.equal(
+    await auth.api.getSession({ headers: new Headers({ cookie: strangerCookie }) }),
+    null,
+  );
+  await updateUser(pool, 'local-owner', strangerId, { enabled: true });
+  assert.deepEqual(
+    (
+      await pool.query(
+        'SELECT action, user_id IS NOT NULL AS actor FROM security_audit WHERE subject_id=$1 ORDER BY id',
+        [strangerId],
+      )
+    ).rows.map((r) => [r.action, r.actor]),
+    [
+      ['user.role.admin', true],
+      ['user.disabled', true],
+      ['user.enabled', false],
+    ],
+  );
+  await assert.rejects(updateUser(pool, ownerId, ownerId, { role: 'user' }), /operator commands/);
+  await assert.rejects(updateUser(pool, ownerId, ownerId, { enabled: false }), /operator commands/);
+  await assert.rejects(updateUser(pool, ownerId, strangerId, { role: 'owner' }), /admin or user/);
+  const lapsedId = (await pool.query("SELECT id FROM auth_user WHERE email='lapsed@example.test'"))
+    .rows[0].id;
+  await assert.rejects(updateUser(pool, ownerId, lapsedId, { role: 'admin' }), /verified/);
+
+  // Accounts left unverified for a week are removed; verified ones and recent ones stay.
+  assert.equal(await removeUnverifiedAccounts(pool), 0);
+  await pool.query(`UPDATE auth_user SET "createdAt"=now()-interval '8 days' WHERE id=$1`, [
+    lapsedId,
+  ]);
+  assert.equal(await removeUnverifiedAccounts(pool), 1);
+  assert.equal(await removeUnverifiedAccounts(pool, { apply: true }), 1);
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_user WHERE id=$1', [lapsedId])).rows[0].n,
+    0,
+  );
+  assert.equal((await listUsers(pool)).total, accountsBefore - 1);
+
   console.log(
-    'P3 integration passed: invitations, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
+    'P3 integration passed: invitations, open sign-up, users panel, unverified cleanup, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
   );
 } finally {
   await pool.end();

@@ -66,3 +66,18 @@ test('public browsing is opt-in and needs session mode', () => {
   const local = { ...env, WINNIGO_AUTH_MODE: 'local', WINNIGO_ORIGIN: 'http://127.0.0.1:5173' };
   assert.equal(readConfig({ ...local, WINNIGO_PUBLIC_BROWSING: 'enabled' }).publicBrowsing, false);
 });
+
+test('sign-up is invitation-only unless deliberately opened', () => {
+  const env = {
+    WINNIGO_AUTH_MODE: 'local',
+    DATABASE_URL: 'postgres://example/test',
+    S3_ENDPOINT: 'https://s3.example',
+    S3_BUCKET: 'test',
+    S3_REGION: 'test',
+    S3_ACCESS_KEY: 'test',
+    S3_SECRET_KEY: 'test',
+  };
+  assert.equal(readConfig(env).signup, 'invitation');
+  assert.equal(readConfig({ ...env, WINNIGO_SIGNUP: 'open' }).signup, 'open');
+  assert.throws(() => readConfig({ ...env, WINNIGO_SIGNUP: 'everyone' }), /invitation or open/);
+});

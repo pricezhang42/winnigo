@@ -40,6 +40,8 @@ export async function proxy(request: NextRequest) {
   if (
     config.mode === 'session' &&
     (path === '/login' ||
+      path === '/privacy' ||
+      path === '/terms' ||
       path === '/account/reset' ||
       path.startsWith('/api/auth/') ||
       path.startsWith('/_next/') ||

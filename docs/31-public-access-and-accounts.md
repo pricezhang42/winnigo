@@ -61,6 +61,10 @@ signed-out browser session.
 
 ### 2. Open sign-up
 
+Done on 2026-11-23 (`WINNIGO_SIGNUP`, `lib/server/users.mjs`, `/api/users`, the Users panel,
+`/privacy` and `/terms`). The privacy policy and terms are drafts marked as such on the pages;
+`WINNIGO_CONTACT_EMAIL` supplies their contact address.
+
 - New setting `WINNIGO_SIGNUP=open` (default `invitation`). When open, the registration hook
   skips the invitation check; email verification is still required before the first sign-in,
   and an unverified account cannot sign in or save.

@@ -30,6 +30,7 @@ import { useSavedListings } from '@/components/discovery/use-saved-listings';
 import { useDiscoveryResults, type MapFilters } from '@/components/discovery/use-discovery-results';
 import { communitySources } from '@/lib/social.mjs';
 import { localDay } from '@/lib/connectors.mjs';
+import { useRouter } from 'next/navigation';
 import type { Listing } from '@/lib/domain';
 export type { Listing } from '@/lib/domain';
 
@@ -100,6 +101,7 @@ export default function Winnigo() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [notice, setNotice] = useState('');
 
+  const router = useRouter();
   const { saved, canSave, canImport, role, known, toggleSaved } = useSavedListings(() =>
     setNotice('Your browser could not save this list.'),
   );
@@ -139,7 +141,7 @@ export default function Winnigo() {
 
   function save(id: string) {
     // A visitor without an account signs in to save (public browsing, docs/31).
-    if (known && !role) return window.location.assign('/login');
+    if (known && !role) return router.push('/login');
     if (!canSave) return;
     if (tab === 'Saved') setOffset(0);
     toggleSaved(id);
@@ -397,7 +399,8 @@ export default function Winnigo() {
         </Link>
         <p>Go find your Winnipeg.</p>
         <span>
-          Made for the place we call home.{' '}
+          Made for the place we call home. <a href="/privacy">Privacy</a> ·{' '}
+          <a href="/terms">Terms</a>{' '}
           {(role === 'owner' || role === 'admin') && (
             <a className="admin-link" href="/admin">
               Manage listings

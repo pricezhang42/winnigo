@@ -9,7 +9,9 @@ loadLocalEnv();
 const origin = process.env.WINNIGO_ORIGIN,
   pool = database(),
   // With WINNIGO_PUBLIC_BROWSING=enabled (docs/31), signed-out reads see public discoveries only.
-  publicBrowsing = process.env.WINNIGO_PUBLIC_BROWSING === 'enabled';
+  publicBrowsing = process.env.WINNIGO_PUBLIC_BROWSING === 'enabled',
+  // With WINNIGO_SIGNUP=open (docs/31), an uninvited email can register (and must still verify).
+  openSignup = process.env.WINNIGO_SIGNUP === 'open';
 assert.ok(new URL(process.env.DATABASE_URL).pathname.endsWith('_p3_qa'));
 assert.ok(['localhost', '127.0.0.1'].includes(new URL(origin).hostname));
 const stamp = Date.now(),
@@ -65,6 +67,15 @@ try {
     assert.equal((await request('/')).status, 307);
   }
   assert.equal((await request('/login')).status, 200);
+  for (const path of ['/privacy', '/terms']) assert.equal((await request(path)).status, 200, path);
+  const uninvited = `uninvited-${stamp}@example.test`;
+  await request('/api/auth/sign-up/email', { email: uninvited, password, name: 'Uninvited QA' });
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_user WHERE email=$1', [uninvited])).rows[0]
+      .n,
+    openSignup ? 1 : 0,
+  );
+  assert.equal((await request('/api/users')).status, 401);
   for (const email of [ownerEmail, memberEmail]) {
     const response = await request('/api/auth/sign-up/email', {
       email,
@@ -87,6 +98,26 @@ try {
   assert.ok(memberCookie.includes('session_token'));
   const owner = { Cookie: ownerCookie },
     member = { Cookie: memberCookie };
+  // The Users panel (docs/31): owner only, same origin only.
+  const users = await request('/api/users', null, owner);
+  assert.equal(users.status, 200);
+  const memberAccount = (await users.json()).users.find((u) => u.email === memberEmail);
+  assert.equal(memberAccount.role, 'user');
+  assert.equal((await request('/api/users', null, member)).status, 401);
+  const roleChange = { action: 'update', userId: memberAccount.id, role: 'admin' };
+  assert.equal((await request('/api/users', roleChange, member)).status, 401);
+  assert.equal(
+    (
+      await fetch(origin + '/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example', ...owner },
+        body: JSON.stringify(roleChange),
+      })
+    ).status,
+    403,
+  );
+  assert.equal((await request('/api/users', roleChange, owner)).status, 200);
+  assert.equal((await request('/api/users', { ...roleChange, role: 'user' }, owner)).status, 200);
   const me = await (await request('/api/me', null, member)).json();
   assert.equal(me.role, 'user');
   const ownerResults = await (
@@ -223,6 +254,7 @@ try {
   );
   console.log(
     (publicBrowsing ? 'Public browsing on. ' : '') +
+      (openSignup ? 'Open sign-up on. ' : '') +
       'P3 HTTP checks passed: session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
   );
 } finally {

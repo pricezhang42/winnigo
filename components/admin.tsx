@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { dateTimeLabel } from '@/lib/time-zone.mjs';
+import { UsersPanel } from '@/components/users-panel';
 import { Textarea } from '@/components/ui/textarea';
 
 type Item = {
@@ -70,7 +71,7 @@ const ACTIVE_RUN = ['queued', 'running', 'retrying'];
 const RUN_POLL_MS = 5000;
 
 /** Collection desk: source status, the social-outing form, and listing corrections. */
-export default function Admin() {
+export default function Admin({ owner = false }: { owner?: boolean }) {
   const [data, setData] = useState<Data>({ items: [], sources: [] });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -197,6 +198,7 @@ export default function Admin() {
       <SocialOutingForm onAdded={load} />
       <RunHistory version={runsVersion} onAvailable={setCollectionAvailable} onSettled={load} />
       <EventReview />
+      {owner && <UsersPanel />}
       <div className="admin-sources">
         {reports.map((report) => (
           <SourceStatus key={report.id} report={report} />

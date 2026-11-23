@@ -22,14 +22,28 @@ const MODES: Record<Mode, { endpoint: string; heading: string; submit: string; d
 };
 
 /**
- * Sign-in, invited sign-up and password-reset request. Sign-up and reset need email delivery
- * (`mail`); Google sign-in appears only when it is configured.
+ * Sign-in, sign-up and password-reset request. Sign-up needs an invitation unless it is open
+ * (`openSignup`, docs/31). Sign-up and reset need email delivery (`mail`); Google sign-in appears
+ * only when it is configured. With public browsing, visitors can go back to browsing.
  */
-export default function AccountLogin({ google, mail }: { google: boolean; mail: boolean }) {
+export default function AccountLogin({
+  google,
+  mail,
+  openSignup = false,
+  browsing = false,
+}: {
+  google: boolean;
+  mail: boolean;
+  openSignup?: boolean;
+  browsing?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>('login');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const copy = MODES[mode];
+  const copy =
+    mode === 'signup' && openSignup
+      ? { ...MODES.signup, heading: 'Create your account' }
+      : MODES[mode];
 
   /** POSTs to a Better Auth endpoint; shows the error and returns null on failure. */
   async function request(path: string, body: Record<string, unknown>) {
@@ -80,7 +94,13 @@ export default function AccountLogin({ google, mail }: { google: boolean; mail: 
         winnigo.
       </Link>
       <h1>{copy.heading}</h1>
-      <p>Sign in to discover your Winnipeg. New accounts require an invitation.</p>
+      <p>
+        {!openSignup
+          ? 'Sign in to discover your Winnipeg. New accounts require an invitation.'
+          : mode === 'signup'
+            ? 'Save discoveries on every device. We will email you a link to verify your address.'
+            : 'Sign in to save discoveries on every device. New here? Create an account.'}
+      </p>
       <form onSubmit={submit}>
         {mode === 'signup' && (
           <label>
@@ -109,7 +129,7 @@ export default function AccountLogin({ google, mail }: { google: boolean; mail: 
           {busy ? 'Please wait…' : copy.submit}
         </button>
       </form>
-      {google && mode === 'login' && (
+      {google && (mode === 'login' || (mode === 'signup' && openSignup)) && (
         <button
           disabled={busy}
           onClick={async () => {
@@ -125,12 +145,27 @@ export default function AccountLogin({ google, mail }: { google: boolean; mail: 
       )}
       <div className="account-links">
         <button onClick={() => toggleMode('signup')}>
-          {mode === 'signup' ? 'Back to sign in' : 'I have an invitation'}
+          {mode === 'signup'
+            ? 'Back to sign in'
+            : openSignup
+              ? 'Create an account'
+              : 'I have an invitation'}
         </button>
         <button onClick={() => toggleMode('reset')}>
           {mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}
         </button>
       </div>
+      {mode === 'signup' && (
+        <p className="account-terms">
+          By creating an account you agree to the <Link href="/terms">terms</Link> and the{' '}
+          <Link href="/privacy">privacy policy</Link>.
+        </p>
+      )}
+      {browsing && (
+        <p>
+          <Link href="/">Keep browsing without an account</Link>
+        </p>
+      )}
       {!mail && <p>Email verification and reset are awaiting email delivery configuration.</p>}
       {message && <p role="status">{message}</p>}
     </main>
