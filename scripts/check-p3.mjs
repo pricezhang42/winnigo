@@ -363,6 +363,15 @@ try {
     'user',
   );
   await call('sign-up/email', { ...credentials, email: 'lapsed@example.test' });
+  // Signing up again with a registered address: the same reply, and an email to its owner.
+  const repeat = await call('sign-up/email', { ...stranger, password: 'Another-password-1' });
+  assert.equal(repeat.status, 200);
+  assert.ok(mail.some((m) => m.to === stranger.email && m.kind === 'existing'));
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_user WHERE email=$1', [stranger.email]))
+      .rows[0].n,
+    1,
+  );
   auth = invitationAuth;
 
   // The owner's Users panel.
