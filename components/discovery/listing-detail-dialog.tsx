@@ -139,7 +139,7 @@ function ListingDetail({
       {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
           {listing.recurring
-            ? 'This is one occurrence of a recurring program. Check the organizer’s schedule before you go.'
+            ? 'This program runs on several dates; they are listed above. Check the organizer’s schedule before you go.'
             : 'This listing covers select dates. Check the organizer’s schedule before you go.'}
         </p>
       )}
@@ -202,6 +202,20 @@ function ListingDetail({
       <p className="source-note">
         Source: {listing.sourceName} · {isCommunityPost(listing) ? 'Added' : 'Checked'}{' '}
         {new Date(listing.checkedAt).toLocaleDateString('en-CA')}
+        {!!listing.alsoListed?.length && (
+          <>
+            <br />
+            Also listed by{' '}
+            {listing.alsoListed.map((other, index) => (
+              <span key={other.source}>
+                {index > 0 && ', '}
+                <a href={other.url} target="_blank" rel="noreferrer">
+                  {other.sourceName}
+                </a>
+              </span>
+            ))}
+          </>
+        )}
         <br />
         Times are local to Winnipeg. Details and availability can change.
       </p>

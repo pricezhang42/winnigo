@@ -49,18 +49,14 @@ function isFacebookPhotoUrl(url: URL) {
  */
 export async function POST(request: Request) {
   const storage = photoStorage();
-  const collector =
-    readConfig().repository === 'postgres' ? await serviceCredential(request.headers) : null;
+  const collector = await serviceCredential(request.headers);
   const owner = collector ? null : await getOwner();
   if (!collector && !owner) return Response.json({ error: 'Sign in required' }, { status: 401 });
   if (!collector && request.headers.get('origin') !== readConfig().origin)
     return Response.json({ error: 'Invalid origin' }, { status: 403 });
   if (collector && collector.source_id !== 'facebook')
     return Response.json({ error: 'Wrong source scope' }, { status: 403 });
-  if (
-    readConfig().repository === 'postgres' &&
-    !(await rateLimit('photo-import:' + (collector?.id || owner!.userId), 120))
-  )
+  if (!(await rateLimit('photo-import:' + (collector?.id || owner!.userId), 120)))
     return Response.json({ error: 'Try again later' }, { status: 429 });
 
   // Only the failing stage is logged, never the error details or source URL.

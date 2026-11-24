@@ -14,7 +14,7 @@ import { materializeVisitingHours, zonedTimestamp } from '../../lib/event-schedu
 const copy = () => structuredClone(single);
 const parse = (change, input = context) => {
   const value = copy();
-  change(value.event, value);
+  change(value.events[0], value);
   return parseEventExtraction(value, input);
 };
 const reject = (change, pattern) => assert.throws(() => parse(change), pattern);
@@ -24,7 +24,7 @@ test('examples validate without mutation; app supplies source URL, timezone and 
   for (const example of examples) {
     const before = structuredClone(example);
     const result = parseEventExtraction(example.result, example.context);
-    assert.equal(result.schemaVersion, '3');
+    assert.equal(result.schemaVersion, '4');
     assert.deepEqual(result.issues, [], example.name);
     assert.equal(event(result).sourceUrl, example.context.pageUrl);
     assert.equal(event(result).schedule.timeZone, null);
@@ -37,7 +37,7 @@ test('examples validate without mutation; app supplies source URL, timezone and 
   assert.equal(kinds['multiple dates and same-day showtimes'], 'multiple');
   assert.equal(kinds['first Friday monthly program'], 'recurring');
   assert.equal(kinds['exhibition with weekly closure and holiday exception'], 'exhibition');
-  assert.deepEqual(parseEventExtraction({ event: null }, context).events, []);
+  assert.deepEqual(parseEventExtraction({ events: [] }, context).events, []);
 });
 
 test('JSON Schema is strict, bounded and omits app-owned fields', () => {
@@ -77,7 +77,7 @@ test('JSON Schema is strict, bounded and omits app-owned fields', () => {
 
 test('strict types reject unknown fields, omitted fields, coercion and non-finite values', () => {
   reject((e, v) => {
-    v.events = [];
+    v.event = e; // the old single-event shape
   });
   reject((e) => {
     e.sourceUrl = context.pageUrl;
@@ -222,9 +222,10 @@ test('recurrence survives DST and monthly selectors remain explicit facts', () =
   const example = examples.find((e) => e.name === 'weekly program across DST');
   const rule = event(parseEventExtraction(example.result, example.context)).schedule.recurrence[0];
   assert.equal(zonedTimestamp('2026-10-25', rule.startTime), '2026-10-26T00:00:00.000Z');
-  assert.equal(zonedTimestamp('2026-11-01', rule.startTime), '2026-11-02T01:00:00.000Z');
+  // Manitoba kept UTC−5 on 2026-11-01 (tzdata 2026f), so the evening start stays at 00:00Z.
+  assert.equal(zonedTimestamp('2026-11-01', rule.startTime), '2026-11-02T00:00:00.000Z');
   const bad = structuredClone(example.result);
-  bad.event.schedule.recurrence[0].weekdays = null;
+  bad.events[0].schedule.recurrence[0].weekdays = null;
   const held = event(parseEventExtraction(bad, example.context));
   assert.deepEqual(held.schedule.recurrence, []);
   assert.match(held.reviewReasons[0].reason, /weekly days missing/);
@@ -235,15 +236,15 @@ test('weekday numbers are described to the model and must match the quoted day',
   assert.match(described, /0 = Sunday, 1 = Monday.*6 = Saturday/);
   // Sundays counted from Monday = 0 become 6 (Saturday); the quote says Sunday, so hold it.
   const example = examples.find((e) => e.name === 'weekly program across DST');
-  assert.match(example.result.event.schedule.recurrence[0].quote, /Sundays/);
+  assert.match(example.result.events[0].schedule.recurrence[0].quote, /Sundays/);
   const shifted = structuredClone(example.result);
-  shifted.event.schedule.recurrence[0].weekdays = [6];
+  shifted.events[0].schedule.recurrence[0].weekdays = [6];
   const held = event(parseEventExtraction(shifted, example.context));
   assert.deepEqual(held.schedule.recurrence, []);
   assert.match(held.reviewReasons[0].reason, /weekdays do not match the quoted days/);
   const monthly = examples.find((e) => e.name === 'first Friday monthly program');
   const wrongFriday = structuredClone(monthly.result);
-  wrongFriday.event.schedule.recurrence[0].weekdays = [4];
+  wrongFriday.events[0].schedule.recurrence[0].weekdays = [4];
   assert.equal(event(parseEventExtraction(wrongFriday, monthly.context)).reviewReasons.length, 1);
   assert.equal(
     event(parseEventExtraction(monthly.result, monthly.context)).reviewReasons.length,
@@ -295,16 +296,16 @@ test('image URLs are safe, published and capped at three', () => {
   const example = examples.find((e) => e.name === 'photo and ticket links');
   const parsed = event(parseEventExtraction(example.result, example.context));
   assert.deepEqual(parsed.images, [
-    { url: example.result.event.imageUrls[0], kind: 'unknown', caption: null },
+    { url: example.result.events[0].imageUrls[0], kind: 'unknown', caption: null },
   ]);
-  assert.equal(parsed.ticketUrl, example.result.event.ticketUrl);
+  assert.equal(parsed.ticketUrl, example.result.events[0].ticketUrl);
   for (const url of ['http://events.example.test/a.jpg', 'javascript:alert(1)']) {
     const value = structuredClone(example.result);
-    value.event.imageUrls = [url];
+    value.events[0].imageUrls = [url];
     assert.throws(() => parseEventExtraction(value, example.context));
   }
   const tooMany = structuredClone(example.result);
-  tooMany.event.imageUrls = Array(4).fill(tooMany.event.imageUrls[0]);
+  tooMany.events[0].imageUrls = Array(4).fill(tooMany.events[0].imageUrls[0]);
   assert.throws(() => parseEventExtraction(tooMany, example.context));
 });
 
@@ -322,12 +323,15 @@ test('request context and result limits fail closed without clipping content', (
     assert.throws(() => parseExtractionContext(input));
   }
   const huge = copy();
-  huge.event.reviewReasons = Array(20).fill({ field: 'other', reason: 'a'.repeat(500) });
-  huge.event.schedule.dates = Array(200).fill(huge.event.schedule.dates[0]);
-  huge.event.schedule.dates[0] = { ...huge.event.schedule.dates[0], quote: 'a'.repeat(600) };
+  huge.events[0].reviewReasons = Array(20).fill({ field: 'other', reason: 'a'.repeat(500) });
+  huge.events[0].schedule.dates = Array(200).fill(huge.events[0].schedule.dates[0]);
+  huge.events[0].schedule.dates[0] = {
+    ...huge.events[0].schedule.dates[0],
+    quote: 'a'.repeat(600),
+  };
   assert.ok(JSON.stringify(huge).length < EXTRACTION_LIMITS.resultBytes);
   const tooBig = copy();
-  tooBig.event.schedule.dates = Array(201).fill(tooBig.event.schedule.dates[0]);
+  tooBig.events[0].schedule.dates = Array(201).fill(tooBig.events[0].schedule.dates[0]);
   assert.throws(() => parseEventExtraction(tooBig, context));
 });
 

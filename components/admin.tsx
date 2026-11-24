@@ -1,11 +1,14 @@
 'use client';
 import SocialOutingForm from '@/components/social-outing-form';
+import EventReview from '@/components/event-review';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, ExternalLink, Search, EyeOff, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { dateTimeLabel } from '@/lib/time-zone.mjs';
+import { UsersPanel } from '@/components/users-panel';
 import { Textarea } from '@/components/ui/textarea';
 
 type Item = {
@@ -42,17 +45,20 @@ type Run = {
   status: string;
   trigger: string | null;
   attempts: number;
+  // Places runs count listings; event runs count published changes (docs/30).
   counts: Partial<
     Record<
       | 'found'
       | 'added'
       | 'updated'
-      | 'unchanged'
-      | 'cancelled'
-      | 'merged'
-      | 'rejected'
       | 'pages'
-      | 'eventPages',
+      | 'events'
+      | 'new'
+      | 'changed'
+      | 'gone'
+      | 'reused'
+      | 'failed'
+      | 'estimatedCostUsd',
       number
     >
   >;
@@ -65,7 +71,7 @@ const ACTIVE_RUN = ['queued', 'running', 'retrying'];
 const RUN_POLL_MS = 5000;
 
 /** Collection desk: source status, the social-outing form, and listing corrections. */
-export default function Admin() {
+export default function Admin({ owner = false }: { owner?: boolean }) {
   const [data, setData] = useState<Data>({ items: [], sources: [] });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,6 +102,8 @@ export default function Admin() {
   useEffect(() => {
     const timer = setTimeout(load, 100);
     return () => clearTimeout(timer);
+    // Reloads when the search or page changes; `load` reads the latest state itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, offset]);
 
   /** Sends an admin action, then reloads the list and closes the editor on success. */
@@ -191,6 +199,8 @@ export default function Admin() {
       )}
       <SocialOutingForm onAdded={load} />
       <RunHistory version={runsVersion} onAvailable={setCollectionAvailable} onSettled={load} />
+      <EventReview />
+      {owner && <UsersPanel />}
       <div className="admin-sources">
         {reports.map((report) => (
           <SourceStatus key={report.id} report={report} />
@@ -339,21 +349,28 @@ function RunHistory({
   );
 }
 
-const formatTime = (value: string) =>
-  new Date(value).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' });
+const formatTime = (value: string) => dateTimeLabel(value, { year: true });
 
 function summarizeCounts(counts: Run['counts']) {
+  if (counts.events !== undefined) {
+    const parts = [
+      `${counts.events} events`,
+      `${counts.new || 0} new`,
+      `${counts.changed || 0} changed`,
+    ];
+    if (counts.gone) parts.push(`${counts.gone} gone`);
+    if (counts.pages) parts.push(`${counts.pages} pages (${counts.reused || 0} unchanged)`);
+    if (counts.failed) parts.push(`${counts.failed} failed`);
+    if (counts.estimatedCostUsd) parts.push(`US$${counts.estimatedCostUsd.toFixed(3)}`);
+    return parts.join(' · ');
+  }
   if (counts.found === undefined) return '';
   const parts = [
     `${counts.found} found`,
     `${counts.added || 0} new`,
     `${counts.updated || 0} changed`,
   ];
-  if (counts.cancelled) parts.push(`${counts.cancelled} cancelled`);
-  if (counts.merged) parts.push(`${counts.merged} duplicates merged`);
-  if (counts.rejected) parts.push(`${counts.rejected} rejected`);
   if (counts.pages && counts.pages > 1) parts.push(`${counts.pages} pages`);
-  if (counts.eventPages) parts.push(`${counts.eventPages} event pages`);
   return parts.join(' · ');
 }
 
@@ -370,10 +387,7 @@ function SourceStatus({ report }: { report: Report }) {
       <h3>{report.name}</h3>
       <p>{report.count} listings</p>
       <small>
-        {report.checkedAt
-          ? 'Checked ' +
-            new Date(report.checkedAt).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' })
-          : 'No successful check yet'}
+        {report.checkedAt ? 'Checked ' + formatTime(report.checkedAt) : 'No successful check yet'}
       </small>
       {report.error && <p className="notice">{report.error}</p>}
     </div>

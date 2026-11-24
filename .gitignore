@@ -54,3 +54,4 @@ __pycache__/
 .dev.vars*
 /.winnigo/
 !.env.example
+!.env.production.example

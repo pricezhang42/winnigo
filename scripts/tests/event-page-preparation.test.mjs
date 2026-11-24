@@ -188,9 +188,10 @@ test('builds the Winnipeg collection window and keeps supporting documents separ
       exceptions: [],
     },
     reviewReasons: [],
+    url: null,
   };
   // Quotes may come from a supporting document; the app keeps the main page as the source URL.
-  const parsed = parseEventExtraction({ event }, result);
+  const parsed = parseEventExtraction({ events: [event] }, result);
   assert.deepEqual(parsed.issues, []);
   assert.equal(parsed.events[0].sourceUrl, url);
   assert.deepEqual(

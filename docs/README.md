@@ -21,7 +21,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [01 — Product overview](01-overview.md) | What Winnigo is, who it's for, current scope and limitations. |
 | [02 — Architecture](02-architecture.md) | Tech stack, runtime (vinext / Cloudflare Workers), request lifecycle, D1 + R2 bindings. |
 | [03 — Data model](03-data-model.md) | D1 tables, the listing "payload" shape, sources, overrides & hidden state. |
-| [04 — Sources & connectors](04-sources-and-connectors.md) | Calendar scrapers, free-swim parser, refresh/dedupe logic, snapshot seeds. |
+| [04 — Sources & connectors](04-sources-and-connectors.md) | Where events, places, official trails and community highlights come from. |
 | [05 — Social & the Facebook collector](05-social-collector.md) | Manual social outings, the Selenium Hiking Manitoba collector, photo import, publish flow. |
 | [06 — Frontend](06-frontend.md) | React components, discovery UI, admin desk, trail map. |
 | [07 — Development & operations](07-development.md) | Install, setup, dev server, build, deploy (wrangler), D1 migrations, tests, Basic-auth model. |
@@ -35,13 +35,10 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [15 — P2 storage](15-p2-storage.md) | PostgreSQL/S3 implementation and migration rehearsal. |
 | [16 — P3 accounts](16-p3-accounts.md) | Accounts, grants, provider setup and acceptance evidence. |
 | [17 — P5 collection jobs](17-p5-collection.md) | Job queue, schedules, run history, failure handling and evidence. |
-| [20 — Event extraction contract](20-event-extraction-contract.md) | Shared JSON Schema, types, evidence, schedule facts and mapping for LLM-assisted extraction. |
-| [21 — Event page preparation](21-event-page-preparation.md) | Prepare public HTML, schedules and source links for the extraction contract. |
-| [22 — Event extraction service](22-event-extraction-service.md) | Opt-in provider configuration, validation, token counts and run budget. |
-| [23 — Event extraction integration](23-event-extraction-integration.md) | Validate and map candidates into shared listings, occurrences and private photos. |
-| [24 — Event extraction cache](24-event-extraction-cache.md) | Reuse validated results and track usage, latency and failures. |
-| [25 — Event extraction pilot](25-event-extraction-pilot.md) | Compare reviewed public pages with model and parser results. |
-| [26 — Event extraction rollout](26-event-extraction-rollout.md) | Enable shadow extraction per source, review comparisons and add a source. |
+| [18 — Event collection](18-event-collection.md) | Source list, crawling, page preparation, the extraction contract and model service, storage, publishing, review and operations. |
+| [30 — Event collection redesign](30-event-collection-redesign.md) | Decisions, the parser-versus-AI comparison and the steps that replaced the parsers. |
+| [31 — Public access and accounts](31-public-access-and-accounts.md) | Plan: public browsing, open sign-up with Google or email, a Users panel and saved items in the account. |
+| [32 — Deployment](32-deployment.md) | Runbook: the production server, environment settings, first start and owner, backups and restore, updates and rollback, secrets. |
 
 ## Fastest path to running it
 

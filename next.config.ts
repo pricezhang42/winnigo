@@ -13,7 +13,6 @@ const config: NextConfig = {
       './.winnigo/**/*',
       './.wrangler/**/*',
       './.sites-runtime/**/*',
-      './spikes/**/*',
     ],
   },
 };

@@ -1,8 +1,10 @@
-// Keeps docs/sources/candidates.csv valid and in step with the sources defined in code.
+// Keeps docs/sources/candidates.csv valid and in step with the sources defined in code: the event
+// source list (config/sources.mjs, any status), places, official trails and community sources.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { sources } from '../../lib/connectors.mjs';
+import { EVENT_SOURCES } from '../../config/sources.mjs';
+import { placeSources } from '../../lib/connectors.mjs';
 import { communitySources } from '../../lib/social.mjs';
 
 const officialTrails = JSON.parse(
@@ -112,7 +114,8 @@ test('the source tracker has the agreed columns and allowed values', () => {
 
 test('live rows match exactly the sources defined in code', () => {
   const defined = [
-    ...sources.map((source) => source.id),
+    ...EVENT_SOURCES.map((source) => source.id),
+    ...placeSources.map((source) => source.id),
     officialTrails.source.id,
     ...communitySources.map((source) => source.id),
   ].sort();
