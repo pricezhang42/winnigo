@@ -102,6 +102,8 @@ export default function Admin({ owner = false }: { owner?: boolean }) {
   useEffect(() => {
     const timer = setTimeout(load, 100);
     return () => clearTimeout(timer);
+    // Reloads when the search or page changes; `load` reads the latest state itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, offset]);
 
   /** Sends an admin action, then reloads the list and closes the editor on success. */

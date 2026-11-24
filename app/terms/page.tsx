@@ -1,4 +1,6 @@
 import { LegalPage } from '@/components/legal-page';
+// Rendered per request: the contact address comes from the server's environment, not the build.
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Terms · Winnigo' };
 export default function TermsPage() {
   return (

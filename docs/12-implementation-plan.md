@@ -164,6 +164,7 @@ Implementation and local acceptance: [P3 evidence and provider limits](16-p3-acc
 
 - [ ] Select and configure production Node hosting, PostgreSQL, S3-compatible storage, TLS, secrets, OAuth callbacks and email delivery. Provision a separate staging environment.
 - [ ] Rehearse export/import using an authorized copy of the actual legacy data. Reconcile counts by source/status, stable IDs, occurrence dates, overrides, hidden state, media hashes/order and source/comment links. Do not use historical summary counts as the current migration baseline.
+- [ ] Keep `BETTER_AUTH_SECRET` only in the host's secret settings (never in database backups or dumps), use a different secret for staging and production, and document rotating it (which signs everyone out) as the response to a database exposure.
 - [ ] Test backup restoration, failed-deployment rollback, database connection limits and representative search/import load on staging.
 - [ ] Re-run unit, database/storage integration, authorization and full browser checks against the production build. Verify actual CSS/module responses, hydration, map interactions and photo navigation.
 - [ ] Record the intended audience and operator acceptance. Keep restricted community content owner-only unless a separate grant decision authorizes otherwise.

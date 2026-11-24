@@ -202,6 +202,20 @@ function ListingDetail({
       <p className="source-note">
         Source: {listing.sourceName} · {isCommunityPost(listing) ? 'Added' : 'Checked'}{' '}
         {new Date(listing.checkedAt).toLocaleDateString('en-CA')}
+        {!!listing.alsoListed?.length && (
+          <>
+            <br />
+            Also listed by{' '}
+            {listing.alsoListed.map((other, index) => (
+              <span key={other.source}>
+                {index > 0 && ', '}
+                <a href={other.url} target="_blank" rel="noreferrer">
+                  {other.sourceName}
+                </a>
+              </span>
+            ))}
+          </>
+        )}
         <br />
         Times are local to Winnipeg. Details and availability can change.
       </p>

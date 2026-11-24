@@ -68,7 +68,7 @@ export function UsersPanel() {
   }
 
   return (
-    <section className="event-review users-panel" aria-label="Users">
+    <section id="users" className="event-review users-panel" aria-label="Users">
       <div className="event-review-head">
         <div>
           <h2>Users</h2>

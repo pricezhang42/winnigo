@@ -1,4 +1,6 @@
 import { LegalPage } from '@/components/legal-page';
+// Rendered per request: the contact address comes from the server's environment, not the build.
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Privacy policy · Winnigo' };
 export default function PrivacyPage() {
   return (
@@ -17,7 +19,8 @@ export default function PrivacyPage() {
         <li>
           Sign-in sessions: a session cookie, when it expires (after a week), and your
           browser&apos;s user agent so you can recognise your devices on the account page. Your IP
-          address is not stored.
+          address is used only briefly, in memory, to limit repeated sign-in attempts, and is not
+          stored.
         </li>
         <li>The discoveries you save.</li>
         <li>

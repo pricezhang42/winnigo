@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accessClause, isAdmin } from '../../lib/server/access.mjs';
 import { readConfig } from '../../lib/server/config.mjs';
+import { passwordProblem } from '../../lib/password-policy.mjs';
 test('P3 authorization fails closed and distinguishes admin from private-content owner', () => {
   const binds = [];
   const bind = (v) => {
@@ -80,4 +81,13 @@ test('sign-up is invitation-only unless deliberately opened', () => {
   assert.equal(readConfig(env).signup, 'invitation');
   assert.equal(readConfig({ ...env, WINNIGO_SIGNUP: 'open' }).signup, 'open');
   assert.throws(() => readConfig({ ...env, WINNIGO_SIGNUP: 'everyone' }), /invitation or open/);
+});
+
+test('passwords need 8 characters with both letters and numbers', () => {
+  for (const ok of ['abcd1234', 'Winnipeg2026', 'été2026x'])
+    assert.equal(passwordProblem(ok), null, ok);
+  assert.match(passwordProblem('Ab1'), /8 characters/);
+  for (const weak of ['abcdefgh', '12345678', '!!!!????'])
+    assert.match(passwordProblem(weak), /letters and numbers/, weak);
+  assert.match(passwordProblem('a1'.repeat(65)), /at most/);
 });
