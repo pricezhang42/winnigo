@@ -18,7 +18,8 @@ export type RepositoryState = {
   listings: ListingRecord[];
   sources: SourceReport[];
 };
-type Principal = { userId: string; role: string };
+// A visitor (public browsing, docs/31) has a role but no account.
+type Principal = { userId?: string; role: string };
 /** The PostgreSQL repository (lib/server/postgres-repository.mjs) as the web routes use it. */
 export interface DiscoveryRepository {
   read(): Promise<RepositoryState>;

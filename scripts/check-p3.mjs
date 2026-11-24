@@ -7,6 +7,14 @@ import { randomBytes } from 'node:crypto';
 import { serviceConfig } from './check-services.mjs';
 import { createAccounts } from '../lib/server/accounts.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { listUsers, removeUnverifiedAccounts, updateUser } from '../lib/server/users.mjs';
+import {
+  hasAccount,
+  importItems,
+  savedIds,
+  saveItem,
+  unsaveItem,
+} from '../lib/server/saved-items.mjs';
 import {
   bootstrapOwner,
   issueCredential,
@@ -96,8 +104,11 @@ try {
   );
   const otherCookie = cookieOf(await call('sign-in/email', second));
   const other = await auth.api.getSession({ headers: new Headers({ cookie: otherCookie }) });
-  reply = await call('update-user', { name: 'Own profile change', userId: other.user.id }, cookie);
-  assert.equal(reply.status, 200);
+  // Profile updates take only a name: naming another account is refused, not applied to it.
+  reply = await call('update-user', { name: 'Taken over', userId: other.user.id }, cookie);
+  assert.equal(reply.status, 400);
+  reply = await call('update-user', { name: 'Own profile change' }, cookie);
+  assert.equal(reply.status, 200, await reply.clone().text());
   assert.equal(
     (await pool.query('SELECT name FROM auth_user WHERE id=$1', [other.user.id])).rows[0].name,
     'QA Member',
@@ -145,6 +156,19 @@ try {
   assert.equal(await repo.detail('private', { principal: member }), null);
   assert.equal((await repo.search({ principal: owner })).total, 2);
   assert.equal((await repo.search()).total, 0);
+  // A visitor (public browsing, docs/31) sees public rows only, with matching facets and counts.
+  const visitor = { role: 'visitor' };
+  assert.deepEqual(
+    (await repo.search({ principal: visitor })).items.map((i) => i.id),
+    ['public'],
+  );
+  assert.deepEqual((await repo.search({ principal: visitor })).areas, ['Public Area']);
+  assert.equal(await repo.detail('private', { principal: visitor }), null);
+  assert.ok(await repo.detail('public', { principal: visitor }));
+  assert.ok(
+    !(await repo.search({ principal: visitor })).reports.some((r) => r.id === 'facebook'),
+    'visitors get no report for restricted sources',
+  );
   const photo = 'a'.repeat(64);
   await pool.query(
     "INSERT INTO media(id,object_key,content_type,size,status) VALUES($1,$2,'image/png',10,'ready')",
@@ -152,6 +176,14 @@ try {
   );
   await pool.query("INSERT INTO listing_media VALUES('private',$1,0)", [photo]);
   assert.equal(await canReadMedia(photo, member, pool), false);
+  assert.equal(await canReadMedia(photo, visitor, pool), false);
+  const publicPhoto = 'b'.repeat(64);
+  await pool.query(
+    "INSERT INTO media(id,object_key,content_type,size,status) VALUES($1,$2,'image/png',10,'ready')",
+    [publicPhoto, 'photos/' + publicPhoto],
+  );
+  await pool.query("INSERT INTO listing_media VALUES('public',$1,0)", [publicPhoto]);
+  assert.equal(await canReadMedia(publicPhoto, visitor, pool), true);
   await pool.query("INSERT INTO listing_grants VALUES($1,'private')", [userId]);
   assert.equal((await repo.search({ principal: member })).total, 2);
   assert.equal(await canReadMedia(photo, member, pool), true);
@@ -217,6 +249,10 @@ try {
   const reset = mail.find((m) => m.kind === 'reset'),
     resetToken = new URL(reset.url).pathname.split('/').pop();
   assert.ok(resetToken);
+  // A new password needs letters and numbers; the refused attempt leaves the token usable.
+  reply = await call('reset-password', { token: resetToken, newPassword: 'onlyletterspassword' });
+  assert.equal(reply.status, 400);
+  assert.equal((await reply.json()).code, 'WEAK_PASSWORD');
   reply = await call('reset-password', {
     token: resetToken,
     newPassword: 'Replacement-password-456',
@@ -230,7 +266,28 @@ try {
   reply = await call('sign-out', {}, newCookie);
   assert.equal(reply.status, 200);
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie: newCookie }) }), null);
-  // Email-confirmed account deletion cascades access and sessions.
+  // Saved items (docs/31): only what the account can see, separate per account, kept when the
+  // item later disappears, and deleted with the account.
+  await saveItem(pool, repo, member, 'public');
+  await saveItem(pool, repo, member, 'public');
+  await assert.rejects(saveItem(pool, repo, member, 'private'), /Not found/);
+  await assert.rejects(saveItem(pool, repo, member, 'missing-item'), /Not found/);
+  assert.deepEqual(await savedIds(pool, userId), ['public']);
+  assert.deepEqual(await savedIds(pool, other.user.id), []);
+  assert.deepEqual(
+    await importItems(pool, repo, otherPrincipal, ['public', 'private', 'missing-item', 'public']),
+    { added: 1, skipped: 2 },
+  );
+  await assert.rejects(importItems(pool, repo, otherPrincipal, 'public'), /at most/);
+  await pool.query("UPDATE listings SET hidden=true WHERE id='public'");
+  assert.deepEqual(await savedIds(pool, userId), ['public'], 'a hidden item stays saved');
+  assert.equal((await repo.search({ principal: member, tab: 'Saved', ids: ['public'] })).total, 0);
+  await pool.query("UPDATE listings SET hidden=false WHERE id='public'");
+  await unsaveItem(pool, userId, 'public');
+  assert.deepEqual(await savedIds(pool, userId), []);
+  assert.equal(hasAccount({ userId: 'local-owner', role: 'owner', legacy: true }), false);
+  assert.equal(hasAccount({ role: 'visitor' }), false);
+  // Email-confirmed account deletion cascades access, sessions and saved items.
   await pool.query("INSERT INTO source_grants VALUES($1,'facebook')", [other.user.id]);
   reply = await call('delete-user', { callbackURL: origin + '/login' }, otherCookie);
   assert.equal(reply.status, 200, await reply.clone().text());
@@ -245,6 +302,7 @@ try {
     (await pool.query('SELECT 1 FROM source_grants WHERE user_id=$1', [other.user.id])).rowCount,
     0,
   );
+  assert.deepEqual(await savedIds(pool, other.user.id), []);
   const ownerCookie = cookieOf(await call('sign-in/email', ownerCred));
   reply = await call('delete-user', { callbackURL: origin + '/login' }, ownerCookie);
   assert.ok([200, 403].includes(reply.status));
@@ -271,8 +329,137 @@ try {
   assert.equal(authorize.hostname, 'accounts.google.com');
   assert.equal(authorize.searchParams.get('redirect_uri'), origin + '/api/auth/callback/google');
   assert.ok(authorize.searchParams.get('state'));
+  // Open sign-up (docs/31): no invitation needed, verification still required, always a user.
+  await pool.query('TRUNCATE auth_rate_limit');
+  // Invitation mode refuses an uninvited email (the reply does not reveal it; no account is made).
+  await call('sign-up/email', { ...credentials, email: 'nobody@example.test' });
+  assert.equal(
+    (await pool.query("SELECT count(*)::int n FROM auth_user WHERE email='nobody@example.test'"))
+      .rows[0].n,
+    0,
+  );
+  const invitationAuth = auth;
+  auth = createAccounts({
+    pool,
+    env: { ...env, WINNIGO_SIGNUP: 'open' },
+    sendMail: async (m) => mail.push(m),
+  });
+  await pool.query('TRUNCATE auth_rate_limit');
+  // Passwords need at least 8 characters, with both letters and numbers.
+  const short = { ...credentials, email: 'short@example.test', password: 'Abc1234' };
+  assert.equal((await call('sign-up/email', short)).status, 400);
+  for (const weak of ['abcdefgh', '12345678']) {
+    const refused = await call('sign-up/email', { ...short, password: weak });
+    assert.equal(refused.status, 400, weak);
+    assert.equal((await refused.json()).code, 'WEAK_PASSWORD');
+  }
+  assert.equal(
+    (await pool.query("SELECT count(*)::int n FROM auth_user WHERE email='short@example.test'"))
+      .rows[0].n,
+    0,
+  );
+  await pool.query('TRUNCATE auth_rate_limit');
+  assert.equal(
+    (await call('sign-up/email', { ...short, password: 'Abc12345' })).status,
+    200,
+    'eight characters with letters and numbers are enough',
+  );
+  await pool.query('TRUNCATE auth_rate_limit');
+  const stranger = { ...credentials, email: 'stranger@example.test', role: 'owner' };
+  reply = await call('sign-up/email', stranger);
+  assert.equal(reply.status, 200, await reply.clone().text());
+  assert.equal((await call('sign-in/email', stranger)).status, 403, 'verification first');
+  await auth.handler(
+    new Request(mail.find((m) => m.to === stranger.email && m.kind === 'verify').url),
+  );
+  const strangerCookie = cookieOf(await call('sign-in/email', stranger));
+  const strangerId = (
+    await auth.api.getSession({ headers: new Headers({ cookie: strangerCookie }) })
+  ).user.id;
+  assert.equal(
+    (await pool.query('SELECT role FROM user_access WHERE user_id=$1', [strangerId])).rows[0].role,
+    'user',
+  );
+  await call('sign-up/email', { ...credentials, email: 'lapsed@example.test' });
+  // Signing up again with a registered address is refused with a reason the page acts on.
+  const mailBefore = mail.length;
+  const repeat = await call('sign-up/email', {
+    ...stranger,
+    email: 'Stranger@Example.test',
+    password: 'Another-password-1',
+  });
+  assert.equal(repeat.status, 422);
+  assert.equal((await repeat.json()).code, 'ACCOUNT_EXISTS');
+  assert.equal(mail.length, mailBefore, 'no email is sent');
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_user WHERE email=$1', [stranger.email]))
+      .rows[0].n,
+    1,
+  );
+  auth = invitationAuth;
+
+  // The owner's Users panel.
+  const ownerId = (await pool.query("SELECT user_id FROM user_access WHERE role='owner'")).rows[0]
+    .user_id;
+  const listed = await listUsers(pool, { query: 'stranger' });
+  assert.deepEqual(
+    listed.users.map((u) => [u.email, u.role, u.enabled, u.verified, u.methods]),
+    [['stranger@example.test', 'user', true, true, ['credential']]],
+  );
+  assert.ok(listed.users[0].lastSignIn);
+  const accountsBefore = (await listUsers(pool)).total;
+  await updateUser(pool, ownerId, strangerId, { role: 'admin' });
+  assert.equal(
+    (await pool.query('SELECT role FROM user_access WHERE user_id=$1', [strangerId])).rows[0].role,
+    'admin',
+  );
+  await updateUser(pool, ownerId, strangerId, { enabled: false });
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_session WHERE "userId"=$1', [strangerId]))
+      .rows[0].n,
+    0,
+    'disabling signs the account out everywhere',
+  );
+  assert.equal(
+    await auth.api.getSession({ headers: new Headers({ cookie: strangerCookie }) }),
+    null,
+  );
+  await updateUser(pool, 'local-owner', strangerId, { enabled: true });
+  assert.deepEqual(
+    (
+      await pool.query(
+        'SELECT action, user_id IS NOT NULL AS actor FROM security_audit WHERE subject_id=$1 ORDER BY id',
+        [strangerId],
+      )
+    ).rows.map((r) => [r.action, r.actor]),
+    [
+      ['user.role.admin', true],
+      ['user.disabled', true],
+      ['user.enabled', false],
+    ],
+  );
+  await assert.rejects(updateUser(pool, ownerId, ownerId, { role: 'user' }), /operator commands/);
+  await assert.rejects(updateUser(pool, ownerId, ownerId, { enabled: false }), /operator commands/);
+  await assert.rejects(updateUser(pool, ownerId, strangerId, { role: 'owner' }), /admin or user/);
+  const lapsedId = (await pool.query("SELECT id FROM auth_user WHERE email='lapsed@example.test'"))
+    .rows[0].id;
+  await assert.rejects(updateUser(pool, ownerId, lapsedId, { role: 'admin' }), /verified/);
+
+  // Accounts left unverified for a week are removed; verified ones and recent ones stay.
+  assert.equal(await removeUnverifiedAccounts(pool), 0);
+  await pool.query(`UPDATE auth_user SET "createdAt"=now()-interval '8 days' WHERE id=$1`, [
+    lapsedId,
+  ]);
+  assert.equal(await removeUnverifiedAccounts(pool), 1);
+  assert.equal(await removeUnverifiedAccounts(pool, { apply: true }), 1);
+  assert.equal(
+    (await pool.query('SELECT count(*)::int n FROM auth_user WHERE id=$1', [lapsedId])).rows[0].n,
+    0,
+  );
+  assert.equal((await listUsers(pool)).total, accountsBefore - 1);
+
   console.log(
-    'P3 integration passed: invitations, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
+    'P3 integration passed: invitations, open sign-up, users panel, saved items, unverified cleanup, verification, login/reset/logout, deletion, owner bootstrap, user isolation, grants/counts/media, collector revocation and throttling.',
   );
 } finally {
   await pool.end();

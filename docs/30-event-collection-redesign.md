@@ -70,7 +70,8 @@ Each step is one PR.
    `blocked` and Rotary `paused`. Local databases are reset once with `npm run db:reset`.
 5. **Schedules.** Per-source `schedule` registers jobs, still gated by
    `WINNIGO_SCHEDULES=enabled`. Production audience and schedules are not changed. Close
-   superseded issues (#18, #20, #28, #60, #67).
+   superseded issues (#18, #20, #28, #60, #67). Done on 2026-11-23: the fixed schedule table is
+   gone; the scheduled set and times are unchanged and pinned by a unit test.
 
 ## Unchanged
 

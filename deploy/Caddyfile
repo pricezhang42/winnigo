@@ -1,0 +1,7 @@
+# HTTPS for Winnigo (compose.production.yaml). Caddy obtains and renews the certificate for
+# WINNIGO_DOMAIN and passes the visitor's address to the app in X-Forwarded-For, replacing any
+# value the visitor sent. Security headers are set by the app (next.config.ts).
+{$WINNIGO_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:5173
+}

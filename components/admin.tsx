@@ -7,6 +7,8 @@ import { ArrowLeft, RefreshCw, ExternalLink, Search, EyeOff, Eye } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { dateTimeLabel } from '@/lib/time-zone.mjs';
+import { UsersPanel } from '@/components/users-panel';
 import { Textarea } from '@/components/ui/textarea';
 
 type Item = {
@@ -69,7 +71,7 @@ const ACTIVE_RUN = ['queued', 'running', 'retrying'];
 const RUN_POLL_MS = 5000;
 
 /** Collection desk: source status, the social-outing form, and listing corrections. */
-export default function Admin() {
+export default function Admin({ owner = false }: { owner?: boolean }) {
   const [data, setData] = useState<Data>({ items: [], sources: [] });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -100,6 +102,8 @@ export default function Admin() {
   useEffect(() => {
     const timer = setTimeout(load, 100);
     return () => clearTimeout(timer);
+    // Reloads when the search or page changes; `load` reads the latest state itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, offset]);
 
   /** Sends an admin action, then reloads the list and closes the editor on success. */
@@ -196,6 +200,7 @@ export default function Admin() {
       <SocialOutingForm onAdded={load} />
       <RunHistory version={runsVersion} onAvailable={setCollectionAvailable} onSettled={load} />
       <EventReview />
+      {owner && <UsersPanel />}
       <div className="admin-sources">
         {reports.map((report) => (
           <SourceStatus key={report.id} report={report} />
@@ -344,8 +349,7 @@ function RunHistory({
   );
 }
 
-const formatTime = (value: string) =>
-  new Date(value).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' });
+const formatTime = (value: string) => dateTimeLabel(value, { year: true });
 
 function summarizeCounts(counts: Run['counts']) {
   if (counts.events !== undefined) {
@@ -383,10 +387,7 @@ function SourceStatus({ report }: { report: Report }) {
       <h3>{report.name}</h3>
       <p>{report.count} listings</p>
       <small>
-        {report.checkedAt
-          ? 'Checked ' +
-            new Date(report.checkedAt).toLocaleString('en-CA', { timeZone: 'America/Winnipeg' })
-          : 'No successful check yet'}
+        {report.checkedAt ? 'Checked ' + formatTime(report.checkedAt) : 'No successful check yet'}
       </small>
       {report.error && <p className="notice">{report.error}</p>}
     </div>

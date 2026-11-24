@@ -1,16 +1,17 @@
 // Background worker process (npm run worker). It processes collection jobs and,
-// when WINNIGO_SCHEDULES=enabled, registers the daily source schedules. It writes a heartbeat file
+// when WINNIGO_SCHEDULES=enabled, registers each source's schedule from the source list. It writes a heartbeat file
 // for the container health check. --once checks storage (and the job queue) and exits.
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadLocalEnv } from './load-env.mjs';
 import { readConfig } from '../lib/server/config.mjs';
-import { getRepository } from '../lib/server/adapters.mjs';
+import { getRepository, getStorage } from '../lib/server/adapters.mjs';
 import { database } from '../lib/server/postgres.mjs';
 import { runCollection } from '../lib/server/collection.mjs';
 import {
   COLLECTION_QUEUE,
   createBoss,
+  scheduledSources,
   schedulesEnabled,
   syncSchedules,
 } from '../lib/server/job-queue.mjs';
@@ -42,14 +43,21 @@ if (once) {
 const pool = database();
 // One job at a time keeps load on source websites low; jobs for different sources run in turn.
 await boss.work(COLLECTION_QUEUE, { includeMetadata: true }, async ([job]) => {
-  const result = await runCollection(job.data.sourceId, job, { pool, repository });
+  const result = await runCollection(job.data.sourceId, job, {
+    pool,
+    repository,
+    storage: getStorage(),
+  });
   console.log(`Collected ${job.data.sourceId}: ${result.status}`);
   return result;
 });
 await syncSchedules(boss);
 console.log(
   schedulesEnabled()
-    ? 'Winnigo worker ready. Source schedules are enabled (America/Winnipeg).'
+    ? 'Winnigo worker ready. Scheduled (America/Winnipeg): ' +
+        scheduledSources()
+          .map((source) => `${source.id} ${source.schedule}`)
+          .join(', ')
     : 'Winnigo worker ready. Schedules are off (set WINNIGO_SCHEDULES=enabled); manual refreshes run.',
 );
 

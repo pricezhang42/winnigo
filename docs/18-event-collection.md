@@ -50,6 +50,7 @@ it changes what Winnigo fetches. `npm test` validates the checked-in list.
 | `supportingPages` | `{ maxPerPage, sites: [{ origin, pattern, selector? }] }`: links on an event page fetched with it, such as the organizer's own page or the same site's series page with every session |
 | `extraction` | `maxInputTokens` / `maxOutputTokens` for long pages or many events per page; they raise, never lower, the configured limits |
 | `city` | `{ name, postalPrefixes }`: keep only events in that city (see below) |
+| `images.origins` | Image hosts besides the source's own sites (Canada Life Centre's CDN); event images are copied only from these and the source's origins |
 
 ## Crawling
 
@@ -150,6 +151,16 @@ structured `addressLocality` decides, then the postal prefix; a ", Town, Provinc
 another town. An event whose place is not stated stays and is flagged for review. Dropped events
 are counted and never reported as gone.
 
+## Winnipeg time
+
+Every conversion between Winnipeg wall time and an instant (session times, labels, "today", the
+collection window and the job scheduler's zone) uses `lib/time-zone.mjs` with the checked-in
+table in `lib/data/time-zone.mjs`, never the copy of the time zone database bundled with Node,
+PostgreSQL or the browser. Those copies can lag behind the law: Manitoba kept UTC−5 on 2026-11-01
+(tzdata 2026f), while Node 22 bundles 2026a and still falls back to UTC−6, which made evening
+times an hour late. After the operating system's tzdata updates, `npm run tz:update` regenerates
+the table; review the diff like any other change.
+
 ## Storage
 
 | Table | Holds |
@@ -157,11 +168,12 @@ are counted and never reported as gone.
 | `sources` | Each source's latest report (status, count, check times, error) |
 | `collection_runs` | One row per run or queued job: trigger, attempts, counts, cost, error |
 | `source_pages` | The last fetch of each page: kind, content hash, stored model output, outcome |
-| `events` | One row per event: identity (`source_key`), page and event URLs, title, description, venue, address, category, price and its wording, availability, ticket and organizer links, source image URL (not shown until copied privately), status (`active`, `cancelled`, `gone`), hidden, visibility, review notes, evidence, owner edits, `sessions_locked` |
+| `events` | One row per event: identity (`source_key`), page and event URLs, title, description, venue, address, category, price and its wording, availability, ticket and organizer links, source image URL and its private copy (`media_id`), status (`active`, `cancelled`, `gone`), hidden, visibility, review notes, evidence, owner edits, `sessions_locked` |
 | `event_sessions` | Event, start and end date, start and end time, cancelled |
 | `event_changes` | Every published change: run, event, kind (`new`, `changed`, `gone`), field and session diff, before and after, reviewed and reverted times |
 
-The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`.
+The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`; later numbered
+migrations (such as `0002_event_photos.sql`) apply on top.
 
 ## Publishing
 
@@ -175,6 +187,18 @@ The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`.
   (hidden from discovery, never deleted). Events on failed or skipped pages are protected. An event
   whose sessions have all ended is retired without a review entry.
 - Each new, changed or gone event gets an `event_changes` row, and the source report is updated.
+
+## Event photos
+
+After each publish, `copyEventPhotos` (`lib/server/event-photos.mjs`) copies every event's source
+image that has no copy yet, or whose image URL changed, into private media (S3 plus a `media`
+row, keyed by the content hash). It fetches through the same rate-limited reader (8 MB cap, no
+redirects) from the source's approved origins only, and keeps only real JPEG, PNG, WebP or GIF
+files: placeholder SVGs are remembered and not fetched again until the URL changes. An image
+shared by several events is stored once. A failed fetch never fails the run and is retried on the
+next one. `events.media_id` points at the copy and `media_source_url` records which URL it came
+from. Discovery shows `/api/photos/<id>`; the photo route allows anyone who can see a current
+event to see its photo, and media cleanup never deletes a photo an event uses.
 
 ## Discovery
 
@@ -209,8 +233,11 @@ npm run collect -- <id> --publish         # crawl, extract and publish one run
 
 The worker (`npm run worker`) runs the same job for queued refreshes. "Refresh sources" in the
 admin page queues every active source with a schedule; the API also accepts one source. Paused
-and blocked sources are refused. Schedules are registered only with `WINNIGO_SCHEDULES=enabled`
-(still the fixed table in `lib/server/job-queue.mjs` until per-source schedules replace it). A
+and blocked sources are refused. Each active source's `schedule` (a cron expression in America/Winnipeg; places use the entry in
+`lib/connectors.mjs`) is registered only with `WINNIGO_SCHEDULES=enabled`; `manual`, paused
+and blocked sources are never scheduled, and schedules left by a source that changed are removed
+when the worker starts. A unit test pins the scheduled set and times, so changing a schedule is a
+reviewed change. A
 network failure before anything was read is retried by the queue; any other failure records an
 error and keeps what the source had.
 
@@ -232,5 +259,4 @@ with `WINNIGO_SEED_PROFILE=qa`; events come only from collection.
 
 - Pages built with JavaScript (the `browser` method) are not read yet; Royal MTC's schedules need
   corrections through the review list.
-- Source images are not shown until they are copied into private storage.
 - WAG refuses automated requests and stays `blocked`.
