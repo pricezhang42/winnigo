@@ -20,7 +20,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 - `lib/server/accounts.mjs`, `access.mjs`, `principal.mjs`: accounts, grants and scoped service credentials. Run `npm run check:p3`; see docs/16-p3-accounts.md for isolated browser QA.
 - `lib/server/postgres-repository.mjs`, `s3-storage.mjs`: P2 domain repository and private media. Run `npm run check:p2` with services available; it uses a temporary schema and object prefix.
 - `lib/server/contracts.ts`, `services.ts`, `adapters.mjs`: repository/photo boundaries (PostgreSQL and S3 only).
-- `lib/store.ts`, `lib/server/actions.mjs`: discovery and atomic import/editorial operations.
+- `lib/server/paged-store.ts`, `lib/server/actions.mjs`: discovery and atomic import/editorial operations.
 - `config/sources.mjs`, `lib/server/event-sources.mjs`, `scripts/collect-source.mjs`: the event source list, its fetcher and AI extraction (`npm run collect -- --list`); `lib/server/event-store.mjs` publishes runs and backs the admin review list. Run `npm run check:events` after changes; see docs/18-event-collection.md.
 - `lib/connectors.mjs`: shared text/date helpers and The Forks places parser; page reads never collect.
 - `scripts/worker.mjs`, `lib/server/job-queue.mjs`, `lib/server/collection.mjs`: P5 collection jobs (pg-boss). Schedules run only with `WINNIGO_SCHEDULES=enabled`; run `npm run check:p5` after changes (docs/17-p5-collection.md). Facebook collection stays on its existing scheduler until P6.
