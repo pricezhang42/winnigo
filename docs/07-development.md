@@ -1,111 +1,110 @@
 # 07 — Development & operations
 
-The standalone working guide is [`AGENTS.md`](../AGENTS.md); the app's own setup notes are in the
-root [`README.md`](../README.md). This is the practical subset.
+The working guide is [`AGENTS.md`](../AGENTS.md); setup notes are in the root
+[`README.md`](../README.md). This is the practical subset. Production deployment is in
+[32 — Deployment](32-deployment.md).
 
 ## Prerequisites
 
 - Node.js `>= 22.13.0`.
-- Python 3 + Selenium (only for the Facebook collector; isolated venv in
-  `.sites-runtime/selenium-venv`, pinned in [`scripts/selenium-requirements.txt`](../scripts/selenium-requirements.txt)).
+- Docker, for the local PostgreSQL and S3-compatible storage ([`compose.yaml`](../compose.yaml)).
+- Python 3 + Selenium only for the Facebook collector, in a private venv such as `.winnigo/venv`
+  (pinned in [`scripts/selenium-requirements.txt`](../scripts/selenium-requirements.txt); see
+  [HIKING-COLLECTOR.md](../HIKING-COLLECTOR.md)).
 
 ## Everyday commands ([`package.json`](../package.json))
 
 ```bash
-npm ci               # install (npm run install:ci is an alias)
-npm run setup        # create .env.local with generated secrets (never overwrites it)
-npm run services:up  # PostgreSQL + S3-compatible storage via Docker Compose
-npm run db:migrate   # apply migrations/postgres in order
-npm run db:seed      # seed snapshot data (WINNIGO_SEED_PROFILE=qa for synthetic QA data)
-npm run dev          # Next.js dev server, http://127.0.0.1:5173
-npm run build        # optimized Next.js build (standalone server)
-npm start            # run the built app
-npm run worker       # background worker (no collection schedules until P5)
-npm test             # node --test on scripts/tests/*.test.mjs
-npm run typecheck    # tsc --noEmit
-npm run lint         # eslint
-npm run format       # prettier (Python: ruff format scripts)
-npm run check:assets # verify real CSS/JS responses and layout for a running server
-npm run check:p2     # PostgreSQL/S3 integration checks (temporary schema)
-npm run check:p3     # accounts and permissions checks (temporary schema)
+npm ci                 # install
+npm run setup          # create .env.local with generated secrets (never overwrites it)
+npm run services:up    # PostgreSQL + S3-compatible storage via Docker Compose
+npm run db:migrate     # apply migrations/postgres in order
+npm run db:seed        # official trails (WINNIGO_SEED_PROFILE=qa adds synthetic QA items)
+npm run dev            # Next.js dev server, http://127.0.0.1:5173
+npm run build          # optimized Next.js build (standalone server)
+npm start              # run the built app
+npm run worker         # collection jobs; schedules only with WINNIGO_SCHEDULES=enabled
+npm run collect -- --list            # event sources; `-- <source> --publish` collects one
+npm run events:duplicates            # recompute and list cross-source duplicate events
+npm run accounts:manage -- <command> # invite, bootstrap-owner, roles, grants (docs/16)
+npm run db:backup / db:restore       # backups to and from the backup bucket (docs/32)
 ```
 
 `npm run dev`/`build`/`start` go through [`scripts/node-app.mjs`](../scripts/node-app.mjs), which
-validates configuration before starting Next.js. The pre-P1 Vinext/Sites commands (`deploy`,
-`build:sites`, `db:generate`) and their helper scripts were removed; they remain available in the
-rollback release described in [`legacy/cloudflare/README.md`](../legacy/cloudflare/README.md).
+validates configuration before starting Next.js. Event collection needs the `WINNIGO_EXTRACTION_*`
+settings and `OPENAI_API_KEY` ([18 — Event collection](18-event-collection.md)). The pre-P1
+Cloudflare/Vinext/Sites commands were removed; they remain in the rollback release described in
+[`legacy/cloudflare/README.md`](../legacy/cloudflare/README.md).
 
-## Authentication model ([`lib/auth-policy.mjs`](../lib/auth-policy.mjs), [`lib/auth.ts`](../lib/auth.ts))
+## Authentication model ([`lib/server/config.mjs`](../lib/server/config.mjs), [`proxy.ts`](../proxy.ts))
 
-`WINNIGO_AUTH_MODE` selects the model:
+`WINNIGO_AUTH_MODE` selects the model; `npm run setup` writes `session` for new checkouts.
 
-- **`basic` (default, standalone):** HTTP Basic auth. The owner is whoever presents
-  `WINNIGO_ADMIN_USER` : `WINNIGO_ADMIN_PASSWORD`. [`worker.ts`](../worker.ts) gates the entire site —
-  anonymous requests get a `401` with `WWW-Authenticate: Basic`. `getOwner()` (in `lib/auth.ts`)
-  returns `{userId:'owner'}` for a valid Basic header, else null; `/admin` and `/api/sources` use it.
-- **`sites` (legacy, opt-in):** trusts `oai-authenticated-user-id` / `-email` headers injected by the
-  ChatGPT Sites dispatch, which enforces the owner-only audience. Standalone mode explicitly does
-  **not** trust those headers (a portability test asserts forged ones are rejected).
+- **`session`:** Better Auth accounts in PostgreSQL ([`lib/server/accounts.mjs`](../lib/server/accounts.mjs)).
+  Sign-up is invitation-only unless `WINNIGO_SIGNUP=open`; email must be verified; the single owner
+  is promoted only by `npm run accounts:manage -- bootstrap-owner`. Outside loopback the origin must
+  be HTTPS. See [16 — P3 accounts](16-p3-accounts.md) and [31](31-public-access-and-accounts.md).
+- **`local`:** the owner, without a password, on a loopback host and origin only. For the owner's
+  own development.
+- **`basic`:** HTTP Basic with `WINNIGO_ADMIN_USER` / `WINNIGO_ADMIN_PASSWORD`; a compatibility
+  mode.
 
-To sign in locally, use the owner credentials in the generated `.dev.vars` when the browser prompts.
-`isCollector()` (collector key) is separate and scoped — see [08 — Security & privacy](08-security-privacy.md).
+[`proxy.ts`](../proxy.ts) gates every page and API route. Without a principal, pages redirect to
+`/login` and APIs answer `401`, except the sign-in shell, `/api/health`, `robots.txt`, public reads
+when `WINNIGO_PUBLIC_BROWSING=enabled`, and the collector import routes, which check their own
+scoped credentials ([08 — Security & privacy](08-security-privacy.md)). It also sets the security
+headers ([`lib/security-headers.mjs`](../lib/security-headers.mjs)). Routes check roles and content
+grants themselves ([`lib/server/access.mjs`](../lib/server/access.mjs)).
 
-## Local D1 migrations
+## Database migrations
 
-`npm run setup` runs `db:migrate` for you. Manual flow after a schema change:
-
-```bash
-npm run db:generate    # after editing db/schema.ts -> drizzle/*.sql
-npm run db:migrate     # wrangler d1 migrations apply DB --local --config wrangler.json --persist-to .wrangler/state
-```
-
-`migrations_dir` is set to `drizzle/` in [`wrangler.json`](../wrangler.json), so `wrangler d1
-migrations apply` handles ordering. Use `.wrangler/state` (Wrangler adds versioned subdirs). Because
-Winnigo seeds everything through `initialize()` from committed JSON, a fresh local DB populates
-itself on the first `GET /api/listings` after migration. Production migrations apply on deploy.
+Migrations are numbered SQL files in [`migrations/postgres/`](../migrations/postgres), applied in
+order by `npm run db:migrate` ([`scripts/migrate-postgres.mjs`](../scripts/migrate-postgres.mjs)),
+which records them in `winnigo_schema_migrations`. Add a schema change as the next numbered file;
+never edit an applied one. `npm run db:reset -- --yes` resets a local pre-baseline database.
+In production the one-off `release` container runs migrations and the seed before a new version
+starts ([32](32-deployment.md)).
 
 ## Tests
 
 ```bash
-npm test          # connectors + free-swim + portability parser/auth tests (21)
-npm run typecheck # tsc --noEmit
-.sites-runtime/selenium-venv/bin/python scripts/tests/selenium_collector_test.py  # collector (needs venv + Chrome)
+npm test             # node --test scripts/tests/*.test.mjs
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint (clean; keep it that way)
+npm run check:events # event store publishing (temporary schema)
+npm run check:p2     # PostgreSQL/S3 integration (temporary schema and object prefix)
+npm run check:p3     # accounts and permissions (temporary schema)
+npm run check:p5     # job queue and schedules
+npm run check:assets # real CSS/JS responses and layout for a running server
+.winnigo/venv/bin/python scripts/tests/selenium_collector_test.py  # Facebook collector (venv + Chrome)
 ```
 
-The portability suite ([`scripts/tests/portability.test.mjs`](../scripts/tests/portability.test.mjs))
-verifies standalone auth rejects forged Sites headers, the collector key is scoped to POST import
-endpoints, and `publish-social.mjs` is local-by-default.
+The `check:*` database checks need `npm run services:up`. Browser regression runs against a
+separate QA database ([15 — P2 storage](15-p2-storage.md)).
 
-## Deploy
+## Verify the access boundary
 
-```bash
-npm run deploy    # build + wrangler deploy --config dist/server/wrangler.json
-```
-
-Deploys to **your own Cloudflare account** (configure `wrangler login` and the D1/R2 resources named
-in [`wrangler.json`](../wrangler.json) first). Set the secrets there — `WINNIGO_ADMIN_USER`,
-`WINNIGO_ADMIN_PASSWORD`, `WINNIGO_COLLECTOR_KEY` — via `wrangler secret put`. No ChatGPT Sites step
-is involved. `build:sites` + the old Sites publish flow remain only for the legacy deployment the
-user already had.
-
-## Verify the auth boundary
-
-After `npm start` (built Worker): an anonymous request must return **401**; owner Basic auth must
-work; the collector key must grant only the two POST import endpoints, never reads or admin. This is
-the standalone equivalent of the old "owner-private" guarantee.
+With a dev or built server running in session mode: an anonymous page request must redirect to
+`/login` and an anonymous API request must return `401`; a signed-in user must not reach admin
+routes; collector credentials must reach only their POST import routes. `npm run check:p3` covers
+these at the account level, `npm run check:boundary` covers Basic mode, and `npm run check:assets`
+confirms that styles and scripts actually load (an HTML `200` alone is not evidence).
 
 ## Things that are git-ignored (don't commit)
 
-`node_modules/`, `dist/`, `.next/`, `.vinext/`, `.wrangler/`, `.dev.vars*` (owner + collector
-secrets), `/.winnigo/`, `.sites-runtime/` (Selenium venv, Chrome profile, collector key,
-candidate/enriched files), `.agents/`, `.codex/`, Python `__pycache__/`, `*.tsbuildinfo`, `.env*`.
-See [`.gitignore`](../.gitignore). **Never** print or commit `.dev.vars` or the collector key.
+`node_modules/`, `.next/`, `dist/`, `.env*` (except `.env.example` and `.env.production.example`),
+`.dev.vars*`, `/.winnigo/` (venv, browser profiles, mail outbox, collection logs, raw candidates),
+`/.sites-runtime/`, `/.wrangler/`, `.agents/`, `.codex/`, Python `__pycache__/`, `*.tsbuildinfo`.
+See [`.gitignore`](../.gitignore). **Never** print or commit `.env.local`, `.env.production`, the
+collector key or provider secrets.
 
-## Regenerating data snapshots
+## Data
 
 ```bash
-node scripts/import-snapshot.mjs                 # refresh listings.json + sources.json from live sites
-python3 scripts/import-official-trails.py        # refresh official-trails.json + anchors from Trails Manitoba
+npm run db:seed                            # official trails from lib/data/official-trails.json
+python3 scripts/import-official-trails.py  # refresh official-trails.json + anchors from Trails Manitoba
+npm run collect -- <source> --publish      # events and places, by AI extraction (docs/18)
 ```
 
-Commit the regenerated JSON. See [04 — Sources & connectors](04-sources-and-connectors.md).
+Only the official trails are seeded; commit regenerated trail JSON. Events and places come from
+collection, not from committed snapshots. See [04 — Sources & connectors](04-sources-and-connectors.md).
