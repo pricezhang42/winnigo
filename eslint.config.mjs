@@ -12,7 +12,24 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Private local state (browser profiles, virtualenvs, scratch scripts); never committed.
+    '.winnigo/**',
+    '.claude/**',
+    // Pre-P1 reference files, excluded from the build (legacy/cloudflare/README.md).
+    'legacy/**',
   ]),
+  {
+    rules: {
+      // Photos come from the private /api/photos route (cached, already sized) or the source's
+      // own address; Next's image optimizer would fetch and re-encode them again.
+      '@next/next/no-img-element': 'off',
+      // `_name` marks an intentionally unused value; dropping fields with a rest copy is fine.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
+  },
   {
     files: ['components/ui/**/*.{ts,tsx}', 'hooks/use-mobile.ts'],
     rules: {

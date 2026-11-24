@@ -104,8 +104,11 @@ try {
   );
   const otherCookie = cookieOf(await call('sign-in/email', second));
   const other = await auth.api.getSession({ headers: new Headers({ cookie: otherCookie }) });
-  reply = await call('update-user', { name: 'Own profile change', userId: other.user.id }, cookie);
-  assert.equal(reply.status, 200);
+  // Profile updates take only a name: naming another account is refused, not applied to it.
+  reply = await call('update-user', { name: 'Taken over', userId: other.user.id }, cookie);
+  assert.equal(reply.status, 400);
+  reply = await call('update-user', { name: 'Own profile change' }, cookie);
+  assert.equal(reply.status, 200, await reply.clone().text());
   assert.equal(
     (await pool.query('SELECT name FROM auth_user WHERE id=$1', [other.user.id])).rows[0].name,
     'QA Member',

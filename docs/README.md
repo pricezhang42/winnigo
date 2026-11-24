@@ -38,6 +38,7 @@ See the [current progress and next steps](12-implementation-plan.md#current-prog
 | [18 — Event collection](18-event-collection.md) | Source list, crawling, page preparation, the extraction contract and model service, storage, publishing, review and operations. |
 | [30 — Event collection redesign](30-event-collection-redesign.md) | Decisions, the parser-versus-AI comparison and the steps that replaced the parsers. |
 | [31 — Public access and accounts](31-public-access-and-accounts.md) | Plan: public browsing, open sign-up with Google or email, a Users panel and saved items in the account. |
+| [32 — Deployment](32-deployment.md) | Runbook: the production server, environment settings, first start and owner, backups and restore, updates and rollback, secrets. |
 
 ## Fastest path to running it
 

@@ -98,6 +98,8 @@ docker compose --env-file .env.local --profile app stop
 
 P3 account setup and verification are in [P3 accounts](docs/16-p3-accounts.md). P2 storage, migration, browser QA and limits are in [P2 evidence](docs/15-p2-storage.md). Historical foundation checks are in [P1 evidence](docs/14-p1-foundation.md).
 
+Deploying to production, backups, updates and rollback are in the [deployment runbook](docs/32-deployment.md).
+
 ## Legacy app and collector
 
 The complete pre-P1 release is commit `c1c29c5e24ec55de01a99fa776a0879afd191d41`. [Legacy instructions](legacy/cloudflare/README.md) describe running it in a separate checkout, including the original Sites build path. Existing `.wrangler`, `.dev.vars`, browser profiles, remote D1/R2 and the old hosted site remain intact. The new `.env.local` applies only to the Node app.

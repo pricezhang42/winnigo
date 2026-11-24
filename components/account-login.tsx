@@ -138,6 +138,9 @@ export default function AccountLogin({
           : { email, password };
     const result = await request(copy.endpoint, body);
     if (!result) return;
+    // A full load on purpose: router.replace('/') followed by router.refresh() re-rendered
+    // /login and cancelled the navigation, leaving a signed-in person on the sign-in page.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (mode === 'login') window.location.assign('/');
     else setSentTo({ email, kind: mode });
   }
