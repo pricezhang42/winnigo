@@ -246,6 +246,10 @@ try {
   const reset = mail.find((m) => m.kind === 'reset'),
     resetToken = new URL(reset.url).pathname.split('/').pop();
   assert.ok(resetToken);
+  // A new password needs letters and numbers; the refused attempt leaves the token usable.
+  reply = await call('reset-password', { token: resetToken, newPassword: 'onlyletterspassword' });
+  assert.equal(reply.status, 400);
+  assert.equal((await reply.json()).code, 'WEAK_PASSWORD');
   reply = await call('reset-password', {
     token: resetToken,
     newPassword: 'Replacement-password-456',
@@ -338,13 +342,24 @@ try {
     sendMail: async (m) => mail.push(m),
   });
   await pool.query('TRUNCATE auth_rate_limit');
-  // Passwords need at least 8 characters.
+  // Passwords need at least 8 characters, with both letters and numbers.
   const short = { ...credentials, email: 'short@example.test', password: 'Abc1234' };
   assert.equal((await call('sign-up/email', short)).status, 400);
+  for (const weak of ['abcdefgh', '12345678']) {
+    const refused = await call('sign-up/email', { ...short, password: weak });
+    assert.equal(refused.status, 400, weak);
+    assert.equal((await refused.json()).code, 'WEAK_PASSWORD');
+  }
+  assert.equal(
+    (await pool.query("SELECT count(*)::int n FROM auth_user WHERE email='short@example.test'"))
+      .rows[0].n,
+    0,
+  );
+  await pool.query('TRUNCATE auth_rate_limit');
   assert.equal(
     (await call('sign-up/email', { ...short, password: 'Abc12345' })).status,
     200,
-    'eight characters are enough',
+    'eight characters with letters and numbers are enough',
   );
   await pool.query('TRUNCATE auth_rate_limit');
   const stranger = { ...credentials, email: 'stranger@example.test', role: 'owner' };

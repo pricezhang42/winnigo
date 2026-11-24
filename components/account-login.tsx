@@ -1,6 +1,36 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import {
+  PASSWORD_HINT,
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  passwordProblem,
+} from '@/lib/password-policy.mjs';
+
+/** Google's "G" mark, for the sign-in button. */
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -42,6 +72,12 @@ export default function AccountLogin({
   // A sign-up refused because the address already has an account; offered for sign-in.
   const [existing, setExisting] = useState('');
   const [prefill, setPrefill] = useState('');
+  // Sign-up's new password and its confirmation; the mismatch shows once the person leaves the
+  // confirmation field, then updates as they type.
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [confirmLeft, setConfirmLeft] = useState(false);
+  const mismatch = mode === 'signup' && confirmLeft && confirm !== password;
 
   // The verification link returns here with ?verified=1.
   useEffect(() => {
@@ -88,6 +124,12 @@ export default function AccountLogin({
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email'));
     const password = String(form.get('password') || '');
+    if (mode === 'signup') {
+      setConfirmLeft(true);
+      if (confirm !== password) return;
+      const problem = passwordProblem(password);
+      if (problem) return setMessage(problem);
+    }
     const body =
       mode === 'reset'
         ? { email, redirectTo: '/account/reset' }
@@ -106,6 +148,9 @@ export default function AccountLogin({
     setMessage('');
     setSentTo(null);
     setExisting('');
+    setPassword('');
+    setConfirm('');
+    setConfirmLeft(false);
   }
 
   /** From a refused sign-up to sign-in, with the email filled in. */
@@ -170,20 +215,56 @@ export default function AccountLogin({
             defaultValue={prefill}
           />
         </label>
-        {mode !== 'reset' && (
+        {mode === 'login' && (
           <label>
             Password
             <input
               type="password"
               name="password"
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               required
-              minLength={mode === 'signup' ? 8 : 1}
-              maxLength={128}
+              maxLength={PASSWORD_MAX}
             />
           </label>
         )}
-        {mode === 'signup' && <small>At least 8 characters.</small>}
+        {mode === 'signup' && (
+          <>
+            <label>
+              Password
+              <input
+                type="password"
+                name="password"
+                autoComplete="new-password"
+                required
+                minLength={PASSWORD_MIN}
+                maxLength={PASSWORD_MAX}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <small>{PASSWORD_HINT}</small>
+            </label>
+            <label>
+              Confirm password
+              <input
+                type="password"
+                name="confirm"
+                autoComplete="new-password"
+                required
+                maxLength={PASSWORD_MAX}
+                value={confirm}
+                aria-invalid={mismatch}
+                aria-describedby={mismatch ? 'password-mismatch' : undefined}
+                onChange={(event) => setConfirm(event.target.value)}
+                onBlur={() => setConfirmLeft(confirm !== '')}
+              />
+              {mismatch && (
+                <small id="password-mismatch" className="field-error">
+                  Passwords don&apos;t match
+                </small>
+              )}
+            </label>
+          </>
+        )}
         <button disabled={busy || (!mail && mode !== 'login')} type="submit">
           {busy ? 'Please wait…' : copy.submit}
         </button>
@@ -201,18 +282,22 @@ export default function AccountLogin({
         )}
       </form>
       {google && (mode === 'login' || (mode === 'signup' && openSignup)) && (
-        <button
-          disabled={busy}
-          onClick={async () => {
-            const result = await request('sign-in/social', {
-              provider: 'google',
-              callbackURL: '/',
-            });
-            if (result?.url) window.location.assign(result.url);
-          }}
-        >
-          Continue with Google
-        </button>
+        <div className="google-row">
+          <button
+            className="google-button"
+            disabled={busy}
+            onClick={async () => {
+              const result = await request('sign-in/social', {
+                provider: 'google',
+                callbackURL: '/',
+              });
+              if (result?.url) window.location.assign(result.url);
+            }}
+          >
+            <GoogleMark />
+            Continue with Google
+          </button>
+        </div>
       )}
       <div className="account-links">
         <button onClick={() => toggleMode('signup')}>

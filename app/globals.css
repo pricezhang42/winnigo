@@ -122,3 +122,6 @@
 .legal-page{max-width:720px;text-align:left}.legal-page h2{font-size:17px;font-weight:650;margin:22px 0 6px}.legal-page p,.legal-page li{font-size:14px;line-height:1.6;color:#41606d}.legal-page ul{padding-left:20px;display:grid;gap:6px}.account-terms{font-size:13px;color:#5d7380}
 .saved-import{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.saved-import span{flex:1 1 280px}
 .account-existing{display:grid;gap:8px;padding:12px;border:1px solid #f0d9a8;border-radius:8px;background:#fff8e8}.account-existing p{margin:0}
+.account-links{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:1rem}.account-links button{justify-self:center;margin:0;text-align:center}
+.google-row{display:flex;justify-content:center;margin:.5rem 0}.account-shell .google-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:white;color:#3c4043;border:1px solid #dadce0;font-weight:500;padding:.65rem 1.1rem}.account-shell .google-button:hover{background:#f8f9fa}
+.account-shell small{font-size:13px;color:#5d7380}.account-shell .field-error{color:#c5221f;font-weight:500}.account-shell input[aria-invalid=true]{border-color:#c5221f}
