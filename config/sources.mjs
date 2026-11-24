@@ -20,6 +20,8 @@
 //   extraction              per-source token limits for pages that need more room
 //   city                    { name, postalPrefixes }: keep only events in that city; events
 //                           whose place is not stated stay, flagged for review
+//   images.origins          image hosts besides the source's own sites; each event's image is
+//                           copied into private storage from these origins only
 //
 // Patterns are anchored and match a URL's path and query.
 
@@ -69,7 +71,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/festivals-and-events/upcoming-events/display,event/(\\d+)',
       nextLinkPattern: '^/festivals-and-events/upcoming-events(?:/page:\\d+)?/?$',
       maxListPages: 15,
-      maxEventPages: 100,
+      maxEventPages: 150,
       selector: '#content',
     },
     supportingPages: { maxPerPage: 1, sites: TOURISM_ORGANIZERS },
@@ -115,6 +117,7 @@ export const EVENT_SOURCES = [
       maxListPages: 1,
       maxEventPages: 60,
     },
+    images: { origins: ['https://d1kq1f9a6xp251.cloudfront.net'] },
   },
   {
     id: 'manitoba-museum',
@@ -164,7 +167,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/livemusic/display,event/(\\d+)',
       pageLinkPattern: '^/livemusic/from:\\d{4}-\\d\\d-\\d\\d/page:\\d+$',
       maxListPages: 6,
-      maxEventPages: 100,
+      maxEventPages: 150,
     },
   },
   {

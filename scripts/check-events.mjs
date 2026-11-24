@@ -7,6 +7,10 @@ import { readFile, readdir } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
+import { copyEventPhotos } from '../lib/server/event-photos.mjs';
+import { canReadMedia } from '../lib/server/access.mjs';
+import { qaImage } from '../lib/server/qa-image.mjs';
+import { contentHash } from '../lib/server/s3-storage.mjs';
 import {
   editEvent,
   listChanges,
@@ -98,43 +102,6 @@ try {
     await pool.query(await readFile(new URL(f, dir), 'utf8'));
   const repo = new PostgresRepository(pool);
 
-  // A parser listing for the same source, published before the switch-over.
-  await repo.importRecords(
-    [
-      {
-        id: 'forks-parser-skating',
-        source: 'forks',
-        hidden: false,
-        override: {},
-        payload: {
-          id: 'forks-parser-skating',
-          source: 'forks',
-          sourceName: 'The Forks',
-          title: 'Parser skating party',
-          type: 'Event',
-          category: 'Outdoors',
-          venue: 'The Forks',
-          address: '',
-          neighbourhood: '',
-          url: 'https://www.theforks.com/events/skating',
-          start: '2026-11-20',
-          end: '2026-11-20',
-          time: '',
-          image: '',
-          checkedAt,
-          price: null,
-          family: false,
-          indoor: false,
-          description: '',
-          schedule: 'event',
-          status: 'active',
-        },
-      },
-    ],
-    [],
-  );
-  assert.equal((await repo.search({ query: 'Parser skating', principal: owner })).total, 1);
-
   // First run: two pages list the same event (sessions merge) and one other event.
   const concert = event('QA Concert', ['2026-11-20T01:00:00.000Z'], { price: 10 });
   const market = event('QA Market', ['2026-11-21', '2026-11-28']);
@@ -151,11 +118,6 @@ try {
   assert.equal(found.items[0].occurrences.length, 2, 'sessions from both pages merge');
   assert.equal(found.items[0].sourceName, 'The Forks');
   assert.equal(found.items[0].image, '', 'source images are not shown directly');
-  assert.equal(
-    (await repo.search({ query: 'Parser skating', principal: owner })).total,
-    0,
-    'parser listings leave discovery once the source publishes events',
-  );
   assert.equal((await repo.search({ query: 'QA', principal: reader })).total, 2);
   const onDay = await repo.search({ date: '2026-11-28', principal: owner, query: 'QA' });
   assert.deepEqual(
@@ -281,8 +243,68 @@ try {
   );
   const report = (await pool.query(`SELECT report FROM sources WHERE id='forks'`)).rows[0].report;
   assert.equal(report.status, 'ok');
+
+  // Event images are copied once into private media and shown from there (docs/18).
+  const png = qaImage([12, 34, 56]);
+  const images = {
+    'https://www.theforks.com/img/concert.png': png,
+    'https://www.theforks.com/img/placeholder.svg': Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    ),
+  };
+  const photoFetch = async (url) =>
+    images[url] ? new Response(images[url]) : new Response('missing', { status: 404 });
+  const stored = [];
+  const storage = {
+    async put(id, bytes, type) {
+      assert.equal(id, contentHash(bytes));
+      stored.push(id);
+      await pool.query(
+        `INSERT INTO media(id,object_key,content_type,size,status) VALUES($1,$2,$3,$4,'ready')
+         ON CONFLICT DO NOTHING`,
+        [id, 'photos/' + id, type, bytes.length],
+      );
+    },
+  };
+  const withImage = async (title, url) =>
+    pool.query(`UPDATE events SET image_url=$2 WHERE title=$1 RETURNING id`, [title, url]);
+  for (const title of ['QA Fair', 'QA Show', 'QA Gala'])
+    await pool.query(
+      `INSERT INTO events(id,source,source_key,page_url,event_url,title,category,checked_at)
+       VALUES($1,'forks',$1,$2,$2,$3,'Experiences',now())`,
+      ['photo-' + title, page1, title],
+    );
+  await withImage('QA Concert', 'https://www.theforks.com/img/concert.png');
+  await withImage('QA Fair', 'https://www.theforks.com/img/concert.png');
+  await withImage('QA Gala', 'https://www.theforks.com/img/placeholder.svg');
+  await withImage('QA Show', 'https://elsewhere.example.test/img.png');
+  const photos = await copyEventPhotos(pool, definition, {
+    storage,
+    fetchImpl: photoFetch,
+    pauseMs: 0,
+  });
+  assert.deepEqual(photos, { copied: 1, reused: 1, notPhoto: 1, failed: 1 });
+  assert.deepEqual(stored, [contentHash(png)], 'the shared image is fetched and stored once');
+  assert.deepEqual(
+    await copyEventPhotos(pool, definition, { storage, fetchImpl: photoFetch, pauseMs: 0 }),
+    { copied: 0, reused: 0, notPhoto: 0, failed: 1 },
+    'only the off-site image is tried again',
+  );
+  const shown = (await repo.search({ query: 'QA Concert', principal: reader })).items[0];
+  assert.equal(shown.image, '/api/photos/' + contentHash(png));
+  assert.deepEqual(shown.images, [shown.image]);
+  assert.equal(await canReadMedia(contentHash(png), reader, pool), true);
+  assert.equal(await canReadMedia('f'.repeat(64), reader, pool), false);
+  await withImage('QA Concert', null);
+  await withImage('QA Fair', null);
+  await copyEventPhotos(pool, definition, { storage, fetchImpl: photoFetch, pauseMs: 0 });
+  assert.equal(
+    (await repo.search({ query: 'QA Concert', principal: reader })).items[0].image,
+    '',
+    'a removed image removes its copy',
+  );
   console.log(
-    'Event store: publishes and merges events, reuses unchanged pages, records and undoes changes, keeps owner edits and protects events on failed pages.',
+    'Event store: publishes and merges events, reuses unchanged pages, records and undoes changes, keeps owner edits, protects events on failed pages and copies event photos privately.',
   );
 } finally {
   await pool.end();

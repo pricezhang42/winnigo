@@ -18,11 +18,6 @@ const noStore = { 'Cache-Control': 'no-store' };
 export async function GET(request: Request) {
   if (!(await getAdmin()))
     return Response.json({ error: 'Sign in to review events.' }, { status: 401 });
-  if (readConfig().repository !== 'postgres')
-    return Response.json(
-      { changes: [], counts: { open: 0, total: 0 }, available: false },
-      { headers: noStore },
-    );
   try {
     const open = new URL(request.url).searchParams.get('all') !== '1';
     return Response.json(
@@ -43,8 +38,6 @@ export async function POST(request: Request) {
   if (!principal) return Response.json({ error: 'Sign in to review events.' }, { status: 401 });
   if (request.headers.get('origin') !== readConfig().origin)
     return Response.json({ error: 'Invalid origin' }, { status: 403 });
-  if (readConfig().repository !== 'postgres')
-    return Response.json({ error: 'Event review needs PostgreSQL.' }, { status: 409 });
   if (!(await rateLimit('event-review:' + principal.userId, 120)))
     return Response.json({ error: 'Try again later' }, { status: 429 });
   if (!request.headers.get('content-type')?.includes('application/json'))

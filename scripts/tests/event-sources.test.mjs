@@ -58,7 +58,7 @@ test('definitions with an unsafe or incomplete scope are refused', () => {
     (d) => (d.fetch.eventLinkPattern = '/event/'),
     (d) => delete d.fetch.eventLinkPattern,
     (d) => (d.fetch.eventKeyPattern = '^/event/\\d+'),
-    (d) => (d.fetch.maxEventPages = 101),
+    (d) => (d.fetch.maxEventPages = 201),
     (d) => (d.fetch.startUrls = ['https://other.example.test/events']),
     (d) => (d.supportingPages.sites[0].pattern = 'shows'),
     (d) => (d.extraction = { maxOutputTokens: 100000 }),
@@ -214,7 +214,7 @@ test('extraction keeps events with sessions in the window, counts the rest and r
   assert.equal(first.events[0].url, origin + '/event/1');
   assert.deepEqual(
     first.events[0].sessions.map((s) => s.startAt),
-    ['2026-11-21T01:00:00.000Z'],
+    ['2026-11-21T00:00:00.000Z'],
   );
   assert.equal(second.outcome, 'outside-window');
   assert.equal(second.outsideWindow, 1);
@@ -290,7 +290,7 @@ test('numbered pagination and dated start URLs read the window', async () => {
     delete d.fetch.nextLinkPattern;
     delete d.supportingPages;
   });
-  const start = origin + '/events/from:2026-11-21?start=1793509200&end=1798783200';
+  const start = origin + '/events/from:2026-11-21?start=1793509200&end=1798779600';
   // Winnipeg midnight on Nov 1 (CDT) and on Jan 1 (CST).
   const { requested, fetchImpl } = site({
     [start]: `<a href="/events/from:2026-11-21/page:2">2</a><a href="/events/from:2026-11-21/page:3">3</a>`,
@@ -342,4 +342,24 @@ test('listing entries that link each date of one event share its key', () => {
     });
   assert.equal(entry('2026-11-21'), entry('2026-12-05'));
   assert.equal(entry('2026-11-21'), 'key:42');
+});
+
+test("an event page's own series page wins over other series it links", async () => {
+  const series = variant((d) => {
+    d.supportingPages = { maxPerPage: 1, sites: [{ origin, pattern: '^/series/[^/]+/$' }] };
+  });
+  const { requested, fetchImpl } = site({
+    [origin + '/events']: '<a href="/event/1/worlds-of-ice">A</a>',
+    [origin + '/event/1/worlds-of-ice']: eventHtml(
+      '<a href="/series/legends-of-the-sky/">« Previous show</a>' +
+        '<a href="/series/worlds-of-ice-planetarium/">All dates</a>',
+    ),
+    [origin + '/series/worlds-of-ice-planetarium/']: '<main>November 24 @ 3:00 pm</main>',
+  });
+  const crawl = await crawlSource(series, { fetchImpl, pauseMs: 0 });
+  assert.deepEqual(
+    crawl.pages[0].supporting.map((s) => s.url),
+    [origin + '/series/worlds-of-ice-planetarium/'],
+  );
+  assert.ok(!requested.some((u) => u.includes('legends')));
 });

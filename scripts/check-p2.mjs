@@ -1,18 +1,14 @@
 // P2 integration check (npm run check:p2): runs migrations in a temporary PostgreSQL schema and
-// S3 prefix, then exercises imports, search, overrides, media and legacy migration.
-import { spawnSync } from 'node:child_process';
+// S3 prefix, then exercises imports, search, overrides and private media.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile, readdir } from 'node:fs/promises';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository, documentFor } from '../lib/server/postgres-repository.mjs';
 import { S3Storage, contentHash } from '../lib/server/s3-storage.mjs';
 import { qaImage } from '../lib/server/qa-image.mjs';
 import { applyAction } from '../lib/server/actions.mjs';
-import { migrateLegacy } from '../lib/server/migrate-legacy.mjs';
 const config = serviceConfig(),
   schema = 'p2_test_' + Date.now(),
   admin = new Pool({ connectionString: config.connectionString });
@@ -35,8 +31,7 @@ repo.search = (filters) =>
   search({ ...filters, principal: { userId: 'test-owner', role: 'owner' } });
 repo.detail = (id, filters) =>
   detail(id, { ...filters, principal: { userId: 'test-owner', role: 'owner' } });
-const dir = await mkdtemp(join(tmpdir(), 'winnigo-p2-')),
-  objects = [];
+const objects = [];
 try {
   await admin.query(`CREATE SCHEMA ${schema}`);
   const migrationFixtures = [
@@ -54,7 +49,6 @@ try {
       indoor: true,
       status: 'active',
       start: '2026-05-01',
-      endMonth: '2027-04',
       schedule: 'series',
       uncertainty: { closing: 'month only' },
       originalWording: 'Until April 2027',
@@ -66,44 +60,25 @@ try {
       url: 'https://example.test/typed-minimal',
     },
   ];
-  const migrationOverride = { title: 'Owner title', description: '', price: null };
-  for (const file of [
-    '0001_foundation.sql',
-    '0002_discovery.sql',
-    '0003_accounts.sql',
-    '0004_restrict_community.sql',
-    '0005_collection_runs.sql',
-    '0006_event_occurrences.sql',
-    '0007_typed_occurrence_schedule.sql',
-    '0008_exhibition_visiting_cards.sql',
-    '0009_typed_listing_fields.sql',
-    '0010_event_extraction_cache.sql',
-    '0011_event_extraction_comparisons.sql',
-    '0012_events.sql',
-  ]) {
-    if (file === '0009_typed_listing_fields.sql') {
-      await pool.query("INSERT INTO sources(id,report) VALUES('typed-fixture','{}')");
-      for (const payload of migrationFixtures) {
-        const override = payload.id === 'typed-full' ? migrationOverride : {};
-        await pool.query(
-          'INSERT INTO listings(id,source,payload,document,visibility,dedupe_key) VALUES($1,$2,$3,$4,$5,$1)',
-          [
-            payload.id,
-            payload.source,
-            payload,
-            documentFor({ id: payload.id, payload, override, hidden: false }),
-            'public',
-          ],
-        );
-        await pool.query('INSERT INTO listing_overrides VALUES($1,$2)', [payload.id, override]);
-      }
-    }
+  for (const file of (await readdir('migrations/postgres'))
+    .filter((f) => f.endsWith('.sql'))
+    .sort())
     await pool.query(await readFile('migrations/postgres/' + file, 'utf8'));
-  }
+  // Typed columns round-trip the source contract: explicit nulls stay, absent keys stay absent.
+  const migrationOverride = { title: 'Owner title', description: '', price: null };
+  await repo.importRecords(
+    migrationFixtures.map((payload) => ({
+      id: payload.id,
+      source: payload.source,
+      payload,
+      hidden: false,
+      override: payload.id === 'typed-full' ? migrationOverride : {},
+    })),
+  );
   for (const expected of migrationFixtures) {
     const row = (
       await pool.query(
-        'SELECT payload,document,metadata,price,end_date,closing_month FROM listing_records WHERE id=$1',
+        'SELECT payload,document,metadata,price,end_date FROM listing_records WHERE id=$1',
         [expected.id],
       )
     ).rows[0];
@@ -125,7 +100,6 @@ try {
     assert.equal(row.end_date, null);
     if (expected.id === 'typed-full') {
       assert.equal(row.price, '25');
-      assert.equal(row.closing_month, '2027-04');
       assert.equal(row.document.price, null);
       assert.equal(row.document.description, '');
     } else {
@@ -159,10 +133,6 @@ try {
     /listing_price_valid/,
   );
   await assert.rejects(
-    pool.query("UPDATE listings SET closing_month='2027-13' WHERE id='typed-full'"),
-    /listing_month_valid/,
-  );
-  await assert.rejects(
     pool.query("UPDATE listings SET end_date='2026-04-30' WHERE id='typed-full'"),
     /listing_dates_order/,
   );
@@ -184,7 +154,9 @@ try {
   assert.equal(roundTripRow.payload.price, null);
   assert.equal('description' in roundTripRow.payload, false);
   assert.equal(roundTripRow.metadata.constructor, 'source metadata');
-  await pool.query("DELETE FROM source_identities WHERE source='typed-fixture'");
+  await pool.query(
+    "DELETE FROM audit_records WHERE listing_id IN (SELECT id FROM listings WHERE source='typed-fixture')",
+  );
   await pool.query("DELETE FROM listings WHERE source='typed-fixture'");
   await pool.query("DELETE FROM sources WHERE id='typed-fixture'");
   const photos = [qaImage([11, 22, 33]), qaImage([44, 55, 66])];
@@ -276,96 +248,30 @@ try {
   assert.ok(detail.mapLocation);
   assert.equal(detail.distanceKm, null);
   assert.equal(detail.commentNotes.length, 1);
-  // Export fixture, dry-run, interrupted copy, restart, stable IDs and editorial preservation.
-  await mkdir(join(dir, 'photos'));
-  for (let i = 0; i < photos.length; i++)
-    await writeFile(join(dir, 'photos', objects[i]), photos[i]);
-  const manifest = {
-    version: 1,
-    sources: [],
-    listings: [row],
-    media: photos.map((bytes, i) => ({
-      id: objects[i],
-      file: 'photos/' + objects[i],
-      size: bytes.length,
-      contentType: 'image/png',
-    })),
-  };
-  const file = join(dir, 'manifest.json');
-  await writeFile(file, JSON.stringify(manifest));
-  const sqlite = join(dir, 'legacy.sqlite');
-  const create = spawnSync(
-    'python3',
-    [
-      '-c',
-      `import sqlite3,json,sys
-m=json.load(open(sys.argv[1]));c=sqlite3.connect(sys.argv[2]);c.execute('CREATE TABLE listings(id,source,payload,hidden,override)');c.execute('CREATE TABLE sources(id,checked_at,attempted_at,count,status,error)')
-for r in m['listings']:c.execute('INSERT INTO listings VALUES(?,?,?,?,?)',(r['id'],r['source'],json.dumps(r['payload']),r['hidden'],json.dumps(r['override'])))
-c.commit();c.close()`,
-      file,
-      sqlite,
-    ],
-    { encoding: 'utf8' },
+  // A dated listing matches only its own dates; undated listings never match a date filter.
+  await repo.importRecords([
+    {
+      id: 'dated',
+      source: 'calendar',
+      hidden: false,
+      override: {},
+      payload: {
+        id: 'dated',
+        source: 'calendar',
+        title: 'Dated outing',
+        url: 'https://example.com/dated',
+        start: '2099-06-01',
+        end: '2099-06-02',
+        status: 'active',
+        schedule: 'event',
+      },
+    },
+  ]);
+  assert.deepEqual(
+    (await repo.search({ date: '2099-06-02' })).items.map((item) => item.id),
+    ['dated'],
   );
-  assert.equal(create.status, 0, create.stderr);
-  const exported = join(dir, 'export');
-  const exportRun = spawnSync(
-    'python3',
-    [
-      'scripts/export-legacy.py',
-      '--database',
-      sqlite,
-      '--output',
-      exported,
-      '--photos-dir',
-      join(dir, 'photos'),
-    ],
-    { encoding: 'utf8' },
-  );
-  assert.equal(exportRun.status, 0, exportRun.stderr);
-  assert.equal(
-    (await migrateLegacy(join(exported, 'manifest.json'), { repository: repo, storage })).listings,
-    1,
-  );
-  const remoteDir = join(dir, 'remote');
-  await mkdir(remoteDir);
-  const remoteManifest = join(remoteDir, 'manifest.json');
-  await writeFile(
-    remoteManifest,
-    JSON.stringify({ ...manifest, media: manifest.media.map(({ id, file }) => ({ id, file })) }),
-  );
-  const legacyEnv = {
-    ...process.env,
-    LEGACY_S3_ENDPOINT: config.s3.endpoint,
-    LEGACY_S3_BUCKET: config.bucket,
-    LEGACY_S3_ACCESS_KEY: config.s3.credentials.accessKeyId,
-    LEGACY_S3_SECRET_KEY: config.s3.credentials.secretAccessKey,
-    LEGACY_S3_PREFIX: storage.prefix,
-  };
-  for (const args of [[], ['--apply'], ['--apply']]) {
-    const copy = spawnSync(
-      process.execPath,
-      ['scripts/fetch-legacy-media.mjs', remoteManifest, ...args],
-      { env: legacyEnv, encoding: 'utf8' },
-    );
-    assert.equal(copy.status, 0, copy.stderr);
-  }
-  assert.equal((await migrateLegacy(remoteManifest, { repository: repo, storage })).media, 2);
-  assert.equal((await migrateLegacy(file, { repository: repo, storage })).dryRun, true);
-  assert.equal((await pool.query('SELECT count(*) FROM migration_runs')).rows[0].count, '0');
-  await assert.rejects(
-    migrateLegacy(file, { repository: repo, storage, apply: true, stopAfter: 1 }),
-    /interrupted/,
-  );
-  assert.ok((await storage.cleanup({ apply: true })).blocked);
-  const migrated = await migrateLegacy(file, { repository: repo, storage, apply: true });
-  assert.equal(migrated.idMap[id], id);
-  assert.equal(migrated.status, 'complete');
-  assert.equal((await repo.detail(id)).title, 'Owner correction');
-  await migrateLegacy(file, { repository: repo, storage, apply: true });
-  assert.equal((await repo.read()).listings.length, 9);
-  await writeFile(join(dir, 'photos', objects[0]), Buffer.from('corrupt'));
-  await assert.rejects(migrateLegacy(file, { repository: repo, storage }), /integrity/);
+  assert.equal((await repo.search({ date: '2099-06-03' })).total, 0);
   // Reused media must survive until all references disappear; uploads and grace periods survive GC.
   await repo.importRecords([
     {
@@ -393,7 +299,7 @@ c.commit();c.close()`,
   assert.equal((await storage.cleanup({ apply: true })).deleted, 1);
   assert.equal(await storage.get(orphanId), null);
   console.log(
-    'P2 integration passed: typed listing backfill/null precision/live overrides, SQL rollback/concurrency, identity/editorial preservation, pagination/filtering, private S3 integrity/reuse, migration dry-run/restart/checksum, safe cleanup.',
+    'P2 integration passed: typed listing round trip/null precision/live overrides, SQL rollback/concurrency, identity/editorial preservation, pagination/filtering/dates, private S3 integrity/reuse, safe cleanup.',
   );
 } finally {
   for (const id of objects)
@@ -404,5 +310,4 @@ c.commit();c.close()`,
   await pool.end();
   await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
   await admin.end();
-  await rm(dir, { recursive: true, force: true });
 }

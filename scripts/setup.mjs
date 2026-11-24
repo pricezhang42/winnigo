@@ -21,8 +21,6 @@ if (!existsSync('.env.local')) {
     WINNIGO_HOST: '127.0.0.1',
     PORT: '5173',
     WINNIGO_ORIGIN: 'http://127.0.0.1:5173',
-    WINNIGO_REPOSITORY: 'postgres',
-    WINNIGO_STORAGE: 's3',
     WINNIGO_DATA_DIR: '.winnigo/node',
     WINNIGO_SEED_PROFILE: 'snapshot',
     POSTGRES_PASSWORD: dbPassword,

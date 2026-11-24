@@ -10,6 +10,8 @@ Remaining activation work is provider configuration and a live Google/SMTP accep
 
 ## Account mode and first owner
 
+With `WINNIGO_SIGNUP=open` (default `invitation`), anyone can create an account with a verified email; see [31](31-public-access-and-accounts.md). The owner's Users panel on the admin page changes roles and disables accounts. Saved discoveries belong to the account (`/api/me/saved`) and are deleted with it; the local and Basic owner modes keep them in the browser.
+
 The normal local app keeps the requested `WINNIGO_AUTH_MODE=local` password-free loopback experience. `basic` remains a compatibility mode. New setups default to `session`, backed by Better Auth 1.7.6 and PostgreSQL. Session mode exposes the login shell and static assets, but requires authentication for discovery, admin and media. Public browsing and unrestricted signup are disabled.
 
 Run setup and migrations before using accounts:
@@ -48,7 +50,7 @@ These are trusted filesystem/operator operations, not public HTTP endpoints. Dis
 
 ## Email and Google configuration
 
-Email/password login requires verified email. Verification, reset and confirmed account deletion are implemented. Passwords require at least 12 characters; reset revokes existing sessions. Logout, listing/revoking sessions and signing out other devices are available at `/account`.
+Email/password login requires verified email. Verification, reset and confirmed account deletion are implemented. Passwords require at least 8 characters with both letters and numbers; reset revokes existing sessions. The account page (`/account`, see docs/31) edits the display name, changes the password, lists signed-in devices, signs out other devices, signs out and requests deletion.
 
 For actual delivery, configure `WINNIGO_MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_PORT` (465 or the provider's STARTTLS port), `SMTP_FROM`, and optional `SMTP_USER` / `SMTP_PASSWORD`. TLS certificate checks remain enabled. The file outbox refuses non-loopback hosts/origins and is never served by an API. Configure SMTP before enabling invitations on a hosted app. Delivery failures do not create a usable unverified login; provider error detail is not returned to clients.
 
@@ -63,6 +65,9 @@ Use the exact configured `WINNIGO_ORIGIN`; local QA uses `http://127.0.0.1:5193/
 The implementation follows the pinned library's [database schema](https://better-auth.com/docs/concepts/database), [email/password options](https://better-auth.com/docs/authentication/email-password), and [Google integration](https://better-auth.com/docs/authentication/google). Reviewed SQL migrations own the schema; the web process does not run automatic auth migrations.
 
 ## Content permissions
+
+With `WINNIGO_PUBLIC_BROWSING=enabled` (session mode only, default off), visitors without an
+account may browse public discoveries and their photos; see [31](31-public-access-and-accounts.md).
 
 - Owner: collection administration and access to restricted items/photos.
 - Admin: collection management for records they may read. Admin status alone does not reveal private community content, permit social imports or issue grants.
@@ -86,7 +91,7 @@ Issuance writes the random token once to a new mode-0600 file; only its SHA-256 
 
 ## Request protection and retention
 
-Cookie-authenticated POSTs require the exact configured Origin. Auth requests accept bounded JSON (16 KiB); source imports retain the 250 KB bound, photo metadata 8 KB and image bytes 8 MB. Better Auth performs its own OAuth state/CSRF checks. Session cookies are HttpOnly, SameSite=Lax and Secure on HTTPS. Session mode refuses an HTTP origin outside loopback. Proxies must not log verification/reset URLs; Next incoming-request logging is disabled for this reason.
+Cookie-authenticated POSTs require the exact configured Origin. Auth requests accept bounded JSON (16 KiB); source imports retain the 250 KB bound, photo metadata 8 KB and image bytes 8 MB. Better Auth performs its own OAuth state/CSRF checks. Session cookies are HttpOnly, SameSite=Lax and Secure on HTTPS, and signed with `BETTER_AUTH_SECRET`: the database holds the session token itself, but a token read from the database cannot be used without the secret. Keep the secret out of database backups and dumps, use a different one per environment, and rotate it if the database is exposed (that signs everyone out). Session mode refuses an HTTP origin outside loopback. Proxies must not log verification/reset URLs; Next incoming-request logging is disabled for this reason.
 
 Database-backed limits cover auth globally (120 requests/minute), an email key (10 attempts/5 minutes), imports per identity (60/minute), and photos per identity (120/minute), alongside Better Auth limits. Raw email/credential/IP strings are not stored in application rate-limit keys. Forwarded IP headers are not trusted; the conservative shared auth limit can throttle simultaneous users and should be tuned alongside a trusted ingress before launch. Limits fail closed if storage is unavailable.
 

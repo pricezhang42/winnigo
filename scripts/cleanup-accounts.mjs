@@ -1,7 +1,9 @@
 // Previews (or with --apply removes) expired sessions, verifications, invitations, rate-limit
-// buckets and old audit/credential rows (npm run accounts:cleanup).
+// buckets, old audit/credential rows and accounts left unverified for seven days
+// (npm run accounts:cleanup).
 import { loadLocalEnv } from './load-env.mjs';
 import { database, writeTransaction } from '../lib/server/postgres.mjs';
+import { removeUnverifiedAccounts } from '../lib/server/users.mjs';
 loadLocalEnv();
 const pool = database(),
   apply = process.argv.includes('--apply');
@@ -22,6 +24,7 @@ try {
       ).rows[0].count;
       if (apply) await c.query(`DELETE FROM ${table} WHERE ${predicate}`);
     }
+    counts.unverified_accounts = await removeUnverifiedAccounts(c, { apply });
     return counts;
   });
   console.log(JSON.stringify({ dryRun: !apply, counts: result }));

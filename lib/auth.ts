@@ -1,9 +1,13 @@
 import 'server-only';
 import { headers } from 'next/headers';
-import { principalFromHeaders } from './server/principal.mjs';
+import { principalFromHeaders, readerFromHeaders } from './server/principal.mjs';
 /** The signed-in caller for this request (see lib/server/principal.mjs), or null. */
 export async function getPrincipal() {
   return principalFromHeaders(await headers());
+}
+/** The signed-in caller, or a visitor when public browsing is enabled (docs/31), or null. */
+export async function getReader() {
+  return readerFromHeaders(await headers());
 }
 export async function getOwner() {
   const principal = await getPrincipal();
