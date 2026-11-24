@@ -17,6 +17,7 @@ account deletion, roles and grants. Those have never been tested with real email
 | Photos for visitors | Shown. Visitors see event and place photos like signed-in users; community photos stay restricted. |
 | CAPTCHA | None at first. Email verification, rate limits and cleanup of unverified accounts carry the load; a CAPTCHA can be added if automated sign-ups appear. |
 | Users panel | Part of this plan (step 2). |
+| Sign-up with a registered address | Said on the page ("An account with this email already exists"), with "Sign in instead". The owner chose this on 2026-11-24 over Better Auth's identical reply, accepting that the page confirms whether an address has an account; sign-up stays rate-limited. Password-reset requests still answer identically. |
 | Launch | Public browsing and open sign-up ship behind settings that default to off. Turning them on for real users is part of the production cutover (P8, #10), together with the hosting, email provider and Google app review. Nothing here changes the production audience, the original site or its collector. |
 
 AGENTS.md currently says "Never open registration". Step 2 changes it to: registration opens

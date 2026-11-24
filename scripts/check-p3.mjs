@@ -363,10 +363,16 @@ try {
     'user',
   );
   await call('sign-up/email', { ...credentials, email: 'lapsed@example.test' });
-  // Signing up again with a registered address: the same reply, and an email to its owner.
-  const repeat = await call('sign-up/email', { ...stranger, password: 'Another-password-1' });
-  assert.equal(repeat.status, 200);
-  assert.ok(mail.some((m) => m.to === stranger.email && m.kind === 'existing'));
+  // Signing up again with a registered address is refused with a reason the page acts on.
+  const mailBefore = mail.length;
+  const repeat = await call('sign-up/email', {
+    ...stranger,
+    email: 'Stranger@Example.test',
+    password: 'Another-password-1',
+  });
+  assert.equal(repeat.status, 422);
+  assert.equal((await repeat.json()).code, 'ACCOUNT_EXISTS');
+  assert.equal(mail.length, mailBefore, 'no email is sent');
   assert.equal(
     (await pool.query('SELECT count(*)::int n FROM auth_user WHERE email=$1', [stranger.email]))
       .rows[0].n,

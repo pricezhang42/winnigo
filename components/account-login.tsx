@@ -39,6 +39,9 @@ export default function AccountLogin({
   const [message, setMessage] = useState('');
   // After a sign-up or reset request: the address the link went to.
   const [sentTo, setSentTo] = useState<{ email: string; kind: Mode } | null>(null);
+  // A sign-up refused because the address already has an account; offered for sign-in.
+  const [existing, setExisting] = useState('');
+  const [prefill, setPrefill] = useState('');
 
   // The verification link returns here with ?verified=1.
   useEffect(() => {
@@ -58,6 +61,7 @@ export default function AccountLogin({
   async function request(path: string, body: Record<string, unknown>) {
     setBusy(true);
     setMessage('');
+    setExisting('');
     try {
       const response = await fetch('/api/auth/' + path, {
         method: 'POST',
@@ -65,6 +69,10 @@ export default function AccountLogin({
         body: JSON.stringify(body),
       });
       const result = await response.json().catch(() => ({}));
+      if (result.code === 'ACCOUNT_EXISTS' && typeof body.email === 'string') {
+        setExisting(body.email);
+        return null;
+      }
       if (!response.ok)
         throw Error(result.message || 'The request could not be completed. Please try again.');
       return result;
@@ -97,10 +105,15 @@ export default function AccountLogin({
     setMode(mode === target ? 'login' : target);
     setMessage('');
     setSentTo(null);
+    setExisting('');
   }
 
-  // The same answer whether or not the address already has an account, so the page never
-  // reveals which addresses are registered.
+  /** From a refused sign-up to sign-in, with the email filled in. */
+  function signInInstead() {
+    setPrefill(existing);
+    toggleMode('login');
+  }
+
   if (sentTo)
     return (
       <main className="account-shell">
@@ -121,11 +134,7 @@ export default function AccountLogin({
             </>
           )}
         </p>
-        <p className="account-terms">
-          Nothing after a few minutes? Check your spam folder.{' '}
-          {sentTo.kind === 'signup' &&
-            'If you already have an account with this address, sign in instead, with “Continue with Google” if you created it with Google.'}
-        </p>
+        <p className="account-terms">Nothing after a few minutes? Check your spam folder.</p>
         <button onClick={() => toggleMode('login')}>Back to sign in</button>
       </main>
     );
@@ -151,7 +160,15 @@ export default function AccountLogin({
         )}
         <label>
           Email
-          <input type="email" name="email" autoComplete="email" required maxLength={254} />
+          <input
+            key={mode + prefill}
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            maxLength={254}
+            defaultValue={prefill}
+          />
         </label>
         {mode !== 'reset' && (
           <label>
@@ -171,6 +188,17 @@ export default function AccountLogin({
           {busy ? 'Please wait…' : copy.submit}
         </button>
         {message && <p role="status">{message}</p>}
+        {existing && (
+          <div role="status" className="account-existing">
+            <p>
+              An account with <strong>{existing}</strong> already exists.
+              {google ? ' If you created it with Google, use “Continue with Google”.' : ''}
+            </p>
+            <button type="button" onClick={signInInstead}>
+              Sign in instead
+            </button>
+          </div>
+        )}
       </form>
       {google && (mode === 'login' || (mode === 'signup' && openSignup)) && (
         <button
