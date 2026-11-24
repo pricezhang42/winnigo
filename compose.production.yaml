@@ -1,0 +1,86 @@
+# Production on one server (docs/32-deployment.md): PostgreSQL, the website, the collection
+# worker and Caddy for HTTPS. Photos and database backups go to S3-compatible storage
+# (Cloudflare R2). Every setting comes from .env.production, which is never committed.
+# Run through deploy/compose.sh, which passes that file to Docker Compose.
+name: winnigo
+
+x-app: &app
+  build: .
+  image: winnigo-node:production
+  env_file: .env.production
+  environment: &app-environment
+    DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/winnigo
+    WINNIGO_AUTH_MODE: session
+    WINNIGO_HOST: 0.0.0.0
+    WINNIGO_DATA_DIR: /data
+    # Caddy replaces this header with the visitor's address (lib/server/config.mjs).
+    WINNIGO_CLIENT_IP_HEADER: x-forwarded-for
+  depends_on:
+    postgres:
+      condition: service_healthy
+  logging: &logging
+    driver: json-file
+    options: { max-size: 10m, max-file: '5' }
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: winnigo
+      POSTGRES_DB: winnigo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes: ['postgres:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U winnigo -d winnigo']
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  # One-off steps, run before starting a new version: migrations and the official trails.
+  release:
+    <<: *app
+    profiles: [tools]
+    command: ['sh', '-c', 'node scripts/migrate-postgres.mjs && node scripts/seed-node.mjs']
+    restart: 'no'
+
+  # Daily database dump to the backup bucket (started by the host's systemd timer).
+  backup:
+    <<: *app
+    profiles: [tools]
+    command: ['node', 'scripts/backup-database.mjs']
+    restart: 'no'
+
+  web:
+    <<: *app
+    command: ['node', 'server.js']
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: ['node', 'scripts/worker.mjs']
+    volumes: ['worker-data:/data']
+    healthcheck:
+      test: ['CMD', 'node', 'scripts/check-worker.mjs']
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      WINNIGO_DOMAIN: ${WINNIGO_DOMAIN:?Set WINNIGO_DOMAIN in .env.production}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  postgres:
+  worker-data:
+  caddy-data:
+  caddy-config:

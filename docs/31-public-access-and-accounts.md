@@ -17,6 +17,7 @@ account deletion, roles and grants. Those have never been tested with real email
 | Photos for visitors | Shown. Visitors see event and place photos like signed-in users; community photos stay restricted. |
 | CAPTCHA | None at first. Email verification, rate limits and cleanup of unverified accounts carry the load; a CAPTCHA can be added if automated sign-ups appear. |
 | Users panel | Part of this plan (step 2). |
+| Sign-up with a registered address | Said on the page ("An account with this email already exists"), with "Sign in instead". The owner chose this on 2026-11-24 over Better Auth's identical reply, accepting that the page confirms whether an address has an account; sign-up stays rate-limited. Password-reset requests still answer identically. |
 | Launch | Public browsing and open sign-up ship behind settings that default to off. Turning them on for real users is part of the production cutover (P8, #10), together with the hosting, email provider and Google app review. Nothing here changes the production audience, the original site or its collector. |
 
 AGENTS.md currently says "Never open registration". Step 2 changes it to: registration opens
@@ -61,6 +62,10 @@ signed-out browser session.
 
 ### 2. Open sign-up
 
+Done on 2026-11-23 (`WINNIGO_SIGNUP`, `lib/server/users.mjs`, `/api/users`, the Users panel,
+`/privacy` and `/terms`). The privacy policy and terms are drafts marked as such on the pages;
+`WINNIGO_CONTACT_EMAIL` supplies their contact address.
+
 - New setting `WINNIGO_SIGNUP=open` (default `invitation`). When open, the registration hook
   skips the invitation check; email verification is still required before the first sign-in,
   and an unverified account cannot sign in or save.
@@ -82,6 +87,12 @@ signed-out browser session.
 
 ### 3. Saved items in the account
 
+Done on 2026-11-23 (`0003_saved_items.sql`, `lib/server/saved-items.mjs`, `/api/me/saved`). An
+account keeps up to 1,000 saved items; the Saved tab reads them on the server, so there is no
+longer a limit of 200 in the request. Verified with `check:p3`, the HTTP check in three setups
+and a browser session (sign-up, verification, sign-in, import of an earlier browser list, save
+and unsave).
+
 - Migration `0003_saved_items.sql`: `saved_items(user_id → auth_user ON DELETE CASCADE,
   item_id, saved_at, PRIMARY KEY(user_id, item_id))`. An item is a listing or an event ID;
   saving checks that the user can see it. A saved item that later disappears stays saved and is
@@ -97,6 +108,25 @@ signed-out browser session.
 - Checks: `check:p3` (isolation between users, cascade on deletion, refusal of items the user
   cannot see); a browser check for saving on one browser profile and seeing it on another.
 
+### Account page
+
+`/account` is written for the person, not the operator (2026-11-24):
+
+- Profile: the display name, editable (`update-user`; the auth hook accepts only a name of up
+  to 100 characters), and the email.
+- Saved: how many discoveries the account keeps, with a link to the Saved tab (`/?tab=saved`).
+- Sign-in and security: the sign-in methods. Email accounts change their password here (same
+  rule and confirmation as sign-up; other devices are signed out). Google-only accounts are told
+  their password lives with Google.
+- Devices: browser and system from each session's user agent, "This device" first, the day of
+  last use, and "Sign out of other devices". The list is read on the server, so session tokens
+  never reach the page (Better Auth's `list-sessions` also refuses sessions older than an hour).
+- Admins and the owner get an Administration section and a role badge; others see no role.
+- Sign out, then deletion by emailed confirmation (the owner is told to transfer ownership
+  first), and links to Privacy and Terms.
+
+Changing the email address, linking Google to an email account and data export are left out.
+
 ### 4. Real providers (#6)
 
 - Choose a transactional email provider (for example Postmark, Amazon SES or Resend) and set
@@ -106,8 +136,10 @@ signed-out browser session.
   `profile` scopes only. With only those basic scopes the app needs no security review; in
   Google's "Testing" status only listed test users can sign in, so publish it ("In production")
   before launch. Showing a logo on the consent screen adds a short brand review.
-- Run the account acceptance against the real providers on a test host (verification and reset
-  emails arrive; Google sign-up and sign-in work), then close #6.
+- Run `npm run accounts:check-providers -- you@example.com` on the test host: it sends a test
+  email through the configured provider and prints the exact Google redirect URI and consent
+  screen links to register. Then run the account acceptance against the real providers
+  (verification and reset emails arrive; Google sign-up and sign-in work) and close #6.
 
 This step needs your accounts with the email provider and Google Cloud; nothing is created or
 paid for without you.

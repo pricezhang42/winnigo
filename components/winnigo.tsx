@@ -30,6 +30,7 @@ import { useSavedListings } from '@/components/discovery/use-saved-listings';
 import { useDiscoveryResults, type MapFilters } from '@/components/discovery/use-discovery-results';
 import { communitySources } from '@/lib/social.mjs';
 import { localDay } from '@/lib/connectors.mjs';
+import { useRouter } from 'next/navigation';
 import type { Listing } from '@/lib/domain';
 export type { Listing } from '@/lib/domain';
 
@@ -99,14 +100,38 @@ export default function Winnigo() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  // Saved-item messages are kept apart from `notice`, which each results refresh replaces.
+  const [savedNotice, setSavedNotice] = useState('');
 
-  const { saved, canSave, canImport, role, known, toggleSaved } = useSavedListings(() =>
-    setNotice('Your browser could not save this list.'),
-  );
+  const router = useRouter();
+  const {
+    saved,
+    canSave,
+    canImport,
+    role,
+    known,
+    synced,
+    browserItems,
+    importBrowserItems,
+    dismissImport,
+    toggleSaved,
+  } = useSavedListings(setSavedNotice);
 
   useEffect(() => {
     const timer = setInterval(() => setToday(localDay()), 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // A link can open a tab (`/?tab=saved`, from the account page); the address is then tidied.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const requested = new URLSearchParams(window.location.search).get('tab');
+      const match = TABS.find((name) => name.toLowerCase() === requested?.toLowerCase());
+      if (!match) return;
+      setTab(match);
+      window.history.replaceState(null, '', window.location.pathname);
+    });
+    return () => clearTimeout(timer);
   }, []);
 
   const { items, total, areas, reports, loading } = useDiscoveryResults(
@@ -137,9 +162,18 @@ export default function Winnigo() {
     setOffset(0);
   }
 
+  // With no filter active, a Saved tab shorter than the saved list means some are no longer listed.
+  const unfiltered =
+    query === DEFAULT_FILTERS.query &&
+    quick === DEFAULT_FILTERS.quick &&
+    category === DEFAULT_FILTERS.category &&
+    area === DEFAULT_FILTERS.area &&
+    collection === DEFAULT_FILTERS.collection &&
+    !visitDate;
+
   function save(id: string) {
     // A visitor without an account signs in to save (public browsing, docs/31).
-    if (known && !role) return window.location.assign('/login');
+    if (known && !role) return router.push('/login');
     if (!canSave) return;
     if (tab === 'Saved') setOffset(0);
     toggleSaved(id);
@@ -198,7 +232,7 @@ export default function Winnigo() {
         </span>
       </header>
       <main>
-        <Intro tab={tab} />
+        <Intro tab={tab} synced={synced} />
         <section className="discovery" aria-label="Search and filters">
           <div className="search-row">
             <Search size={21} />
@@ -317,6 +351,45 @@ export default function Winnigo() {
               {notice}
             </p>
           )}
+          {savedNotice && (
+            <p className="notice" role="status">
+              {savedNotice}
+            </p>
+          )}
+          {browserItems > 0 && (
+            <div className="notice saved-import" role="status">
+              <span>
+                This browser has {browserItems} saved{' '}
+                {browserItems === 1 ? 'discovery' : 'discoveries'} from before. Add{' '}
+                {browserItems === 1 ? 'it' : 'them'} to your account to see{' '}
+                {browserItems === 1 ? 'it' : 'them'} on every device?
+              </span>
+              <Button
+                onClick={async () => {
+                  const result = await importBrowserItems();
+                  if (result)
+                    setSavedNotice(
+                      `Added ${result.added} to your account.` +
+                        (result.skipped
+                          ? ` ${result.skipped} ${result.skipped === 1 ? 'was' : 'were'} already saved or no longer listed.`
+                          : ''),
+                    );
+                }}
+              >
+                Add to my account
+              </Button>
+              <Button variant="ghost" onClick={dismissImport}>
+                Not now
+              </Button>
+            </div>
+          )}
+          {tab === 'Saved' && !loading && unfiltered && total < saved.length && (
+            <p className="source-note">
+              {saved.length - total} saved{' '}
+              {saved.length - total === 1 ? 'discovery is' : 'discoveries are'} no longer listed:
+              finished, removed by the source, or hidden.
+            </p>
+          )}
           {tab === 'Trail map' ? (
             <TrailMap items={items} onSelect={setSelected} onFilterChange={changeMapFilters} />
           ) : (
@@ -397,7 +470,8 @@ export default function Winnigo() {
         </Link>
         <p>Go find your Winnipeg.</p>
         <span>
-          Made for the place we call home.{' '}
+          Made for the place we call home. <a href="/privacy">Privacy</a> ·{' '}
+          <a href="/terms">Terms</a>{' '}
           {(role === 'owner' || role === 'admin') && (
             <a className="admin-link" href="/admin">
               Manage listings
@@ -424,7 +498,7 @@ export default function Winnigo() {
   );
 }
 
-function Intro({ tab }: { tab: string }) {
+function Intro({ tab, synced }: { tab: string; synced: boolean }) {
   return (
     <section className="intro">
       <div>
@@ -444,7 +518,9 @@ function Intro({ tab }: { tab: string }) {
           {tab === 'Trail map'
             ? 'Explore Manitoba trails, community reports, and the places they connect.'
             : tab === 'Saved'
-              ? 'Your shortlist, saved on this device.'
+              ? synced
+                ? 'Your shortlist, on every device you sign in to.'
+                : 'Your shortlist, saved on this device.'
               : 'Find your next good time. Events, local places, and everything in between.'}
         </p>
       </div>
