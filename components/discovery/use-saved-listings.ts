@@ -113,6 +113,8 @@ export function useSavedListings(onError: (message: string) => void) {
   return {
     saved,
     canSave: !!principal,
+    // Saved in the account (every device) rather than this browser.
+    synced: account,
     canImport: principal?.role === 'owner',
     role: principal?.role ?? null,
     known,

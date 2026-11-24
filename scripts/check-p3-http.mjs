@@ -125,6 +125,17 @@ try {
   );
   assert.deepEqual((await imported.json()).ids, [publicItem]);
 
+  // The account page (docs/31): server-read devices and saved count, no session tokens, and
+  // `update-user` changes only a bounded display name.
+  const accountPage = await (await request('/account', null, member)).text();
+  assert.match(accountPage, /This device/);
+  assert.match(accountPage, /1 saved discovery/);
+  const memberToken = decodeURIComponent(memberCookie.split('session_token=')[1]).split('.')[0];
+  assert.ok(!accountPage.includes(memberToken));
+  for (const body of [{ name: 'QA', image: 'https://example.test/x.png' }, { name: ' ' }])
+    assert.equal((await request('/api/auth/update-user', body, member)).status, 400);
+  assert.equal((await request('/api/auth/update-user', { name: 'Member QA' }, member)).status, 200);
+
   // The Users panel (docs/31): owner only, same origin only.
   const users = await request('/api/users', null, owner);
   assert.equal(users.status, 200);
@@ -282,7 +293,7 @@ try {
   console.log(
     (publicBrowsing ? 'Public browsing on. ' : '') +
       (openSignup ? 'Open sign-up on. ' : '') +
-      'P3 HTTP checks passed: saved items, users panel, session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
+      'P3 HTTP checks passed: saved items, account page, users panel, session gate, filtered counts/media, grants/revocation, own profile, origin checks and scoped/revoked collector credentials.',
   );
 } finally {
   await pool.end();

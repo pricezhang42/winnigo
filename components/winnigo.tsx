@@ -110,6 +110,7 @@ export default function Winnigo() {
     canImport,
     role,
     known,
+    synced,
     browserItems,
     importBrowserItems,
     dismissImport,
@@ -119,6 +120,18 @@ export default function Winnigo() {
   useEffect(() => {
     const timer = setInterval(() => setToday(localDay()), 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // A link can open a tab (`/?tab=saved`, from the account page); the address is then tidied.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const requested = new URLSearchParams(window.location.search).get('tab');
+      const match = TABS.find((name) => name.toLowerCase() === requested?.toLowerCase());
+      if (!match) return;
+      setTab(match);
+      window.history.replaceState(null, '', window.location.pathname);
+    });
+    return () => clearTimeout(timer);
   }, []);
 
   const { items, total, areas, reports, loading } = useDiscoveryResults(
@@ -219,7 +232,7 @@ export default function Winnigo() {
         </span>
       </header>
       <main>
-        <Intro tab={tab} />
+        <Intro tab={tab} synced={synced} />
         <section className="discovery" aria-label="Search and filters">
           <div className="search-row">
             <Search size={21} />
@@ -485,7 +498,7 @@ export default function Winnigo() {
   );
 }
 
-function Intro({ tab }: { tab: string }) {
+function Intro({ tab, synced }: { tab: string; synced: boolean }) {
   return (
     <section className="intro">
       <div>
@@ -505,7 +518,9 @@ function Intro({ tab }: { tab: string }) {
           {tab === 'Trail map'
             ? 'Explore Manitoba trails, community reports, and the places they connect.'
             : tab === 'Saved'
-              ? 'Your shortlist, saved on this device.'
+              ? synced
+                ? 'Your shortlist, on every device you sign in to.'
+                : 'Your shortlist, saved on this device.'
               : 'Find your next good time. Events, local places, and everything in between.'}
         </p>
       </div>

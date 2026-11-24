@@ -108,6 +108,25 @@ and unsave).
 - Checks: `check:p3` (isolation between users, cascade on deletion, refusal of items the user
   cannot see); a browser check for saving on one browser profile and seeing it on another.
 
+### Account page
+
+`/account` is written for the person, not the operator (2026-11-24):
+
+- Profile: the display name, editable (`update-user`; the auth hook accepts only a name of up
+  to 100 characters), and the email.
+- Saved: how many discoveries the account keeps, with a link to the Saved tab (`/?tab=saved`).
+- Sign-in and security: the sign-in methods. Email accounts change their password here (same
+  rule and confirmation as sign-up; other devices are signed out). Google-only accounts are told
+  their password lives with Google.
+- Devices: browser and system from each session's user agent, "This device" first, the day of
+  last use, and "Sign out of other devices". The list is read on the server, so session tokens
+  never reach the page (Better Auth's `list-sessions` also refuses sessions older than an hour).
+- Admins and the owner get an Administration section and a role badge; others see no role.
+- Sign out, then deletion by emailed confirmation (the owner is told to transfer ownership
+  first), and links to Privacy and Terms.
+
+Changing the email address, linking Google to an email account and data export are left out.
+
 ### 4. Real providers (#6)
 
 - Choose a transactional email provider (for example Postmark, Amazon SES or Resend) and set
