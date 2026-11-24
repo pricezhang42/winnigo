@@ -1,5 +1,7 @@
-// Seeds the selected repository with snapshot data, or synthetic QA data when
-// WINNIGO_SEED_PROFILE=qa (npm run db:seed). Existing records and owner corrections are kept.
+// Seeds the database with the official trails, plus synthetic community items when
+// WINNIGO_SEED_PROFILE=qa (npm run db:seed). Events and places come from collection
+// (npm run collect, or the worker); nothing is seeded for them. Existing records and owner
+// corrections are kept.
 import { readFile } from 'node:fs/promises';
 import { loadLocalEnv } from './load-env.mjs';
 import { readConfig } from '../lib/server/config.mjs';
@@ -10,13 +12,9 @@ import { normalizeHikingBatch } from '../lib/social.mjs';
 loadLocalEnv();
 const config = readConfig();
 const json = async (path) => JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'));
-const [listings, sources, official] = await Promise.all([
-  json('../lib/data/listings.json'),
-  json('../lib/data/sources.json'),
-  json('../lib/data/official-trails.json'),
-]);
-const items = [...listings, ...official.items];
-const reports = [...sources, { ...official.source }].map((sourceInfo) => ({
+const official = await json('../lib/data/official-trails.json');
+const items = [...official.items];
+const reports = [{ ...official.source }].map((sourceInfo) => ({
   id: sourceInfo.id,
   checkedAt: sourceInfo.checkedAt,
   attemptedAt: sourceInfo.checkedAt,
@@ -66,10 +64,9 @@ if (config.profile === 'qa') {
 }
 const repository = getRepository();
 await repository.transaction((state) => {
-  // Skip listings already stored, by ID or (for events stored under older IDs) by page URL.
+  // Skip listings already stored, by ID or by page URL.
   for (const item of items)
     if (
-      !state.aliases?.[item.id] &&
       !state.listings.some(
         (r) => r.id === item.id || (r.source === item.source && r.payload.url === item.url),
       )

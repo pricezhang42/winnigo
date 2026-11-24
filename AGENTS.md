@@ -8,7 +8,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 - `.env.local` now configures Node; `.dev.vars` is retained for the legacy app. Never print or commit secrets. Setup carries forward the owner's local auth preference once.
 - Run `npm run format` after editing code (and `ruff format scripts` after editing Python, using `ruff.toml`). Run `npm test`, `npm run typecheck`, `npm run build` after behavior changes.
 - With dev and built servers running, run `npm run check:assets` for each origin and check a real browser for grid layout and completed loading. HTML 200 alone is not evidence that styles/scripts work.
-- Basic mode must deny anonymous and collector reads and general collector admin actions. Explicit `WINNIGO_AUTH_MODE=local` is the owner's authorized password-free loopback option; retain it locally. Session mode uses invitation-only Better Auth accounts; Basic remains a compatibility option. Never open registration or bootstrap the first signup as owner.
+- Basic mode must deny anonymous and collector reads and general collector admin actions. Explicit `WINNIGO_AUTH_MODE=local` is the owner's authorized password-free loopback option; retain it locally. Session mode uses Better Auth accounts, invitation-only unless the owner deliberately sets `WINNIGO_SIGNUP=open` (docs/31); Basic remains a compatibility option. Never open registration any other way, and never bootstrap the first signup as owner.
 - Browser regression: seed a separate QA PostgreSQL database with `WINNIGO_SEED_PROFILE=qa`, then run `scripts/check-browser.py` against that server. It edits synthetic QA items. See docs/15-p2-storage.md.
 - Do not deploy or change production audience/schedules to test a local change.
 
@@ -19,12 +19,12 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 - `lib/server/config.mjs`: validated server configuration.
 - `lib/server/accounts.mjs`, `access.mjs`, `principal.mjs`: accounts, grants and scoped service credentials. Run `npm run check:p3`; see docs/16-p3-accounts.md for isolated browser QA.
 - `lib/server/postgres-repository.mjs`, `s3-storage.mjs`: P2 domain repository and private media. Run `npm run check:p2` with services available; it uses a temporary schema and object prefix.
-- `lib/server/contracts.ts`, `services.ts`, `fixture-*.mjs`: repository/photo boundaries and P1 file-backed fixtures.
+- `lib/server/contracts.ts`, `services.ts`, `adapters.mjs`: repository/photo boundaries (PostgreSQL and S3 only).
 - `lib/store.ts`, `lib/server/actions.mjs`: discovery and atomic import/editorial operations.
-- `config/sources.mjs`, `lib/server/event-sources.mjs`, `scripts/collect-source.mjs`: the event source list, its fetcher and AI extraction (`npm run collect -- --list`). They replace the parsers below; see docs/30-event-collection-redesign.md.
-- `lib/connectors.mjs`, `lib/free-swim.mjs`: public parsers; P1 does not collect during page reads.
+- `config/sources.mjs`, `lib/server/event-sources.mjs`, `scripts/collect-source.mjs`: the event source list, its fetcher and AI extraction (`npm run collect -- --list`); `lib/server/event-store.mjs` publishes runs and backs the admin review list. Run `npm run check:events` after changes; see docs/18-event-collection.md.
+- `lib/connectors.mjs`: shared text/date helpers and The Forks places parser; page reads never collect.
 - `scripts/worker.mjs`, `lib/server/job-queue.mjs`, `lib/server/collection.mjs`: P5 collection jobs (pg-boss). Schedules run only with `WINNIGO_SCHEDULES=enabled`; run `npm run check:p5` after changes (docs/17-p5-collection.md). Facebook collection stays on its existing scheduler until P6.
-- `compose.yaml`, `Dockerfile`, `migrations/postgres/`: local infrastructure and numbered SQL migrations.
+- `compose.yaml`, `Dockerfile`, `migrations/postgres/`: local infrastructure, the schema baseline and later numbered migrations (`npm run db:reset -- --yes` resets a local pre-baseline database).
 - `legacy/cloudflare/README.md`: complete pre-P1 release commit and rollback checkout instructions. Reference files here are excluded from the Node build.
 
 ## Data rules

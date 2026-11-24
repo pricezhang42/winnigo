@@ -5,6 +5,10 @@ driven by a checked-in source list. Changes publish right away and the owner rev
 afterwards. The event tables are rebuilt from a fresh baseline, and code that only existed for
 the parsers, the parser comparison or the legacy import is removed.
 
+How collection works now (source list, pipeline, contract, storage, review and operations) is in
+[18 — Event collection](18-event-collection.md). This document records the decisions, the
+comparison that justified the switch, and the steps.
+
 ## Decisions
 
 | Question | Decision |
@@ -16,77 +20,33 @@ the parsers, the parser comparison or the legacy import is removed.
 | Review | Publish, then review: every change publishes immediately and appears in a review list with its diff, so the owner can revert or correct it. |
 | File-backed fixtures | Removed. Development and tests use PostgreSQL. |
 
-## Source list
+## Side-by-side comparison (step 3)
 
-`config/sources.mjs` holds one entry per event source, reviewed in code like any other change
-to what the app fetches. `lib/server/event-sources.mjs` validates it (`npm test` checks the
-checked-in list).
+On 2026-11-21 every active source was collected once by its parser (in memory) and once by the AI
+path (nothing published), and every disagreement from today to the end of next month went on a
+review page for the owner's verdicts. Canada Life Centre agreed fully. The differences led to six
+changes:
 
-| Field | Meaning |
+| Finding | Change |
 | --- | --- |
-| `id`, `name`, `notes` | Slug (the existing source id), label and notes for the owner |
-| `status` | `active`, `paused` (not collected; the notes say why), or `blocked` (the site refuses automated requests; never worked around) |
-| `schedule` | `manual` or a cron expression in America/Winnipeg; registered only with `WINNIGO_SCHEDULES=enabled` |
-| `defaultVenue` | Venue used when a page omits it |
-| `fetch.method` | `pages` (a list links to one page per event), `single-page` (each list page lists several events), `browser` (pages built with JavaScript; not supported yet) |
-| `fetch.allowedOrigin`, `startUrls` | The only https origin for list and event pages, and the list pages to start from. Start URLs may contain `{today}`, `{from}`, `{to}` (YYYY-MM-DD) or `{fromUnix}`, `{toUnix}` so calendar requests ask for the collection window only |
-| `fetch.eventLinkPattern` | Anchored pattern (path and query) for event links, found in anchors or as absolute URLs in the page text (calendar feeds, embedded JSON) |
-| `fetch.eventKeyPattern` | Optional pattern with one capture group: links with the same key are one event (for calendars that link every date) |
-| `fetch.nextLinkPattern` | A "next page" link (`rel=next`, a `next` class, or a Next / › label) must match it |
-| `fetch.pageLinkPattern` | Numbered pagination: every matching list link is read, up to `maxListPages` |
-| `fetch.selector`, `exclude` | Content region sent to the model |
-| `fetch.maxListPages`, `maxEventPages` | Limits (at most 20 and 100) |
-| `supportingPages` | `{ maxPerPage, sites: [{ origin, pattern, selector? }] }`: links on an event page to fetch with it, such as the organizer's own event page or the same site's series page listing every session |
-| `extraction` | Optional `maxInputTokens` / `maxOutputTokens` for sources with long pages or many events per page |
+| FortWhyte event pages show one date each (often an earlier one) and its series pages load sessions with JavaScript | FortWhyte is read from its list view as listing pages; links to each date of an event share its key |
+| Zoo Lights and TROLLS live outside `/events/event/<n>` | Assiniboine Park's event-link pattern includes `/events/zoolights` and `/trolls` |
+| 26 Manitoba Music pages have the generic heading "Manitoba Live Music Event" | A page with a generic heading but its own event details is still that event, named by its title field or performers |
+| Travel Manitoba lists events across the province | Source option `city`: an event whose address, venue or event page's structured address (`addressLocality`) names another town or postal area is dropped (and never reported as gone); one whose place is not stated stays, flagged for review |
+| The same page gave different answers between runs (free swim youth swims, a Museum series) | Listing entries with different names at one venue are separate events; every session a supporting calendar shows is listed |
+| The model took "Show: 8:00 PM" from the description over the page's Date field (owner verdicts: the Date field is right) | An event's own date/time field gives the start time; description times do not replace it |
 
-Redirects are followed only while they stay on the source's approved origins.
+Tourism Winnipeg timed out under sustained crawling during the run (both paths lost most pages)
+and is compared from the 2026-11-20 review instead. Pages that need JavaScript (Royal MTC's
+schedules) are still unreadable; corrections go through the review list.
 
-`npm run collect -- --list` prints the list; `npm run collect -- <id>` crawls a source without
-calling the model; `--extract` also extracts every page and writes the results to
-`.winnigo/collect/` (nothing is stored in the database until step 2).
+## Removed
 
-## Pipeline
-
-```
-fetch (code) → prepare text → unchanged page? skip → AI extract → proposed events
-            → diff with the published events → publish → review list
-```
-
-- Code fetches every page through the shared rate-limited reader; the model only reads prepared
-  text and has no network access.
-- A page's content hash replaces the extraction cache: an unchanged page is not sent again.
-- The extraction contract returns `events[]` instead of `event | null`, so `single-page` sources
-  work.
-- Supporting pages are found by code on the event page (approved origin and path pattern) and
-  sent as extra documents in the same request. An organizer's dates and times win over the
-  listing site's. A listing range that starts on the day it was read is treated as a rolled-forward
-  start, not a conflict.
-- Values the model cannot quote stay empty. Events with unresolved conflicts still publish, with
-  the uncertainty shown, and are marked for review.
-- An event that disappears from its source page is marked `gone` (hidden from discovery), never
-  deleted.
-
-## Review list
-
-The admin screen lists every published change with its kind (`new`, `changed`, `gone`), a field
-and session diff, and the page quote for each value. For each change the owner can mark it
-reviewed, revert it, or edit the event. Edits are stored as owner edits and survive later runs.
-
-## Tables
-
-| Table | Purpose |
-| --- | --- |
-| `sources` | Runtime state per source |
-| `collection_runs` | One row per run: counts, cost, error |
-| `source_pages` | Source, URL, content hash, last fetch, last extraction |
-| `events` | Source, source URL, title, description, venue, address, category, price text and amount, image, status, hidden, visibility, owner edits |
-| `event_sessions` | Event, start/end date, start/end time, all-day, cancelled |
-| `event_changes` | Run, event, kind, before/after, diff, quotes, reviewed state |
-
-Removed: `occurrences`, `schedule_coverage`, `source_identities`, `occurrence_grants`,
+Tables `occurrences`, `schedule_coverage`, `source_identities`, `occurrence_grants`,
 `event_aliases`, `event_alias_media`, `migration_runs`, `event_extraction_cache`,
-`event_extraction_usage`, `event_extraction_comparisons`, and event rows in `listings`.
-Migrations `0001`–`0012` are squashed into one baseline.
+`event_extraction_usage` and `event_extraction_comparisons`; event rows in `listings` and the
+listing columns only events used (`closing_month`, `recurring`). Migrations `0001`–`0012` became
+`0001_baseline.sql`.
 
 ## Steps
 
@@ -105,10 +65,13 @@ Each step is one PR.
    `free-swim`); `collect-*.mjs` and their fixtures and tests; shadow/pilot/rollout code and
    reports; `flaresolverr`; `migrate-event-schedules`; source browser checks; legacy
    import/export and `migrate-legacy`; the file-backed fixture repository; docs 18–28 merged
-   into one event collection doc.
+   into one event collection doc. Done on 2026-11-23: the worker and `npm run collect` share one
+   collection path; The Forks' places page keeps its parser as a places source; WAG stays
+   `blocked` and Rotary `paused`. Local databases are reset once with `npm run db:reset`.
 5. **Schedules.** Per-source `schedule` registers jobs, still gated by
    `WINNIGO_SCHEDULES=enabled`. Production audience and schedules are not changed. Close
-   superseded issues (#18, #20, #28, #60, #67).
+   superseded issues (#18, #20, #28, #60, #67). Done on 2026-11-23: the fixed schedule table is
+   gone; the scheduled set and times are unchanged and pinned by a unit test.
 
 ## Unchanged
 
@@ -119,7 +82,7 @@ restricted data behind owner access) are unchanged.
 ## Risks
 
 - Large structured schedules such as free swim may be less reliable and costlier with AI than
-  with a parser; step 3 measures this before the parser is deleted.
+  with a parser; step 3 measured them (17 of 17 free swim programs agreed after the fixes).
 - With no parser to compare against, the review list is the only check on model mistakes.
 - Cost is about US$0.001 per changed page; skipping unchanged pages keeps daily runs to cents.
 - Sites that refuse automated requests stay `blocked`.

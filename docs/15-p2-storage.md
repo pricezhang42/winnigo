@@ -20,28 +20,11 @@ Objects use SHA-256 content IDs and private S3 keys; API URLs remain `/api/photo
 
 `npm run media:cleanup` reports at most 100 eligible orphan IDs without deleting. `npm run media:cleanup -- --apply` rechecks each object transactionally and deletes only ready, unreferenced objects whose creation time and upload lease are older than 24 hours. Referenced objects, unfinished uploads and every unfinished migration block the relevant cleanup. A migration left running after failure must be repaired/resumed; do not clear its checkpoint merely to force cleanup.
 
-## Legacy migration rehearsal
+## Legacy migration
 
-These tools are explicit operator commands, not automatic startup actions. Use an authorized local SQLite copy/export of D1 and source R2 credentials with read-only object access. They never fetch production credentials or change source storage permissions. SQL-text exports must first be restored into a separate SQLite file. Never operate on the live database file during writes.
-
-```sh
-# SQLite export plus already-downloaded, content-addressed photo files:
-npm run migrate:export -- --database /private/legacy.sqlite --output .winnigo/export --photos-dir /private/photos
-
-# Alternatively omit --photos-dir, then preview/copy the referenced R2 objects:
-npm run migrate:media -- .winnigo/export/manifest.json
-npm run migrate:media -- .winnigo/export/manifest.json --apply
-
-# Target PostgreSQL/S3 are selected through the current environment:
-npm run migrate:import -- .winnigo/export/manifest.json
-npm run migrate:import -- .winnigo/export/manifest.json --apply
-```
-
-For the R2 copy, supply `LEGACY_S3_ENDPOINT`, `LEGACY_S3_BUCKET`, `LEGACY_S3_ACCESS_KEY` and `LEGACY_S3_SECRET_KEY` through a private environment, not source control. The source prefix defaults to `photos/`; `LEGACY_S3_PREFIX` permits another explicitly configured source namespace. Each copied photo and the manifest are checkpointed atomically, so re-running is safe. No source objects are deleted.
-
-Import dry-runs validate all record identities, referenced media, file paths, sizes and SHA-256 checksums before reporting counts and an identity-preserving ID map. Different target IDs for the same source post require operator reconciliation; the tool does not silently remap them. Apply records a manifest hash and progress, uploads media first, and imports records in atomic batches. A per-manifest lock prevents simultaneous execution of the same migration. Re-running verifies/replays batches idempotently and preserves existing target editorial state. Reconciliation checks original payloads, source/IDs, hidden state, corrections, ordered associations and stored photo checksums before marking complete. Do not edit imported listings concurrently with a migration rehearsal.
-
-A production cutover still requires P8's authorized real-data rehearsal, source/status count reconciliation, backup/restore, write pause, delta reconciliation and audience decision. Local fixture success does not imply production was migrated.
+The legacy import (`migrate:export`, `migrate:media`, `migrate:import`) was removed on
+2026-11-23: the Node site starts fresh instead of importing the original site's data (docs/30).
+The original site and its data are unchanged; see [the legacy instructions](../legacy/cloudflare/README.md).
 
 ## Verification and repeatable QA
 

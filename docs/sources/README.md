@@ -2,8 +2,8 @@
 
 `candidates.csv` lists every source Winnigo collects (`status=live`) and every source under
 research. It tracks research and progress; it is not the runtime registry. Live sources are defined
-in code (`lib/connectors.mjs`, `lib/data/official-trails.json`, `lib/social.mjs`; see
-[docs/04](../04-sources-and-connectors.md)), and
+in code (`config/sources.mjs` for events, `lib/connectors.mjs` for places,
+`lib/data/official-trails.json`, `lib/social.mjs`; see [docs/04](../04-sources-and-connectors.md)), and
 [`source-tracker.test.mjs`](../../scripts/tests/source-tracker.test.mjs) fails if the `live` rows and
 those sources disagree, or if a value below is not allowed.
 
