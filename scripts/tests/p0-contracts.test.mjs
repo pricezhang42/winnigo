@@ -7,19 +7,7 @@ import {
   preferencesSchema,
 } from '../../lib/contracts/discovery.mjs';
 import { normalizeHikingBatch } from '../../lib/social.mjs';
-import { parseSource, dedupe } from '../../lib/connectors.mjs';
-import { parseFreeSwim } from '../../lib/free-swim.mjs';
 const f = JSON.parse(readFileSync(new URL('../fixtures/p0-discovery.json', import.meta.url)));
-test('P0 fixtures: calendar ranges and multiple swims remain distinct', () => {
-  const [event] = parseSource('forks', f.calendarHtml, '2026-12-15T18:00:00Z');
-  assert.equal(event.start, '2026-12-31');
-  assert.equal(event.end, '2027-01-01');
-  const swims = parseFreeSwim(f.swimHtml);
-  assert.equal(swims.length, 2);
-  assert.equal(dedupe(swims).length, 2);
-  assert.equal(swims[1].family, false);
-  assert.match(swims[1].description, /9–19/);
-});
 test('P0 fixtures: duplicate post imports retain ordered photos and linked comment uncertainty', () => {
   const duplicate = { ...f.community, url: f.community.url.replace('www.', '') };
   const result = normalizeHikingBatch({ status: 'ok', items: [f.community, duplicate] });

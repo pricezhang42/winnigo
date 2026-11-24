@@ -222,7 +222,8 @@ test('recurrence survives DST and monthly selectors remain explicit facts', () =
   const example = examples.find((e) => e.name === 'weekly program across DST');
   const rule = event(parseEventExtraction(example.result, example.context)).schedule.recurrence[0];
   assert.equal(zonedTimestamp('2026-10-25', rule.startTime), '2026-10-26T00:00:00.000Z');
-  assert.equal(zonedTimestamp('2026-11-01', rule.startTime), '2026-11-02T01:00:00.000Z');
+  // Manitoba kept UTC−5 on 2026-11-01 (tzdata 2026f), so the evening start stays at 00:00Z.
+  assert.equal(zonedTimestamp('2026-11-01', rule.startTime), '2026-11-02T00:00:00.000Z');
   const bad = structuredClone(example.result);
   bad.events[0].schedule.recurrence[0].weekdays = null;
   const held = event(parseEventExtraction(bad, example.context));

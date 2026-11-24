@@ -18,6 +18,10 @@
 //   supportingPages         links on an event page to fetch alongside it: the organizer's own
 //                           page, or the same site's series page with every session
 //   extraction              per-source token limits for pages that need more room
+//   city                    { name, postalPrefixes }: keep only events in that city; events
+//                           whose place is not stated stay, flagged for review
+//   images.origins          image hosts besides the source's own sites; each event's image is
+//                           copied into private storage from these origins only
 //
 // Patterns are anchored and match a URL's path and query.
 
@@ -67,7 +71,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/festivals-and-events/upcoming-events/display,event/(\\d+)',
       nextLinkPattern: '^/festivals-and-events/upcoming-events(?:/page:\\d+)?/?$',
       maxListPages: 15,
-      maxEventPages: 100,
+      maxEventPages: 150,
       selector: '#content',
     },
     supportingPages: { maxPerPage: 1, sites: TOURISM_ORGANIZERS },
@@ -79,18 +83,19 @@ export const EVENT_SOURCES = [
     status: 'active',
     schedule: 'manual',
     defaultVenue: { name: 'FortWhyte Alive', address: '' },
-    fetch: eventsCalendar('https://www.fortwhyte.org', '/events/', '/events/month/'),
-    supportingPages: {
-      maxPerPage: 1,
-      sites: [
-        {
-          origin: 'https://www.fortwhyte.org',
-          pattern: '^/series/[^/]+/$',
-          selector: SERIES_SUMMARY,
-        },
-      ],
+    notes:
+      'Read from the list view: each event page shows a single date and the series pages load ' +
+      'their sessions with JavaScript (checked 2026-11-22).',
+    fetch: {
+      method: 'single-page',
+      allowedOrigin: 'https://www.fortwhyte.org',
+      startUrls: ['https://www.fortwhyte.org/events/list/'],
+      nextLinkPattern: '^/events/list/page/\\d+/$',
+      // Entries link /event/<slug>/<date>/; the slug is the event.
+      eventKeyPattern: '^/event/([^/]+)/',
+      maxListPages: 12,
     },
-    extraction: { maxInputTokens: 20000 },
+    extraction: { maxOutputTokens: 16384 },
   },
   {
     id: 'canada-life-centre',
@@ -112,6 +117,7 @@ export const EVENT_SOURCES = [
       maxListPages: 1,
       maxEventPages: 60,
     },
+    images: { origins: ['https://d1kq1f9a6xp251.cloudfront.net'] },
   },
   {
     id: 'manitoba-museum',
@@ -161,7 +167,7 @@ export const EVENT_SOURCES = [
       eventKeyPattern: '^/livemusic/display,event/(\\d+)',
       pageLinkPattern: '^/livemusic/from:\\d{4}-\\d\\d-\\d\\d/page:\\d+$',
       maxListPages: 6,
-      maxEventPages: 100,
+      maxEventPages: 150,
     },
   },
   {
@@ -205,7 +211,8 @@ export const EVENT_SOURCES = [
       method: 'pages',
       allowedOrigin: 'https://www.assiniboinepark.ca',
       startUrls: ['https://www.assiniboinepark.ca/events'],
-      eventLinkPattern: '^/events/event/\\d+/?$',
+      // Zoo Lights and TROLLS have their own pages outside /events/event/.
+      eventLinkPattern: '^(?:/events/event/\\d+|/events/zoolights|/trolls)/?$',
       nextLinkPattern: '^/events/events/20\\d\\d/\\d\\d/?$',
       maxListPages: 2,
       maxEventPages: 60,
@@ -217,6 +224,7 @@ export const EVENT_SOURCES = [
     status: 'active',
     schedule: '0 6 * * *',
     notes: 'Province-wide listing; events outside Winnipeg are dropped after extraction.',
+    city: { name: 'Winnipeg', postalPrefixes: ['R2', 'R3'] },
     fetch: {
       method: 'pages',
       allowedOrigin: 'https://www.travelmanitoba.com',

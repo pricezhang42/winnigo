@@ -30,8 +30,6 @@ services:
     image: winnigo-node:p3
     env_file: .env.local
     environment:
-      WINNIGO_REPOSITORY: postgres
-      WINNIGO_STORAGE: s3
       DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
       S3_ENDPOINT: http://storage:8333
       WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
@@ -40,21 +38,31 @@ services:
       WINNIGO_DATA_DIR: /data
       HOSTNAME: 0.0.0.0
       PORT: 5173
-    command: ["sh", "-c", "node scripts/migrate-postgres.mjs && node scripts/seed-node.mjs && exec node server.js"]
+    command: ["node", "server.js"]
+    depends_on:
+      release:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:5180:5173"]
+  # Migrations and the official trails, once per start of the stack (as in production).
+  release:
+    profiles: ["app"]
+    image: winnigo-node:p3
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
+      S3_ENDPOINT: http://storage:8333
+      WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
+    command: ["sh", "-c", "node scripts/migrate-postgres.mjs && node scripts/seed-node.mjs"]
     depends_on:
       postgres:
         condition: service_healthy
       storage:
         condition: service_healthy
-    ports: ["127.0.0.1:5180:5173"]
-    volumes: ["fixtures:/data"]
   worker:
     profiles: ["app"]
     image: winnigo-node:p3
     env_file: .env.local
     environment:
-      WINNIGO_REPOSITORY: postgres
-      WINNIGO_STORAGE: s3
       DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD}@postgres:5432/winnigo
       S3_ENDPOINT: http://storage:8333
       WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
@@ -64,7 +72,7 @@ services:
     depends_on:
       web:
         condition: service_healthy
-    volumes: ["fixtures:/data"]
+    volumes: ["worker-data:/data"]
     healthcheck:
       test: ["CMD", "node", "scripts/check-worker.mjs"]
       interval: 15s
@@ -72,4 +80,4 @@ services:
 volumes:
   postgres:
   storage:
-  fixtures:
+  worker-data:

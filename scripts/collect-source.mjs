@@ -6,19 +6,15 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EVENT_SOURCES } from '../config/sources.mjs';
-import { createConfiguredEventExtractionService } from '../lib/server/openai-event-extraction.mjs';
+import { collectEventSource, sourceExtractor } from '../lib/server/collection.mjs';
 import {
   crawlSource,
   extractPages,
   findSource,
   validateSources,
 } from '../lib/server/event-sources.mjs';
-import {
-  finishRun,
-  publishCollection,
-  startRun,
-  storedExtractions,
-} from '../lib/server/event-store.mjs';
+import { finishRun, startRun } from '../lib/server/event-store.mjs';
+import { getStorage } from '../lib/server/adapters.mjs';
 import { database } from '../lib/server/postgres.mjs';
 import { loadLocalEnv } from './load-env.mjs';
 
@@ -51,7 +47,32 @@ if (publish) {
   runId = await startRun(pool, definition.id);
 }
 
+const summarize = (c) =>
+  `${c.pages} page(s): ${c.withEvents} with ${c.events} event(s), ${c.outsideWindow} outside ` +
+  `the window, ${c.none} without events, ${c.failed} failed, ${c.skipped} skipped; ` +
+  `${c.supportingUsed} supporting page(s); ${c.reused} unchanged page(s) reused; ` +
+  `US$${c.estimatedCostUsd}`;
+
 try {
+  if (publish) {
+    // The same path as the worker: crawl, extract (reusing unchanged pages) and publish.
+    const run = await collectEventSource(pool, raw, { runId, checkedAt, storage: getStorage() });
+    for (const f of run.crawl.failedPages) console.log(`  failed ${f.url}: ${f.error}`);
+    console.log(summarize(run.result.counts));
+    await finishRun(pool, runId, run.status, run.counts, run.note);
+    const p = run.published;
+    console.log(
+      `Published: ${p.new} new, ${p.changed} changed, ${p.unchanged} unchanged, ${p.gone} gone. ` +
+        'Review them in the admin page.',
+    );
+    const ph = run.photos;
+    if (ph)
+      console.log(
+        `Photos: ${ph.copied} copied, ${ph.reused} reused, ${ph.notPhoto} not photos, ${ph.failed} failed.`,
+      );
+    process.exit(0);
+  }
+
   const crawl = await crawlSource(raw, { checkedAt });
   console.log(
     `${definition.id}: ${crawl.listPagesRead} list page(s), ${crawl.pages.length} page(s) to read` +
@@ -59,7 +80,7 @@ try {
   );
   for (const f of crawl.failedPages) console.log(`  failed ${f.url}: ${f.error}`);
 
-  if (!flag('--extract') && !publish) {
+  if (!flag('--extract')) {
     for (const p of crawl.pages)
       console.log(
         `  ${p.url}` +
@@ -68,49 +89,18 @@ try {
     process.exit(0);
   }
 
-  // Per-source token limits raise (never lower) the configured ones for this run.
-  const env = { ...process.env };
-  for (const [key, name] of [
-    ['maxInputTokens', 'WINNIGO_EXTRACTION_MAX_INPUT_TOKENS'],
-    ['maxOutputTokens', 'WINNIGO_EXTRACTION_MAX_OUTPUT_TOKENS'],
-  ]) {
-    const wanted = definition.extraction?.[key];
-    if (wanted && !(Number(env[name]) >= wanted)) env[name] = String(wanted);
-  }
-  const extractor = createConfiguredEventExtractionService(env);
+  const extractor = sourceExtractor(definition);
   if (!extractor) throw Error('Set WINNIGO_EXTRACTION_PROVIDER and its settings to extract');
-  const result = await extractPages(raw, crawl, {
-    extractor,
-    checkedAt,
-    ...(publish ? { reuse: await storedExtractions(pool, definition.id) } : {}),
-  });
-  const c = result.counts;
-  console.log(
-    `${c.pages} page(s): ${c.withEvents} with ${c.events} event(s), ${c.outsideWindow} outside ` +
-      `the window, ${c.none} without events, ${c.failed} failed, ${c.skipped} skipped; ` +
-      `${c.supportingUsed} supporting page(s); ${c.reused} unchanged page(s) reused; ` +
-      `US$${c.estimatedCostUsd}`,
+  const result = await extractPages(raw, crawl, { extractor, checkedAt });
+  console.log(summarize(result.counts));
+  const out = option('--out') || `.winnigo/collect/${definition.id}-${checkedAt.slice(0, 10)}.json`;
+  await mkdir(dirname(out), { recursive: true });
+  await writeFile(
+    out,
+    JSON.stringify({ ...result, crawl: { failedPages: crawl.failedPages } }, null, 2),
+    { mode: 0o600 },
   );
-
-  if (publish) {
-    const published = await publishCollection(pool, raw, crawl, result, { runId });
-    const status = c.failed || crawl.failedPages.length ? 'partial' : 'ok';
-    await finishRun(pool, runId, status, { ...c, ...published });
-    console.log(
-      `Published: ${published.new} new, ${published.changed} changed, ` +
-        `${published.unchanged} unchanged, ${published.gone} gone. Review them in the admin page.`,
-    );
-  } else {
-    const out =
-      option('--out') || `.winnigo/collect/${definition.id}-${checkedAt.slice(0, 10)}.json`;
-    await mkdir(dirname(out), { recursive: true });
-    await writeFile(
-      out,
-      JSON.stringify({ ...result, crawl: { failedPages: crawl.failedPages } }, null, 2),
-      { mode: 0o600 },
-    );
-    console.log(`Written to ${out}`);
-  }
+  console.log(`Written to ${out}`);
 } catch (error) {
   if (publish) await finishRun(pool, runId, 'error', {}, error.message);
   throw error;

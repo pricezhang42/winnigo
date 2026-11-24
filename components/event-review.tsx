@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { dateTimeLabel } from '@/lib/time-zone.mjs';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 type Diff =
@@ -50,14 +51,8 @@ const FIELD_LABELS: Record<string, string> = {
 const EDITABLE = ['title', 'venue', 'address', 'category', 'price', 'price_text', 'ticket_url'];
 const KIND_LABELS = { new: 'New', changed: 'Changed', gone: 'Gone from source' };
 
-const winnipeg = (value: string) =>
-  new Date(value).toLocaleString('en-CA', {
-    timeZone: 'America/Winnipeg',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+// Winnipeg time from the checked-in zone table, not the browser's own time zone data.
+const winnipeg = (value: string) => dateTimeLabel(value);
 /** "2026-11-21 2026-11-21 2026-11-21T19:45:00.000Z ..." → "Nov 21, 1:45 p.m." */
 function sessionLabel(text: string) {
   const [start, , startAt] = text.split(' ');

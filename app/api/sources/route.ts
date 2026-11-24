@@ -7,7 +7,7 @@ import { serviceCredential, rateLimit } from '@/lib/server/access.mjs';
 import { applyAction, ActionError } from '@/lib/server/actions.mjs';
 import { readLimited } from '@/lib/server/request-body.mjs';
 import { database } from '@/lib/server/postgres.mjs';
-import { localSources } from '@/lib/server/collection.mjs';
+import { collectableSources } from '@/lib/server/collection.mjs';
 import { queueRefresh } from '@/lib/server/job-queue.mjs';
 export const dynamic = 'force-dynamic';
 
@@ -37,17 +37,13 @@ export async function GET(request: Request) {
  * requests must come from the configured origin.
  */
 export async function POST(request: Request) {
-  const collector =
-    readConfig().repository === 'postgres' ? await serviceCredential(request.headers) : null;
+  const collector = await serviceCredential(request.headers);
   const principal = collector ? null : await getAdmin();
   if (!collector && !principal)
     return Response.json({ error: 'Sign in to manage listings.' }, { status: 401 });
   if (!collector && request.headers.get('origin') !== readConfig().origin)
     return Response.json({ error: 'Invalid origin' }, { status: 403 });
-  if (
-    readConfig().repository === 'postgres' &&
-    !(await rateLimit('import:' + (collector?.id || principal!.userId), 60))
-  )
+  if (!(await rateLimit('import:' + (collector?.id || principal!.userId), 60)))
     return Response.json({ error: 'Try again later' }, { status: 429 });
   if (!request.headers.get('content-type')?.includes('application/json'))
     return Response.json({ error: 'JSON required' }, { status: 415 });
@@ -68,10 +64,9 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Wrong source scope' }, { status: 403 });
     if (!collector && principal?.role !== 'owner' && input.action !== 'update')
       return Response.json({ error: 'Owner access required' }, { status: 403 });
-    // With PostgreSQL, refresh queues collection jobs and returns at once (P5). The fixture
-    // repository has no queue, so it falls through to the action's "unavailable" response.
-    if (input.action === 'refresh' && readConfig().repository === 'postgres') {
-      const known = localSources.some((source) => source.id === input.source);
+    // Refresh queues collection jobs and returns at once (P5).
+    if (input.action === 'refresh') {
+      const known = collectableSources.some((source) => source.id === input.source);
       if (input.source !== undefined && !known)
         return Response.json({ error: 'Unknown source' }, { status: 400 });
       const queued = await queueRefresh(input.source, database());
