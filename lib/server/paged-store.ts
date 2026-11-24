@@ -5,7 +5,8 @@ import official from '../data/official-trails.json';
 import { communitySources } from '../social.mjs';
 import { schedulesEnabled } from './job-queue.mjs';
 
-type Principal = { userId: string; role: string };
+// A visitor (public browsing, docs/31) has a role but no account.
+type Principal = { userId?: string; role: string };
 type Filters = Record<string, unknown>;
 
 /**

@@ -1,0 +1,12 @@
+# Daily database backup to the backup bucket (docs/32-deployment.md). Installed by copying to
+# /etc/systemd/system/ with deploy/winnigo-backup.timer; WorkingDirectory is the checkout.
+[Unit]
+Description=Winnigo database backup
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=winnigo
+WorkingDirectory=/opt/winnigo
+ExecStart=/opt/winnigo/deploy/compose.sh run --rm backup

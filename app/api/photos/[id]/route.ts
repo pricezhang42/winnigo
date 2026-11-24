@@ -1,13 +1,13 @@
 import { canReadMedia } from '@/lib/server/access.mjs';
 import { photoStorage } from '@/lib/server/services';
-import { getPrincipal } from '@/lib/auth';
+import { getReader } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 // A media ID is the photo's content hash, so its bytes never change: the viewer's browser may keep
 // it for a day. Access is still checked on every request, and a revalidation is answered without
 // reading storage.
 const CACHE = 'private, max-age=86400';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const principal = await getPrincipal();
+  const principal = await getReader();
   if (!principal) return new Response('Sign in required', { status: 401 });
   const { id } = await params;
   if (!/^[a-f0-9]{64}$/.test(id)) return new Response('Not found', { status: 404 });

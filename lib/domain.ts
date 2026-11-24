@@ -112,6 +112,8 @@ export type Listing = {
   url: string;
   sourceName: string;
   source: string;
+  // Other sources listing the same event (#66), shown under the most direct source.
+  alsoListed?: { source: string; sourceName: string; url: string }[];
   checkedAt: string;
   price: number | null;
   family: boolean;
