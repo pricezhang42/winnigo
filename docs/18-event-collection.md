@@ -50,6 +50,7 @@ it changes what Winnigo fetches. `npm test` validates the checked-in list.
 | `supportingPages` | `{ maxPerPage, sites: [{ origin, pattern, selector? }] }`: links on an event page fetched with it, such as the organizer's own page or the same site's series page with every session |
 | `extraction` | `maxInputTokens` / `maxOutputTokens` for long pages or many events per page; they raise, never lower, the configured limits |
 | `city` | `{ name, postalPrefixes }`: keep only events in that city (see below) |
+| `images.origins` | Image hosts besides the source's own sites (Canada Life Centre's CDN); event images are copied only from these and the source's origins |
 
 ## Crawling
 
@@ -167,11 +168,12 @@ the table; review the diff like any other change.
 | `sources` | Each source's latest report (status, count, check times, error) |
 | `collection_runs` | One row per run or queued job: trigger, attempts, counts, cost, error |
 | `source_pages` | The last fetch of each page: kind, content hash, stored model output, outcome |
-| `events` | One row per event: identity (`source_key`), page and event URLs, title, description, venue, address, category, price and its wording, availability, ticket and organizer links, source image URL (not shown until copied privately), status (`active`, `cancelled`, `gone`), hidden, visibility, review notes, evidence, owner edits, `sessions_locked` |
+| `events` | One row per event: identity (`source_key`), page and event URLs, title, description, venue, address, category, price and its wording, availability, ticket and organizer links, source image URL and its private copy (`media_id`), status (`active`, `cancelled`, `gone`), hidden, visibility, review notes, evidence, owner edits, `sessions_locked` |
 | `event_sessions` | Event, start and end date, start and end time, cancelled |
 | `event_changes` | Every published change: run, event, kind (`new`, `changed`, `gone`), field and session diff, before and after, reviewed and reverted times |
 
-The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`.
+The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`; later numbered
+migrations (such as `0002_event_photos.sql`) apply on top.
 
 ## Publishing
 
@@ -185,6 +187,18 @@ The schema starts from one baseline, `migrations/postgres/0001_baseline.sql`.
   (hidden from discovery, never deleted). Events on failed or skipped pages are protected. An event
   whose sessions have all ended is retired without a review entry.
 - Each new, changed or gone event gets an `event_changes` row, and the source report is updated.
+
+## Event photos
+
+After each publish, `copyEventPhotos` (`lib/server/event-photos.mjs`) copies every event's source
+image that has no copy yet, or whose image URL changed, into private media (S3 plus a `media`
+row, keyed by the content hash). It fetches through the same rate-limited reader (8 MB cap, no
+redirects) from the source's approved origins only, and keeps only real JPEG, PNG, WebP or GIF
+files: placeholder SVGs are remembered and not fetched again until the URL changes. An image
+shared by several events is stored once. A failed fetch never fails the run and is retried on the
+next one. `events.media_id` points at the copy and `media_source_url` records which URL it came
+from. Discovery shows `/api/photos/<id>`; the photo route allows anyone who can see a current
+event to see its photo, and media cleanup never deletes a photo an event uses.
 
 ## Discovery
 
@@ -245,5 +259,4 @@ with `WINNIGO_SEED_PROFILE=qa`; events come only from collection.
 
 - Pages built with JavaScript (the `browser` method) are not read yet; Royal MTC's schedules need
   corrections through the review list.
-- Source images are not shown until they are copied into private storage.
 - WAG refuses automated requests and stays `blocked`.

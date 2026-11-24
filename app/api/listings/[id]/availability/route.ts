@@ -1,9 +1,9 @@
-import { getPrincipal } from '@/lib/auth';
+import { getReader } from '@/lib/auth';
 import { repository } from '@/lib/server/services';
 import { validScheduleDay } from '@/lib/event-schedule.mjs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const principal = await getPrincipal();
+  const principal = await getReader();
   if (!principal) return Response.json({ error: 'Sign in required' }, { status: 401 });
   const date = new URL(request.url).searchParams.get('date');
   if (!date || !validScheduleDay(date))

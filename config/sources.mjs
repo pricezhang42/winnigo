@@ -20,6 +20,8 @@
 //   extraction              per-source token limits for pages that need more room
 //   city                    { name, postalPrefixes }: keep only events in that city; events
 //                           whose place is not stated stay, flagged for review
+//   images.origins          image hosts besides the source's own sites; each event's image is
+//                           copied into private storage from these origins only
 //
 // Patterns are anchored and match a URL's path and query.
 
@@ -115,6 +117,7 @@ export const EVENT_SOURCES = [
       maxListPages: 1,
       maxEventPages: 60,
     },
+    images: { origins: ['https://d1kq1f9a6xp251.cloudfront.net'] },
   },
   {
     id: 'manitoba-museum',
