@@ -37,7 +37,10 @@
     "accounts:cleanup": "node scripts/cleanup-accounts.mjs",
     "accounts:check-providers": "node scripts/check-providers.mjs",
     "collect": "node scripts/collect-source.mjs",
-    "tz:update": "node scripts/update-time-zone.mjs"
+    "tz:update": "node scripts/update-time-zone.mjs",
+    "events:duplicates": "node scripts/event-duplicates.mjs",
+    "db:backup": "node scripts/backup-database.mjs",
+    "db:restore": "node scripts/restore-database.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1137.0",

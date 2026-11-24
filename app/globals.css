@@ -142,3 +142,4 @@
 .account-footer{display:flex;justify-content:center;gap:1.5rem;margin-top:1.6rem;padding-top:1rem;border-top:1px solid #e3eaee;font-size:13px}
 @media (max-width:600px){.account-page{margin:0;border-radius:0;border-left:0;border-right:0;padding:1.25rem 1rem}}
 .account-shell a.brand{text-decoration:none}
+.status-page{text-align:left}.status-page .account-buttons{align-items:center;gap:1rem}
