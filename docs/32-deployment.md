@@ -49,27 +49,39 @@ showing their images have not been reviewed (docs/31).
 2. Upgrade the account to **Pay As You Go** and add a budget alert (for example US$1). Oracle can
    reclaim idle Always Free servers on free-only accounts; Pay As You Go avoids that and still
    costs nothing within the limits.
-3. Create an instance: shape **VM.Standard.A1.Flex** with **2 OCPUs and 12 GB** memory, image
-   **Ubuntu 24.04 (aarch64)**, boot volume 50 GB, your SSH public key, a public IPv4 address.
-   If Oracle reports no capacity, try another availability domain or try again later.
-4. In the instance's subnet security list, allow ingress TCP 80 and 443 (and UDP 443) from
+3. Create the network first: **Networking → Virtual cloud networks → Start VCN Wizard → Create
+   VCN with Internet Connectivity**. (A network created inside the instance form can leave the
+   public IPv4 switch disabled.)
+4. Create an instance in that VCN's **public subnet**: shape **VM.Standard.A1.Flex** with
+   **2 OCPUs and 12 GB** memory (the form defaults to 1 OCPU and 6 GB; raise it here or later with
+   Edit → Shape), image **Ubuntu 24.04 (aarch64)**, boot volume 50 GB, your SSH public key
+   (`ssh-keygen -t ed25519 -f ~/.ssh/winnigo`, paste `~/.ssh/winnigo.pub`), and **automatically
+   assign public IPv4 address** on. If Oracle reports no capacity, try another availability
+   domain or try again later.
+5. In the subnet's security list, allow ingress TCP 80 and 443 (and UDP 443) from
    0.0.0.0/0. Keep SSH (22) as it is.
 
 ### 3. Prepare the server
 
-Connect with `ssh ubuntu@SERVER_IP`, then:
+Connect with `ssh -i ~/.ssh/winnigo ubuntu@SERVER_IP` (check the host key fingerprint on first connect), then:
 
 ```sh
 sudo apt update && sudo apt -y full-upgrade
 sudo apt -y install unattended-upgrades docker.io docker-compose-v2 git
 sudo dpkg-reconfigure -f noninteractive unattended-upgrades
-# Oracle's Ubuntu image has its own firewall rules; open HTTP and HTTPS there too.
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p udp --dport 443 -j ACCEPT
-sudo netfilter-persistent save
-sudo useradd --system --create-home --groups docker winnigo
+# Oracle's Ubuntu image has its own firewall rules ending in a REJECT; open HTTP and HTTPS
+# above it. Check its position first (`sudo iptables -L INPUT -n --line-numbers`); on a fresh
+# image it is rule 5. Inserted in reverse, so they read 80, 443/tcp, 443/udp.
+sudo iptables -I INPUT 5 -p udp -m state --state NEW -m udp --dport 443 -j ACCEPT
+sudo iptables -I INPUT 5 -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+sudo iptables -I INPUT 5 -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+# Keep them after a reboot by adding the same lines to the boot-time file, after the SSH rule.
+# Not `netfilter-persistent save`: that would also save Docker's own rules into the file.
+sudo sed -i '/--dport 22 -j ACCEPT$/a -A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT\n-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT\n-A INPUT -p udp -m state --state NEW -m udp --dport 443 -j ACCEPT' /etc/iptables/rules.v4
+sudo iptables-restore --test < /etc/iptables/rules.v4 && echo 'boot rules valid'
+sudo useradd --system --create-home --shell /bin/bash --groups docker winnigo
 sudo mkdir -p /opt/winnigo && sudo chown winnigo: /opt/winnigo
+sudo reboot   # if the upgrade installed a new kernel (/var/run/reboot-required exists)
 ```
 
 The repository is private: add a **read-only deploy key** for the server in GitHub
