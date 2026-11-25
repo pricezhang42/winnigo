@@ -34,6 +34,15 @@ function GoogleMark() {
 
 type Mode = 'login' | 'signup' | 'reset';
 
+// Why a Google sign-in came back to /login (Better Auth's `error` parameter). Only these fixed
+// messages are shown, never the description from the URL.
+const GOOGLE_ERRORS: Record<string, string> = {
+  account_not_linked:
+    'This email already has a Winnigo account with a password. Sign in with your email and password.',
+  INVITATION_REQUIRED: 'An invitation is required to join Winnigo.',
+  access_denied: 'Google sign-in was cancelled.',
+};
+
 // Better Auth endpoint and wording for each form mode.
 const MODES: Record<Mode, { endpoint: string; heading: string; submit: string }> = {
   login: { endpoint: 'sign-in/email', heading: 'Welcome back', submit: 'Sign in' },
@@ -69,8 +78,10 @@ export default function AccountLogin({
   const [message, setMessage] = useState('');
   // After a sign-up or reset request: the address the link went to.
   const [sentTo, setSentTo] = useState<{ email: string; kind: Mode } | null>(null);
-  // A sign-up refused because the address already has an account; offered for sign-in.
-  const [existing, setExisting] = useState('');
+  // An address that already has an account, and how that account signs in.
+  const [existing, setExisting] = useState<{ email: string; method: 'password' | 'google' } | null>(
+    null,
+  );
   const [prefill, setPrefill] = useState('');
   // Sign-up's new password and its confirmation; the mismatch shows once the person leaves the
   // confirmation field, then updates as they type.
@@ -79,11 +90,16 @@ export default function AccountLogin({
   const [confirmLeft, setConfirmLeft] = useState(false);
   const mismatch = mode === 'signup' && confirmLeft && confirm !== password;
 
-  // The verification link returns here with ?verified=1.
+  // The verification link returns here with ?verified=1, and a failed Google sign-in with ?error.
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (new URLSearchParams(window.location.search).has('verified'))
-        setMessage('Your email is verified. You can sign in now.');
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get('error');
+      if (params.has('verified')) setMessage('Your email is verified. You can sign in now.');
+      else if (error)
+        setMessage(
+          GOOGLE_ERRORS[error] ?? 'Google sign-in could not be completed. Please try again.',
+        );
     });
     return () => clearTimeout(timer);
   }, []);
@@ -97,7 +113,7 @@ export default function AccountLogin({
   async function request(path: string, body: Record<string, unknown>) {
     setBusy(true);
     setMessage('');
-    setExisting('');
+    setExisting(null);
     try {
       const response = await fetch('/api/auth/' + path, {
         method: 'POST',
@@ -105,8 +121,14 @@ export default function AccountLogin({
         body: JSON.stringify(body),
       });
       const result = await response.json().catch(() => ({}));
-      if (result.code === 'ACCOUNT_EXISTS' && typeof body.email === 'string') {
-        setExisting(body.email);
+      if (
+        (result.code === 'ACCOUNT_EXISTS' || result.code === 'GOOGLE_ACCOUNT_EXISTS') &&
+        typeof body.email === 'string'
+      ) {
+        setExisting({
+          email: body.email,
+          method: result.code === 'GOOGLE_ACCOUNT_EXISTS' ? 'google' : 'password',
+        });
         return null;
       }
       if (!response.ok)
@@ -150,7 +172,7 @@ export default function AccountLogin({
     setMode(mode === target ? 'login' : target);
     setMessage('');
     setSentTo(null);
-    setExisting('');
+    setExisting(null);
     setPassword('');
     setConfirm('');
     setConfirmLeft(false);
@@ -158,9 +180,20 @@ export default function AccountLogin({
 
   /** From a refused sign-up to sign-in, with the email filled in. */
   function signInInstead() {
-    setPrefill(existing);
+    setPrefill(existing?.email ?? '');
     toggleMode('login');
   }
+
+  /** Starts Google sign-in; a refusal comes back to /login with ?error. */
+  async function continueWithGoogle() {
+    const result = await request('sign-in/social', {
+      provider: 'google',
+      callbackURL: '/',
+      errorCallbackURL: '/login',
+    });
+    if (result?.url) window.location.assign(result.url);
+  }
+  const googleRow = google && (mode === 'login' || (mode === 'signup' && openSignup));
 
   if (sentTo)
     return (
@@ -272,31 +305,34 @@ export default function AccountLogin({
           {busy ? 'Please wait…' : copy.submit}
         </button>
         {message && <p role="status">{message}</p>}
-        {existing && (
+        {existing?.method === 'password' && (
           <div role="status" className="account-existing">
             <p>
-              An account with <strong>{existing}</strong> already exists.
-              {google ? ' If you created it with Google, use “Continue with Google”.' : ''}
+              An account with <strong>{existing.email}</strong> already exists. Sign in with your
+              email and password.
             </p>
             <button type="button" onClick={signInInstead}>
               Sign in instead
             </button>
           </div>
         )}
+        {existing?.method === 'google' && (
+          <div role="status" className="account-existing">
+            <p>
+              <strong>{existing.email}</strong> is signed up with Google. Use “Continue with Google”
+              to sign in.
+            </p>
+            {google && !googleRow && (
+              <button type="button" onClick={continueWithGoogle}>
+                Continue with Google
+              </button>
+            )}
+          </div>
+        )}
       </form>
-      {google && (mode === 'login' || (mode === 'signup' && openSignup)) && (
+      {googleRow && (
         <div className="google-row">
-          <button
-            className="google-button"
-            disabled={busy}
-            onClick={async () => {
-              const result = await request('sign-in/social', {
-                provider: 'google',
-                callbackURL: '/',
-              });
-              if (result?.url) window.location.assign(result.url);
-            }}
-          >
+          <button className="google-button" disabled={busy} onClick={continueWithGoogle}>
             <GoogleMark />
             Continue with Google
           </button>
