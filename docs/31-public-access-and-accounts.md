@@ -17,7 +17,7 @@ account deletion, roles and grants. Those have never been tested with real email
 | Photos for visitors | Shown. Visitors see event and place photos like signed-in users; community photos stay restricted. |
 | CAPTCHA | None at first. Email verification, rate limits and cleanup of unverified accounts carry the load; a CAPTCHA can be added if automated sign-ups appear. |
 | Users panel | Part of this plan (step 2). |
-| Sign-up with a registered address | Said on the page ("An account with this email already exists"), with "Sign in instead". The owner chose this on 2026-11-24 over Better Auth's identical reply, accepting that the page confirms whether an address has an account; sign-up stays rate-limited. Password-reset requests still answer identically. |
+| Sign-up with a registered address | Said on the page ("An account with this email already exists"), with "Sign in instead". The owner chose this on 2026-11-24 over Better Auth's identical reply, accepting that the page confirms whether an address has an account; sign-up stays rate-limited. Password-reset requests still answer identically. On 2026-11-25 the owner extended it to the sign-in method: email sign-up or sign-in for an address created with Google says "signed up with Google", and Google sign-in for an address that has a password sends the person back to sign in with it. |
 | Launch | Public browsing and open sign-up ship behind settings that default to off. Turning them on for real users is part of the production cutover (P8, #10), together with the hosting, email provider and Google app review. Nothing here changes the production audience, the original site or its collector. |
 
 AGENTS.md currently says "Never open registration". Step 2 changes it to: registration opens
@@ -71,7 +71,7 @@ Done on 2026-11-23 (`WINNIGO_SIGNUP`, `lib/server/users.mjs`, `/api/users`, the 
   and an unverified account cannot sign in or save.
 - The login page gets "Create an account" next to "Sign in", and "Continue with Google" creates
   an account for a verified Google email. Accounts are not linked across providers
-  automatically, as today.
+  automatically, as today; the login page names the method an address already uses.
 - Abuse protection: the existing per-email and global auth limits, and `accounts:cleanup`
   removes accounts left unverified for seven days. No CAPTCHA at first; Better Auth's captcha
   plugin can be added later if automated sign-ups appear.

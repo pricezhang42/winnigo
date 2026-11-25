@@ -396,6 +396,31 @@ try {
       .rows[0].n,
     1,
   );
+  // An address created with Google is named as such on email sign-up and sign-in (accounts are
+  // not linked across methods); a password account still gets the generic sign-in refusal.
+  await pool.query(
+    `INSERT INTO auth_user(id,name,email,"emailVerified") VALUES('g1','Googler','googler@example.test',true);
+     INSERT INTO auth_account(id,"accountId","providerId","userId","updatedAt") VALUES('ga1','1','google','g1',now())`,
+  );
+  await pool.query('TRUNCATE auth_rate_limit');
+  const googleSignup = await call('sign-up/email', {
+    ...stranger,
+    email: 'Googler@example.test',
+    password: 'Another-password-1',
+  });
+  assert.equal(googleSignup.status, 422);
+  assert.equal((await googleSignup.json()).code, 'GOOGLE_ACCOUNT_EXISTS');
+  const googleSignin = await call('sign-in/email', {
+    email: 'googler@example.test',
+    password: 'Another-password-1',
+  });
+  assert.equal(googleSignin.status, 401);
+  assert.equal((await googleSignin.json()).code, 'GOOGLE_ACCOUNT_EXISTS');
+  assert.equal(mail.length, mailBefore, 'no email is sent');
+  const wrong = await call('sign-in/email', { email: stranger.email, password: 'Wrong-pass-1' });
+  assert.equal(wrong.status, 401);
+  assert.notEqual((await wrong.json()).code, 'GOOGLE_ACCOUNT_EXISTS');
+  await pool.query("DELETE FROM auth_user WHERE id='g1'");
   auth = invitationAuth;
 
   // The owner's Users panel.

@@ -1,13 +1,18 @@
 import { LegalPage } from '@/components/legal-page';
-// Rendered per request: the contact address comes from the server's environment, not the build.
+import { readConfig } from '@/lib/server/config.mjs';
+// Rendered per request: the contact address and browsing setting come from the server's
+// environment, not the build.
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Privacy policy · Winnigo' };
 export default function PrivacyPage() {
+  const { publicBrowsing } = readConfig();
   return (
     <LegalPage title="Privacy policy">
       <p>
-        Winnigo helps people find things to do in Winnipeg. You can browse without an account; an
-        account lets you keep saved discoveries on every device.
+        Winnigo helps people find things to do in Winnipeg.{' '}
+        {publicBrowsing
+          ? 'You can browse without an account; an account lets you keep saved discoveries on every device.'
+          : 'Browsing needs an account, which also keeps your saved discoveries on every device.'}
       </p>
       <h2>What we store</h2>
       <ul>
