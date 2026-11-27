@@ -11,6 +11,8 @@ test('P5 retries network trouble but not source changes', () => {
   assert.equal(isTransient(new TypeError('fetch failed')), true);
   assert.equal(isTransient(Object.assign(Error('x'), { cause: { code: 'ECONNRESET' } })), true);
   assert.equal(isTransient(Error('Source returned HTTP 503')), true);
+  assert.equal(isTransient(Error('FlareSolverr returned HTTP 503')), true);
+  assert.equal(isTransient(Error('FlareSolverr returned HTTP 403')), false);
   assert.equal(isTransient(Error('Source returned HTTP 429')), true);
   assert.equal(isTransient(Error('Source returned HTTP 404')), false);
   assert.equal(isTransient(Error('Unexpected source size')), false);

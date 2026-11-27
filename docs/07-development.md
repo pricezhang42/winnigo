@@ -7,7 +7,7 @@ The working guide is [`AGENTS.md`](../AGENTS.md); setup notes are in the root
 ## Prerequisites
 
 - Node.js `>= 22.13.0`.
-- Docker, for the local PostgreSQL and S3-compatible storage ([`compose.yaml`](../compose.yaml)).
+- Docker, for local PostgreSQL, S3-compatible storage and FlareSolverr ([`compose.yaml`](../compose.yaml)).
 - Python 3 + Selenium only for the Facebook collector, in a private venv such as `.winnigo/venv`
   (pinned in [`scripts/selenium-requirements.txt`](../scripts/selenium-requirements.txt); see
   [HIKING-COLLECTOR.md](../HIKING-COLLECTOR.md)).
@@ -17,7 +17,7 @@ The working guide is [`AGENTS.md`](../AGENTS.md); setup notes are in the root
 ```bash
 npm ci                 # install
 npm run setup          # create .env.local with generated secrets (never overwrites it)
-npm run services:up    # PostgreSQL + S3-compatible storage via Docker Compose
+npm run services:up    # PostgreSQL + S3-compatible storage + FlareSolverr via Docker Compose
 npm run db:migrate     # apply migrations/postgres in order
 npm run db:seed        # official trails (WINNIGO_SEED_PROFILE=qa adds synthetic QA items)
 npm run dev            # Next.js dev server, http://127.0.0.1:5173
@@ -32,7 +32,8 @@ npm run db:backup / db:restore       # backups to and from the backup bucket (do
 
 `npm run dev`/`build`/`start` go through [`scripts/node-app.mjs`](../scripts/node-app.mjs), which
 validates configuration before starting Next.js. Event collection needs the `WINNIGO_EXTRACTION_*`
-settings and `OPENAI_API_KEY` ([18 — Event collection](18-event-collection.md)). The pre-P1
+settings and `OPENAI_API_KEY`; WAG also uses FlareSolverr on loopback port 8191, started by
+`services:up` ([18 — Event collection](18-event-collection.md)). The pre-P1
 Cloudflare/Vinext/Sites commands were removed; they remain in the rollback release described in
 [`legacy/cloudflare/README.md`](../legacy/cloudflare/README.md).
 

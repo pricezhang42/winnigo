@@ -9,7 +9,7 @@ original site and its Facebook collector are not touched.
 
 | Piece | Where |
 | --- | --- |
-| Website (`web`), collection worker (`worker`), PostgreSQL 17 (`postgres`) | Docker containers on the server |
+| Website (`web`), collection worker (`worker`), PostgreSQL 17 (`postgres`), FlareSolverr (`flaresolverr`) | Docker containers on the server |
 | HTTPS certificate and proxy (`caddy`) | Docker container on the server; ports 80 and 443 |
 | Event photos | R2 bucket `winnigo-media` (private, served through `/api/photos/:id`) |
 | Database backups | R2 bucket `winnigo-backups` (private), daily, 30 days |
@@ -17,7 +17,8 @@ original site and its Facebook collector are not touched.
 | DNS | Porkbun: `winnigo.lpzdev.com` → the server's public IP |
 
 `release` (migrations and the official trails) and `backup` are one-off containers from the same
-image. A staging site runs beside production on the same server ([Staging](#staging)). Every setting is in `.env.production` on the server
+image. FlareSolverr is reachable only on the private Compose network by the worker; it has no
+public port. A staging site runs beside production on the same server ([Staging](#staging)). Every setting is in `.env.production` on the server
 ([template](../.env.production.example)); it is never committed or pasted anywhere else.
 
 ## Launch stages

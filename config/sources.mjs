@@ -8,9 +8,10 @@
 //                   WINNIGO_SCHEDULES=enabled)
 //   fetch.method    pages: list pages link to one page per event
 //                   single-page: each list page itself lists several events
-//                   browser: pages built with JavaScript (not supported yet)
+//                   browser: pages fetched through the local FlareSolverr browser service
 //   fetch.eventKeyPattern   one capture group; links with the same key are one event
 //   fetch.nextLinkPattern   a "next page" link (rel=next, a next class or label) must match it
+//   fetch.nextPageSelector  optional "view more" anchor; its data-next fills the paged query value
 //   fetch.pageLinkPattern   numbered pagination: every matching list link is read, up to
 //                           maxListPages
 //   fetch.startUrls         may contain {today} {from} {to} (YYYY-MM-DD) or {fromUnix} {toUnix}: the
@@ -137,6 +138,26 @@ export const EVENT_SOURCES = [
       ],
     },
     extraction: { maxInputTokens: 20000 },
+  },
+  {
+    id: 'wag',
+    name: 'WAG–Qaumajuq',
+    status: 'active',
+    schedule: 'manual',
+    notes: 'The calendar requires the local FlareSolverr browser service.',
+    defaultVenue: { name: 'WAG–Qaumajuq', address: '300 Memorial Boulevard, Winnipeg' },
+    fetch: {
+      method: 'browser',
+      allowedOrigin: 'https://www.wag.ca',
+      startUrls: ['https://www.wag.ca/events/event-calendar/'],
+      eventLinkPattern: '^/event/[^/]+/?$',
+      nextPageSelector: '.btn-more[data-next][href]',
+      nextLinkPattern:
+        '^/events/event-calendar/\\?(?:category=&audience=&timeframe=all&)?paged=\\d+$',
+      maxListPages: 5,
+      maxEventPages: 60,
+      selector: '#maincontent',
+    },
   },
   {
     id: 'manitoba-music',

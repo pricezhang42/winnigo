@@ -41,6 +41,27 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: 'false'
+      TZ: America/Winnipeg
+    tmpfs: ['/tmp:size=256M,mode=1777']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8191/', timeout=2)",
+        ]
+      interval: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    logging: *logging
+
   # One-off steps, run before starting a new version: migrations and the official trails.
   release:
     <<: *app
@@ -67,6 +88,14 @@ services:
   worker:
     <<: *app
     command: ['node', 'scripts/worker.mjs']
+    environment:
+      <<: *app-environment
+      WINNIGO_FLARESOLVERR_URL: http://flaresolverr:8191
+    depends_on:
+      postgres:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_healthy
     volumes: ['worker-data:/data']
     healthcheck:
       test: ['CMD', 'node', 'scripts/check-worker.mjs']

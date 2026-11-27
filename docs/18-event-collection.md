@@ -20,6 +20,7 @@ config/sources.mjs → crawl (code) → prepare text → unchanged page? reuse �
 | `config/sources.mjs` | The source list |
 | `lib/server/event-sources.mjs` | Source validation, crawler, city filter, extraction of every page |
 | `lib/server/source-reader.mjs` | Rate-limited, size-capped HTTP reads |
+| `lib/server/flaresolverr.mjs` | Browser-backed reads through the local FlareSolverr service |
 | `lib/server/event-page-preparation.mjs` | HTML to the text and links the model reads |
 | `lib/contracts/event-extraction.mjs` (+ `.ts` types) | Model input and output contract, quote checks |
 | `lib/server/openai-event-extraction.mjs`, `event-extraction-service.mjs` | The model call, budget and limits |
@@ -39,11 +40,12 @@ it changes what Winnigo fetches. `npm test` validates the checked-in list.
 | `status` | `active`, `paused` (not collected; the notes say why) or `blocked` (the site refuses automated requests; never worked around) |
 | `schedule` | `manual`, or a cron expression in America/Winnipeg (see Operations) |
 | `defaultVenue` | Venue used when a page omits it |
-| `fetch.method` | `pages` (a list links to one page per event), `single-page` (each list page lists several events), `browser` (pages built with JavaScript; not supported yet) |
+| `fetch.method` | `pages` (a list links to one page per event), `single-page` (each list page lists several events), `browser` (rendered pages fetched through FlareSolverr) |
 | `fetch.allowedOrigin`, `startUrls` | The only https origin for list and event pages, and where to start. Start URLs may contain `{today}`, `{from}`, `{to}` (YYYY-MM-DD) or `{fromUnix}`, `{toUnix}` so a calendar request asks for the collection window only |
 | `fetch.eventLinkPattern` | Anchored pattern (path and query) for event links, found in anchors or as absolute URLs in page text (calendar feeds, embedded JSON) |
 | `fetch.eventKeyPattern` | One capture group: links with the same key are one event (calendars that link every date) |
 | `fetch.nextLinkPattern` | A "next page" link (`rel=next`, a `next` class, or a Next / › label) must match it |
+| `fetch.nextPageSelector` | Optional "view more" anchor: its `data-next` number fills the link's blank `paged` query value, bounded by `data-total` when present (WAG) |
 | `fetch.pageLinkPattern` | Numbered pagination: every matching list link is read, up to `maxListPages` |
 | `fetch.selector`, `exclude` | The page region sent to the model |
 | `fetch.maxListPages`, `maxEventPages` | Limits (at most 20 and 200) |
@@ -55,10 +57,13 @@ it changes what Winnigo fetches. `npm test` validates the checked-in list.
 ## Crawling
 
 Code does all fetching; the model has no network access. Every request goes through the source
-reader: one request per second per origin, a request and time budget per run, a 2 MB cap per
-response and no automatic redirects. The crawler follows redirects itself, and only while they
-stay on the source's approved origins. List pages are read first, then event pages (`pages`
-method) or the list pages themselves (`single-page`), each with any supporting pages it links to.
+reader: one request per second per origin, a request and time budget per run and a 2 MB cap per
+response. Ordinary HTTP reads do not automatically redirect; the crawler follows redirects itself,
+and only while they stay on the source's approved origins. A `browser` source instead sends each
+validated URL to FlareSolverr, waits up to 60 seconds for the rendered page, and validates the
+final URL and rejects verification pages. Browser cookies and raw service errors are not returned
+to the crawler or included in collection errors. List pages are read first, then event pages (`pages` and `browser`
+methods) or the list pages themselves (`single-page`), each with any supporting pages it links to.
 A page that fails is recorded and the crawl continues.
 
 ## Page preparation
@@ -117,6 +122,15 @@ that event, named by its title field or performers; differently named entries at
 separate events; every session a supporting calendar shows is listed; an organizer's dates and
 times win over a listing site's, and a listing range that starts on the day it was read is not a
 published start.
+
+## Browser service
+
+`npm run services:up` starts pinned FlareSolverr 3.5.2 on `127.0.0.1:8191`; its browser temporary
+files use a bounded RAM filesystem. Do not expose this unauthenticated service to the network.
+`WINNIGO_FLARESOLVERR_URL` defaults to `http://127.0.0.1:8191` and must be an HTTP(S) origin
+without credentials or a path. Docker workers use `http://flaresolverr:8191` on the private
+Compose network. WAG is the only browser source and remains `manual`, so enabling schedules does
+not schedule it. Run `npm run collect -- wag` for a crawl without extraction or stored changes.
 
 ## Model service
 
@@ -257,5 +271,6 @@ with `WINNIGO_SEED_PROFILE=qa`; events come only from collection.
 
 ## Known gaps
 
-- Pages built with JavaScript (the `browser` method) are not read yet; Royal MTC's schedules need
-  corrections through the review list.
+- Royal MTC is not a configured source; its schedules need corrections through the review list.
+- WAG event pages use FlareSolverr, but photo downloads still use ordinary HTTP and may fail
+  without failing event publication; the private copy is retried on the next run.
