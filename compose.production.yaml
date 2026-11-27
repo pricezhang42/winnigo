@@ -2,12 +2,16 @@
 # worker and Caddy for HTTPS. Photos and database backups go to S3-compatible storage
 # (Cloudflare R2). Every setting comes from .env.production, which is never committed.
 # Run through deploy/compose.sh, which passes that file to Docker Compose.
+#
+# Staging is the same file in a second checkout with .env.staging: deploy/compose.sh then sets
+# WINNIGO_STAGE=staging, which names the project, image and env file, and leaves Caddy out (the
+# production Caddy serves both hosts over the shared winnigo-edge network).
 name: winnigo
 
 x-app: &app
   build: .
-  image: winnigo-node:production
-  env_file: .env.production
+  image: winnigo-node:${WINNIGO_STAGE:-production}
+  env_file: .env.${WINNIGO_STAGE:-production}
   environment: &app-environment
     DATABASE_URL: postgres://winnigo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/winnigo
     WINNIGO_AUTH_MODE: session
@@ -54,6 +58,10 @@ services:
   web:
     <<: *app
     command: ['node', 'server.js']
+    networks:
+      default:
+      # Caddy reaches each stage's website by this name (deploy/Caddyfile).
+      edge: { aliases: ['${WINNIGO_STAGE:-production}-web'] }
     restart: unless-stopped
 
   worker:
@@ -68,9 +76,15 @@ services:
 
   caddy:
     image: caddy:2.10.2-alpine
+    # Only production runs Caddy; staging sets this to 0 (deploy/compose.sh).
+    scale: ${WINNIGO_CADDY_SCALE:-1}
     ports: ['80:80', '443:443', '443:443/udp']
+    networks: [edge]
     environment:
       WINNIGO_DOMAIN: ${WINNIGO_DOMAIN:?Set WINNIGO_DOMAIN in .env.production}
+      # Optional: the staging host (docs/32). Unset, it is plain-HTTP staging.localhost, for
+      # which Caddy requests no certificate.
+      WINNIGO_STAGING_DOMAIN: ${WINNIGO_STAGING_DOMAIN:-http://staging.localhost}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -78,6 +92,12 @@ services:
     depends_on: [web]
     restart: unless-stopped
     logging: *logging
+
+# Shared by production's Caddy and each stage's website; deploy/compose.sh creates it.
+networks:
+  edge:
+    name: winnigo-edge
+    external: true
 
 volumes:
   postgres:

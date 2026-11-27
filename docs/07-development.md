@@ -80,7 +80,10 @@ npm run check:assets # real CSS/JS responses and layout for a running server
 ```
 
 The `check:*` database checks need `npm run services:up`. Browser regression runs against a
-separate QA database ([15 — P2 storage](15-p2-storage.md)).
+separate QA database ([15 — P2 storage](15-p2-storage.md)). GitHub Actions runs the same checks
+(except `check:assets` and the browser regression) on every pull request
+([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)); a change can then be tried on the
+staging site before production ([32 — Deployment](32-deployment.md#staging)).
 
 ## Verify the access boundary
 
