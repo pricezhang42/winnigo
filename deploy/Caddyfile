@@ -1,7 +1,15 @@
-# HTTPS for Winnigo (compose.production.yaml). Caddy obtains and renews the certificate for
-# WINNIGO_DOMAIN and passes the visitor's address to the app in X-Forwarded-For, replacing any
-# value the visitor sent. Security headers are set by the app (next.config.ts).
+# HTTPS for Winnigo (compose.production.yaml). Caddy obtains and renews the certificates and
+# passes the visitor's address to the app in X-Forwarded-For, replacing any value the visitor
+# sent. Security headers are set by the app (lib/security-headers.mjs). Each stage's website is
+# reached over the winnigo-edge network by its alias, never by the shared service name "web".
 {$WINNIGO_DOMAIN} {
 	encode zstd gzip
-	reverse_proxy web:5173
+	reverse_proxy production-web:5173
+}
+
+# Staging (docs/32): a second Compose project in its own checkout. compose.production.yaml
+# defaults WINNIGO_STAGING_DOMAIN to http://staging.localhost, which needs no certificate.
+{$WINNIGO_STAGING_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy staging-web:5173
 }

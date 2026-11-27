@@ -25,6 +25,7 @@ Use standard terminal tools; no coding-agent-specific tools or external skills a
 - `lib/connectors.mjs`: shared text/date helpers and The Forks places parser; page reads never collect.
 - `scripts/worker.mjs`, `lib/server/job-queue.mjs`, `lib/server/collection.mjs`: P5 collection jobs (pg-boss). Schedules run only with `WINNIGO_SCHEDULES=enabled`; run `npm run check:p5` after changes (docs/17-p5-collection.md). Facebook collection stays on its existing scheduler until P6.
 - `compose.yaml`, `Dockerfile`, `migrations/postgres/`: local infrastructure, the schema baseline and later numbered migrations (`npm run db:reset -- --yes` resets a local pre-baseline database).
+- `compose.production.yaml`, `deploy/`: the production server and the staging site beside it (docs/32). `.github/workflows/ci.yml` runs the checks on every pull request; merge only when it passes.
 - `legacy/cloudflare/README.md`: complete pre-P1 release commit and rollback checkout instructions. Reference files here are excluded from the Node build.
 
 ## Data rules

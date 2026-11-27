@@ -17,7 +17,7 @@ original site and its Facebook collector are not touched.
 | DNS | Porkbun: `winnigo.lpzdev.com` → the server's public IP |
 
 `release` (migrations and the official trails) and `backup` are one-off containers from the same
-image. Every setting is in `.env.production` on the server
+image. A staging site runs beside production on the same server ([Staging](#staging)). Every setting is in `.env.production` on the server
 ([template](../.env.production.example)); it is never committed or pasted anywhere else.
 
 ## Launch stages
@@ -148,7 +148,55 @@ deploy/compose.sh exec postgres dropdb -U winnigo winnigo_restore_test
 Photos are not backed up separately: R2 keeps them durably, and a lost photo is copied again
 from its source on the next collection run.
 
-## Updating
+## Checks before merging
+
+GitHub Actions ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs on every pull
+request and every push to `main`: formatting, lint, types, unit tests, `check:events`,
+`check:p2`, `check:p3`, `check:p5` against throwaway PostgreSQL and storage, and the build.
+Merge only when it passes.
+
+## Staging
+
+`https://staging.winnigo.lpzdev.com` is a second copy of the stack for trying a change against
+the real providers (HTTPS, Resend, Google, R2) before production. It is the same
+`compose.production.yaml` in its own checkout, `/opt/winnigo-staging`, with `.env.staging`
+instead of `.env.production`. `deploy/compose.sh` picks the stage from that file: staging gets
+its own Compose project (`winnigo-staging`), image, database and volumes, and no Caddy of its
+own. Production's Caddy serves both hosts and reaches each website over the `winnigo-edge`
+Docker network as `production-web` or `staging-web`.
+
+Staging differs from production in `.env.staging`:
+
+| Setting | Staging |
+| --- | --- |
+| `WINNIGO_DOMAIN`, `WINNIGO_ORIGIN` | `staging.winnigo.lpzdev.com` |
+| `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `WINNIGO_COLLECTOR_KEY` | Its own new values |
+| `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket `winnigo-staging-media` and a token limited to it; never production's |
+| `BACKUP_*` | Empty: staging data is disposable and has no backup timer |
+| `WINNIGO_SIGNUP`, `WINNIGO_PUBLIC_BROWSING`, `WINNIGO_INDEXING` | `invitation`, `disabled`, `disabled` |
+| `WINNIGO_SCHEDULES` | `disabled` (manual refreshes only; each costs AI budget) |
+
+Resend, Google and OpenAI settings are the same as production's. Google needs the staging
+redirect URI `https://staging.winnigo.lpzdev.com/api/auth/callback/google` added to the OAuth
+client. DNS needs an **A** record `staging.winnigo` → the server's IP, and production's
+`.env.production` needs `WINNIGO_STAGING_DOMAIN=staging.winnigo.lpzdev.com` so Caddy gets its
+certificate. Accounts are separate from production's: invite and bootstrap an owner on staging
+with the same commands.
+
+**Trying a change:** as `winnigo`, check out the branch in the staging checkout and start it:
+
+```sh
+cd /opt/winnigo-staging && git fetch && git checkout BRANCH && git pull --ff-only
+deploy/compose.sh build && deploy/compose.sh run --rm release && deploy/compose.sh up -d
+```
+
+Return staging to `main` afterwards. A branch with a new migration leaves staging's database
+ahead of `main`; reset it if needed (`deploy/compose.sh down -v` in the staging checkout deletes
+only staging's database and volumes, then run `release` again).
+
+## Updating production
+
+Merge to `main` after CI passes and, for risky changes, after trying it on staging. Then:
 
 ```sh
 cd /opt/winnigo && git pull --ff-only
