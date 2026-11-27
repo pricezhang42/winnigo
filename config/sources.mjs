@@ -23,6 +23,8 @@
 //                           whose place is not stated stay, flagged for review
 //   images.origins          image hosts besides the source's own sites; each event's image is
 //                           copied into private storage from these origins only
+//   images.browserPath      browser-source image paths; canonical og:image wins and blocked
+//                           downloads fall back to a validated standalone-image screenshot
 //
 // Patterns are anchored and match a URL's path and query.
 

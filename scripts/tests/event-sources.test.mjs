@@ -210,34 +210,41 @@ const stubExtractor = (byUrl) => ({
   },
 });
 
-test('browser event pages can supply their own preview image when extraction omits it', async () => {
+test('browser event pages prefer their own preview over extracted or missing images', async () => {
   const definition = variant((d) => {
     d.fetch.method = 'browser';
     d.images = { browserPath: '^/uploads/.+\\.jpg$' };
   });
   const url = origin + '/event/1';
   const image = origin + '/uploads/concert.jpg';
+  const unrelated = origin + '/uploads/sponsor.jpg';
   const makePage = (declaredPage, declaredImage) => ({
     url,
     kind: 'event',
     html:
       `<meta property="og:url" content="${declaredPage}"><meta property="og:image" content="${declaredImage}">` +
-      eventHtml(),
+      eventHtml(`<img src="${unrelated}">`),
     supporting: [],
   });
-  for (const [page, expected] of [
-    [makePage(url + '/', image), [image]],
-    [makePage(origin + '/events', image), []],
-    [makePage(url, organizer + '/uploads/concert.jpg'), []],
-  ]) {
-    const result = await extractPages(
+  const extract = (page, extractedImages = []) =>
+    extractPages(
       definition,
       { pages: [page] },
       {
         checkedAt,
-        extractor: stubExtractor({ [url]: () => model() }),
+        extractor: stubExtractor({
+          [url]: () => model((event) => (event.imageUrls = extractedImages)),
+        }),
       },
     );
+  for (const [page, extractedImages, expected] of [
+    [makePage(url + '/', image), [], [image]],
+    [makePage(url, image), [unrelated], [image]],
+    [makePage('', ''), [unrelated], [unrelated]],
+    [makePage(origin + '/events', image), [], []],
+    [makePage(url, organizer + '/uploads/concert.jpg'), [], []],
+  ]) {
+    const result = await extract(page, extractedImages);
     assert.deepEqual(result.pages[0].events[0].images, expected);
   }
 });
