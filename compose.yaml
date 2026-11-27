@@ -24,6 +24,25 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9333/cluster/status"]
       interval: 3s
       retries: 30
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: "false"
+      TZ: America/Winnipeg
+    ports: ["127.0.0.1:8191:8191"]
+    tmpfs: ["/tmp:size=256M,mode=1777"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8191/', timeout=2)",
+        ]
+      interval: 3s
+      retries: 30
+      start_period: 30s
   web:
     profiles: ["app"]
     build: .
@@ -68,9 +87,12 @@ services:
       WINNIGO_AUTH_MODE: ${WINNIGO_CONTAINER_AUTH_MODE:-session}
       WINNIGO_HOST: 0.0.0.0
       WINNIGO_DATA_DIR: /data
+      WINNIGO_FLARESOLVERR_URL: http://flaresolverr:8191
     command: ["node", "scripts/worker.mjs"]
     depends_on:
       web:
+        condition: service_healthy
+      flaresolverr:
         condition: service_healthy
     volumes: ["worker-data:/data"]
     healthcheck:

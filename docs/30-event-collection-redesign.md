@@ -9,6 +9,10 @@ How collection works now (source list, pipeline, contract, storage, review and o
 [18 — Event collection](18-event-collection.md). This document records the decisions, the
 comparison that justified the switch, and the steps.
 
+Update on 2026-11-27: the planned `browser` method is now implemented with a local FlareSolverr
+service. WAG–Qaumajuq is active again with a manual schedule and uses the shared AI extraction and
+review pipeline; the historical notes below describe its earlier blocked state.
+
 ## Decisions
 
 | Question | Decision |

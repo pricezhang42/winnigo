@@ -76,7 +76,7 @@ try {
   const crawl = await crawlSource(raw, { checkedAt });
   console.log(
     `${definition.id}: ${crawl.listPagesRead} list page(s), ${crawl.pages.length} page(s) to read` +
-      (definition.fetch.method === 'pages' ? ` of ${crawl.discovered} event(s) found` : ''),
+      (definition.fetch.method !== 'single-page' ? ` of ${crawl.discovered} event(s) found` : ''),
   );
   for (const f of crawl.failedPages) console.log(`  failed ${f.url}: ${f.error}`);
 

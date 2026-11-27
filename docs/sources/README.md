@@ -20,7 +20,7 @@ secrets. Open it in any spreadsheet app; keep the column order and quote fields 
 | `kind`         | `venue`, `organization`, `aggregator`, `umbrella-directory`, `community-group`, `platform`                                                     |
 | `content`      | `events`, `places`, `trails`, `activities`                                                                                                     |
 | `events_url`   | The page or site the listings come from (`https://`)                                                                                           |
-| `feed_type`    | `ics`, `jsonld`, `rss`, `api`, `html`, `kml`, `browser` (signed-in browser), `manual` (added by link)                                          |
+| `feed_type`    | `ics`, `jsonld`, `rss`, `api`, `html`, `kml`, `browser` (browser transport; signed in only when noted), `manual` (added by link)                |
 | `feed_url`     | Only when it differs from `events_url`                                                                                                         |
 | `pagination`   | `none`, `?page=N`, `month-nav`, `load-more`, `other`                                                                                           |
 | `access`       | `ok` (robots.txt and terms allow it), `limited` (only with sign-in, permission or by hand), `blocked`, `unchecked`. Details go in `notes`.        |

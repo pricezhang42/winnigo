@@ -46,7 +46,7 @@ For another port use `WINNIGO_CHECK_ORIGIN=http://127.0.0.1:5174 npm run check:a
 
 Events are collected by AI extraction from the source list in `config/sources.mjs`; configuration, the review list and operations are in [event collection](docs/18-event-collection.md).
 
-## PostgreSQL and S3 development services
+## PostgreSQL, S3 and FlareSolverr development services
 
 Requires Docker Compose; these have separate `winnigo-node` volumes from P0 and legacy state.
 
@@ -56,7 +56,7 @@ npm run services:check
 npm run db:migrate
 ```
 
-PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. Setup writes their credentials to `.env.local`: PostgreSQL uses the fixed local login `winnigo` / `winnigo` (database `winnigo`), which is safe only because the port is bound to loopback; the S3 keys and auth secret are random. `db:migrate` applies the schema baseline and any later numbered migrations transactionally. `db:seed` adds the official trails and preserves corrections; it does not migrate production data. PostgreSQL applies the password only when its volume is first created; to change it later, run `ALTER USER` and update `POSTGRES_PASSWORD` and `DATABASE_URL` together.
+PostgreSQL is on loopback port 55433; SeaweedFS S3 is on 58334. FlareSolverr is on loopback port 8191 for browser-backed WAG collection; never expose it publicly. Setup writes the database and storage credentials to `.env.local`: PostgreSQL uses the fixed local login `winnigo` / `winnigo` (database `winnigo`), which is safe only because the port is bound to loopback; the S3 keys and auth secret are random. `db:migrate` applies the schema baseline and any later numbered migrations transactionally. `db:seed` adds the official trails and preserves corrections; it does not migrate production data. PostgreSQL applies the password only when its volume is first created; to change it later, run `ALTER USER` and update `POSTGRES_PASSWORD` and `DATABASE_URL` together.
 
 Stop the services with `npm run services:down`. To run the web app and its separate worker in containers:
 
@@ -85,7 +85,7 @@ docker compose --env-file .env.local --profile app stop
 | `npm run db:seed` | Add official trails (and QA fixtures with the `qa` profile); preserve existing records |
 | `npm run db:migrate` | Apply pending PostgreSQL migrations |
 | `npm run db:reset -- --yes` | Empty the local database (loopback or Compose only) before migrating from the baseline |
-| `npm run services:up` / `services:down` | Start/stop local PostgreSQL and SeaweedFS |
+| `npm run services:up` / `services:down` | Start/stop local PostgreSQL, SeaweedFS and FlareSolverr |
 | `npm run services:check` | Authenticated PostgreSQL and S3 connectivity checks |
 | `npm test` / `npm run typecheck` | Regression tests and TypeScript checks |
 | `npm run check:assets` | Validate actual styles/scripts and configured API access |

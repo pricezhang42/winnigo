@@ -58,6 +58,7 @@ test('definitions with an unsafe or incomplete scope are refused', () => {
     (d) => (d.fetch.eventLinkPattern = '/event/'),
     (d) => delete d.fetch.eventLinkPattern,
     (d) => (d.fetch.eventKeyPattern = '^/event/\\d+'),
+    (d) => (d.fetch.nextPageSelector = ''),
     (d) => (d.fetch.maxEventPages = 201),
     (d) => (d.fetch.startUrls = ['https://other.example.test/events']),
     (d) => (d.supportingPages.sites[0].pattern = 'shows'),
@@ -126,7 +127,7 @@ test('the pages crawler follows next links, merges links by key and fetches supp
   assert.ok(!requested.some((u) => u.includes('elsewhere') || u.includes('/other/')));
 });
 
-test('single-page sources read list pages as listings; inactive and browser sources do not run', async () => {
+test('single-page sources read list pages as listings; inactive sources do not run', async () => {
   const listing = variant((d) => {
     d.fetch.method = 'single-page';
     delete d.fetch.eventLinkPattern;
@@ -144,8 +145,56 @@ test('single-page sources read list pages as listings; inactive and browser sour
       [origin + '/events/page/2', 'listing'],
     ],
   );
-  for (const change of [(d) => (d.status = 'blocked'), (d) => (d.fetch.method = 'browser')])
-    await assert.rejects(crawlSource(variant(change), { fetchImpl, pauseMs: 0 }));
+  await assert.rejects(
+    crawlSource(
+      variant((d) => (d.status = 'blocked')),
+      { fetchImpl, pauseMs: 0 },
+    ),
+  );
+});
+
+test('browser sources crawl rendered pages through FlareSolverr and retain the final URL', async () => {
+  const browser = variant((d) => {
+    d.fetch.method = 'browser';
+    d.fetch.nextPageSelector = '.btn-more[data-next][href]';
+    d.fetch.nextLinkPattern = '^/events\\?paged=\\d+$';
+    delete d.supportingPages;
+  });
+  const requested = [];
+  const pages = {
+    [origin + '/events']:
+      '<a href="/event/1">A</a><a class="btn-more" data-next="2" data-total="2" href="/events?paged=">View More</a>',
+    [origin + '/events?paged=2']: '<a href="/event/2">B</a>',
+    [origin + '/event/1']: eventHtml(),
+    [origin + '/event/2']: eventHtml(),
+  };
+  const fetchImpl = async (url, init) => {
+    assert.equal(url, 'http://127.0.0.1:8191/v1');
+    assert.equal(init.redirect, 'error');
+    const request = JSON.parse(init.body);
+    requested.push(request.url);
+    const finalUrl = request.url === origin + '/events' ? origin + '/events/' : request.url;
+    return Response.json({
+      status: 'ok',
+      solution: { status: 200, url: finalUrl, response: pages[request.url] },
+    });
+  };
+  const crawl = await crawlSource(browser, { fetchImpl, pauseMs: 0 });
+  assert.deepEqual(requested, [
+    origin + '/events',
+    origin + '/events?paged=2',
+    origin + '/event/1',
+    origin + '/event/2',
+  ]);
+  assert.equal(crawl.listPagesRead, 2);
+  assert.equal(crawl.discovered, 2);
+  assert.deepEqual(
+    crawl.pages.map((p) => [p.url, p.kind]),
+    [
+      [origin + '/event/1', 'event'],
+      [origin + '/event/2', 'event'],
+    ],
+  );
 });
 
 const model = (change = () => {}) => {

@@ -30,6 +30,7 @@ if (!existsSync('.env.local')) {
     S3_BUCKET: 'winnigo-dev',
     S3_ACCESS_KEY: secret(),
     S3_SECRET_KEY: secret(),
+    WINNIGO_FLARESOLVERR_URL: 'http://127.0.0.1:8191',
   };
   writeFileSync(
     '.env.local',
