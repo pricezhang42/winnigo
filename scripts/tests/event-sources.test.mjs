@@ -210,6 +210,38 @@ const stubExtractor = (byUrl) => ({
   },
 });
 
+test('browser event pages can supply their own preview image when extraction omits it', async () => {
+  const definition = variant((d) => {
+    d.fetch.method = 'browser';
+    d.images = { browserPath: '^/uploads/.+\\.jpg$' };
+  });
+  const url = origin + '/event/1';
+  const image = origin + '/uploads/concert.jpg';
+  const makePage = (declaredPage, declaredImage) => ({
+    url,
+    kind: 'event',
+    html:
+      `<meta property="og:url" content="${declaredPage}"><meta property="og:image" content="${declaredImage}">` +
+      eventHtml(),
+    supporting: [],
+  });
+  for (const [page, expected] of [
+    [makePage(url + '/', image), [image]],
+    [makePage(origin + '/events', image), []],
+    [makePage(url, organizer + '/uploads/concert.jpg'), []],
+  ]) {
+    const result = await extractPages(
+      definition,
+      { pages: [page] },
+      {
+        checkedAt,
+        extractor: stubExtractor({ [url]: () => model() }),
+      },
+    );
+    assert.deepEqual(result.pages[0].events[0].images, expected);
+  }
+});
+
 test('extraction keeps events with sessions in the window, counts the rest and records failures', async () => {
   const crawl = {
     pages: [

@@ -5,6 +5,8 @@ import './check-event-extraction-clock.mjs';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { Pool } from 'pg';
+import { PNG } from 'pngjs';
+import { EVENT_SOURCES } from '../config/sources.mjs';
 import { serviceConfig } from './check-services.mjs';
 import { PostgresRepository } from '../lib/server/postgres-repository.mjs';
 import { copyEventPhotos } from '../lib/server/event-photos.mjs';
@@ -303,6 +305,43 @@ try {
     '',
     'a removed image removes its copy',
   );
+  const wag = EVENT_SOURCES.find((s) => s.id === 'wag');
+  const wagPage = 'https://www.wag.ca/event/qa-concert/';
+  const wagImage = 'https://www.wag.ca/isl/uploads/qa-concert.jpg';
+  await startRun(pool, wag.id);
+  await pool.query(
+    `INSERT INTO events(id,source,source_key,page_url,event_url,title,category,image_url,checked_at)
+     VALUES('qa-wag-photo','wag','photo',$1,$1,'QA WAG Concert','Music',$2,now())`,
+    [wagPage, wagImage],
+  );
+  const viewport = new PNG({ width: 8, height: 8 });
+  viewport.data.fill(14);
+  const picture = new PNG({ width: 4, height: 2 });
+  picture.data.fill(255);
+  PNG.bitblt(picture, viewport, 0, 0, 4, 2, 2, 3);
+  const fetchWag = async (url, init) => {
+    if (url === wagImage) return new Response('Forbidden', { status: 403 });
+    const request = JSON.parse(init.body);
+    assert.equal(request.url, wagImage);
+    assert.equal(request.returnScreenshot, true);
+    return Response.json({
+      status: 'ok',
+      solution: {
+        status: 200,
+        url: wagImage,
+        response: `<title>qa-concert.jpg (4×2)</title><meta name="viewport" content="width=device-width, minimum-scale=0.1">
+          <body><img src="${wagImage}" style="margin: auto"></body>`,
+        screenshot: PNG.sync.write(viewport).toString('base64'),
+      },
+    });
+  };
+  assert.deepEqual(await copyEventPhotos(pool, wag, { storage, fetchImpl: fetchWag, pauseMs: 0 }), {
+    copied: 1,
+    reused: 0,
+    notPhoto: 0,
+    failed: 0,
+  });
+  assert.equal(stored.at(-1), contentHash(PNG.sync.write(picture)));
   console.log(
     'Event store: publishes and merges events, reuses unchanged pages, records and undoes changes, keeps owner edits, protects events on failed pages and copies event photos privately.',
   );

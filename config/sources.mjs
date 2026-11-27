@@ -145,6 +145,7 @@ export const EVENT_SOURCES = [
     status: 'active',
     schedule: 'manual',
     notes: 'The calendar requires the local FlareSolverr browser service.',
+    images: { browserPath: '^/isl/uploads/.+\\.(?:jpe?g|png|webp|gif)$' },
     defaultVenue: { name: 'WAG–Qaumajuq', address: '300 Memorial Boulevard, Winnipeg' },
     fetch: {
       method: 'browser',
