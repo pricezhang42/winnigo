@@ -139,22 +139,6 @@ export const EVENT_SOURCES = [
     extraction: { maxInputTokens: 20000 },
   },
   {
-    id: 'wag',
-    name: 'WAG–Qaumajuq',
-    status: 'blocked',
-    schedule: 'manual',
-    notes: 'wag.ca answers automated requests with HTTP 403 (checked 2026-11-21).',
-    defaultVenue: { name: 'WAG–Qaumajuq', address: '300 Memorial Boulevard, Winnipeg' },
-    fetch: {
-      method: 'pages',
-      allowedOrigin: 'https://www.wag.ca',
-      startUrls: ['https://www.wag.ca/events/event-calendar/'],
-      eventLinkPattern: '^/event/[^/]+/?$',
-      maxListPages: 1,
-      maxEventPages: 60,
-    },
-  },
-  {
     id: 'manitoba-music',
     name: 'Manitoba Music',
     status: 'active',

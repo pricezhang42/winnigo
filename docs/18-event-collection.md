@@ -259,4 +259,3 @@ with `WINNIGO_SEED_PROFILE=qa`; events come only from collection.
 
 - Pages built with JavaScript (the `browser` method) are not read yet; Royal MTC's schedules need
   corrections through the review list.
-- WAG refuses automated requests and stays `blocked`.

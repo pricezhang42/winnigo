@@ -85,14 +85,14 @@ try {
   await ensureCollectionQueue(boss);
   await ensureCollectionQueue(boss); // second call updates settings without error
 
-  // 1. Manual refresh queues one job per source and never duplicates a queued one; blocked,
-  //    paused and unknown sources are refused.
+  // 1. Manual refresh queues one job per source and never duplicates a queued one; paused and
+  //    unknown sources are refused.
   const [first] = await enqueueCollection(boss, pool, ['forks'], 'manual');
   assert.ok(first.jobId && first.runId);
   assert.equal((await runRow(first.jobId))[0].status, 'queued');
   const [again] = await enqueueCollection(boss, pool, ['forks'], 'manual');
   assert.equal(again.alreadyQueued, true);
-  for (const refused of ['facebook', 'wag', 'winnipeg-rotary'])
+  for (const refused of ['facebook', 'no-such-source', 'winnipeg-rotary'])
     await assert.rejects(enqueueCollection(boss, pool, [refused]), /Unknown source/);
   checks.push('Refresh queues jobs; duplicates and unknown, blocked or paused sources refused');
 
