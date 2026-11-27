@@ -15,9 +15,8 @@ No agent-specific tools are required. The pre-P1 Cloudflare/Sites app is kept on
 
 - **Events** by AI extraction from the source list in `config/sources.mjs`: Tourism Winnipeg,
   FortWhyte Alive, Canada Life Centre, Manitoba Museum, Manitoba Music, City of Winnipeg free
-  swims, The Forks, Assiniboine Park and Travel Manitoba (Winnipeg only). WAG–Qaumajuq is blocked
-  by the site and the Rotary Club is paused (its events are poster images). See
-  [docs/18](docs/18-event-collection.md).
+  swims, The Forks, Assiniboine Park and Travel Manitoba (Winnipeg only). The Rotary Club is
+  paused (its events are poster images). See [docs/18](docs/18-event-collection.md).
 - **Places** from The Forks, and the **Official Trails** from Trails Manitoba with a trail map.
 - Search, date/category/area filters, details, original-source links and directions.
 - **Accounts** (session mode): invitation-only sign-up unless the owner opens it, verified email,
