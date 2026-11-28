@@ -4,7 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { dateTimeLabel } from '@/lib/time-zone.mjs';
+import { dateTimeLabel, timeLabel } from '@/lib/time-zone.mjs';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 type Diff =
@@ -35,6 +35,7 @@ type Change = {
 
 const FIELD_LABELS: Record<string, string> = {
   title: 'Title',
+  event_kind: 'Event type',
   description: 'Description',
   venue: 'Venue',
   address: 'Address',
@@ -47,6 +48,7 @@ const FIELD_LABELS: Record<string, string> = {
   image_url: 'Image',
   status: 'Status',
   sessions: 'Sessions',
+  review_notes: 'Needs review',
 };
 const EDITABLE = ['title', 'venue', 'address', 'category', 'price', 'price_text', 'ticket_url'];
 const KIND_LABELS = { new: 'New', changed: 'Changed', gone: 'Gone from source' };
@@ -55,15 +57,24 @@ const KIND_LABELS = { new: 'New', changed: 'Changed', gone: 'Gone from source' }
 const winnipeg = (value: string) => dateTimeLabel(value);
 /** "2026-11-21 2026-11-21 2026-11-21T19:45:00.000Z ..." → "Nov 21, 1:45 p.m." */
 function sessionLabel(text: string) {
-  const [start, , startAt] = text.split(' ');
+  const [start, end, startAt, endAt] = text.split(' ');
   const cancelled = text.endsWith('cancelled') ? ' (cancelled)' : '';
-  if (startAt && startAt.includes('T')) return winnipeg(startAt) + cancelled;
-  return (
-    new Date(start + 'T12:00:00Z').toLocaleDateString('en-CA', {
+  const date = (day: string) =>
+    new Date(day + 'T12:00:00Z').toLocaleDateString('en-CA', {
       timeZone: 'UTC',
       month: 'short',
       day: 'numeric',
-    }) + cancelled
+    });
+  const time = timeLabel(
+    startAt?.includes('T') ? startAt : undefined,
+    endAt?.includes('T') ? endAt : undefined,
+    undefined,
+  );
+  return (
+    date(start) +
+    (end && end !== start ? ' – ' + date(end) : '') +
+    (time ? ', ' + time : '') +
+    cancelled
   );
 }
 const show = (value: unknown) =>
@@ -303,9 +314,14 @@ function EditEventDialog({
     if (!change) return {};
     const current = change.after || change.before || {};
     return Object.fromEntries(
-      [...EDITABLE, 'description'].map((field) => [
+      [...EDITABLE, 'event_kind', 'description'].map((field) => [
         field,
-        change.ownerEdits[field] ?? (current[field] == null ? '' : String(current[field])),
+        change.ownerEdits[field] ??
+          (current[field] == null
+            ? field === 'event_kind'
+              ? 'event'
+              : ''
+            : String(current[field])),
       ]),
     );
   });
@@ -314,7 +330,8 @@ function EditEventDialog({
   const fields = () =>
     Object.fromEntries(
       Object.entries(values).map(([field, value]) => {
-        const original = source[field] == null ? '' : String(source[field]);
+        const original =
+          source[field] == null ? (field === 'event_kind' ? 'event' : '') : String(source[field]);
         // Matching the source value again removes the correction.
         return [field, value === original ? null : value];
       }),
@@ -334,6 +351,16 @@ function EditEventDialog({
             onSave(fields());
           }}
         >
+          <label>
+            Event type
+            <select
+              value={values.event_kind}
+              onChange={(event) => setValues({ ...values, event_kind: event.target.value })}
+            >
+              <option value="event">Event</option>
+              <option value="class">Class</option>
+            </select>
+          </label>
           {EDITABLE.map((field) => (
             <label key={field}>
               {FIELD_LABELS[field]}

@@ -24,7 +24,7 @@ test('examples validate without mutation; app supplies source URL, timezone and 
   for (const example of examples) {
     const before = structuredClone(example);
     const result = parseEventExtraction(example.result, example.context);
-    assert.equal(result.schemaVersion, '4');
+    assert.equal(result.schemaVersion, '5');
     assert.deepEqual(result.issues, [], example.name);
     assert.equal(event(result).sourceUrl, example.context.pageUrl);
     assert.equal(event(result).schedule.timeZone, null);

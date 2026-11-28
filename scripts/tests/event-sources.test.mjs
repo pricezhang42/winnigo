@@ -210,6 +210,92 @@ const stubExtractor = (byUrl) => ({
   },
 });
 
+test('description uses verified narrative and a class keeps its whole schedule', async () => {
+  const url = origin + '/event/1';
+  const narrative = 'Make unforgettable memories with your little ones.';
+  const registration = 'One registration covers all four sessions.';
+  const schedule = 'Wednesdays, December 16, 2026 through January 6, 2027, 6:00 p.m. to 8:30 p.m.';
+  const html = `<main><h1>QA Concert</h1><p>Admission: $47 and up</p><p>${narrative}</p>
+    <p>${registration}</p><p>${schedule}</p><a href="https://www.facebook.com/sharer/sharer.php?u=qa">Share on Facebook</a></main>`;
+  const fixture = (mode) =>
+    model((e) => {
+      e.venue = null;
+      e.descriptionQuotes = ['Admission: $47 and up', narrative, 'Text the page never published'];
+      e.registration = { mode, quote: registration };
+      e.schedule.dates = [];
+      e.schedule.recurrence = [
+        {
+          frequency: 'weekly',
+          interval: 1,
+          from: { year: 2026, month: 12, day: 16 },
+          through: { year: 2027, month: 1, day: 6 },
+          weekdays: [3],
+          monthDays: null,
+          weekOfMonth: null,
+          startTime: '18:00',
+          endTime: '20:30',
+          quote: schedule,
+        },
+      ];
+    });
+  const crawl = { pages: [{ url, kind: 'event', html, supporting: [] }] };
+  const extract = async (mode) =>
+    (
+      await extractPages(base, crawl, {
+        checkedAt,
+        extractor: stubExtractor({ [url]: () => fixture(mode) }),
+      })
+    ).pages[0].events[0];
+  const course = await extract('series');
+  assert.equal(course.description, narrative);
+  assert.equal(course.eventKind, 'class');
+  assert.deepEqual(
+    course.sessions.map((s) => s.start),
+    ['2026-12-16', '2026-12-23', '2026-12-30', '2027-01-06'],
+  );
+  assert.equal(course.sessions[0].endAt, '2026-12-17T01:30:00.000Z');
+  const dropIn = await extract('separate');
+  assert.equal(dropIn.eventKind, 'event');
+  assert.equal(dropIn.sessions.length, 3);
+});
+
+test('sessions keep their published end, including overnight and end-only times', async () => {
+  const url = origin + '/event/1';
+  const dates = [
+    [20, '19:00', null, 'November 20 at 7 p.m.'],
+    [21, '23:00', '01:00', 'November 21, 11 p.m. to 1 a.m.'],
+    [23, null, '21:00', 'November 23, ends at 9 p.m.'],
+  ];
+  const html = `<main><h1>QA Concert</h1><p>${dates.map((d) => d[3]).join('</p><p>')}</p></main>`;
+  const result = await extractPages(
+    base,
+    { pages: [{ url, kind: 'event', html, supporting: [] }] },
+    {
+      checkedAt,
+      extractor: stubExtractor({
+        [url]: () =>
+          model((e) => {
+            e.venue = null;
+            e.schedule.dates = dates.map(([day, startTime, endTime, quote]) => ({
+              start: { year: 2026, month: 11, day },
+              end: null,
+              startTime,
+              endTime,
+              quote,
+              cancelled: false,
+            }));
+          }),
+      }),
+    },
+  );
+  const [startOnly, overnight, endOnly] = result.pages[0].events[0].sessions;
+  assert.equal(startOnly.endAt, null);
+  assert.equal(overnight.end, '2026-11-22');
+  assert.equal(overnight.endAt, '2026-11-22T06:00:00.000Z');
+  assert.equal(endOnly.startAt, null);
+  assert.equal(endOnly.endAt, '2026-11-24T02:00:00.000Z');
+});
+
 test('browser event pages prefer their own preview over extracted or missing images', async () => {
   const definition = variant((d) => {
     d.fetch.method = 'browser';
