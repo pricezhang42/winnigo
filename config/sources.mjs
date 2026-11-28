@@ -23,6 +23,8 @@
 //                           whose place is not stated stay, flagged for review
 //   images.origins          image hosts besides the source's own sites; each event's image is
 //                           copied into private storage from these origins only
+//   images.browserPath      browser-source image paths; canonical og:image wins and blocked
+//                           downloads fall back to a validated standalone-image screenshot
 //
 // Patterns are anchored and match a URL's path and query.
 
@@ -145,6 +147,7 @@ export const EVENT_SOURCES = [
     status: 'active',
     schedule: 'manual',
     notes: 'The calendar requires the local FlareSolverr browser service.',
+    images: { browserPath: '^/isl/uploads/.+\\.(?:jpe?g|png|webp|gif)$' },
     defaultVenue: { name: 'WAG–Qaumajuq', address: '300 Memorial Boulevard, Winnipeg' },
     fetch: {
       method: 'browser',

@@ -53,6 +53,7 @@ it changes what Winnigo fetches. `npm test` validates the checked-in list.
 | `extraction` | `maxInputTokens` / `maxOutputTokens` for long pages or many events per page; they raise, never lower, the configured limits |
 | `city` | `{ name, postalPrefixes }`: keep only events in that city (see below) |
 | `images.origins` | Image hosts besides the source's own sites (Canada Life Centre's CDN); event images are copied only from these and the source's origins |
+| `images.browserPath` | Anchored path pattern for a browser source's own event images. A valid `og:image` on the event's canonical page replaces model-selected sponsor or related images; blocked direct downloads fall back to a browser screenshot (WAG) |
 
 ## Crawling
 
@@ -208,11 +209,14 @@ After each publish, `copyEventPhotos` (`lib/server/event-photos.mjs`) copies eve
 image that has no copy yet, or whose image URL changed, into private media (S3 plus a `media`
 row, keyed by the content hash). It fetches through the same rate-limited reader (8 MB cap, no
 redirects) from the source's approved origins only, and keeps only real JPEG, PNG, WebP or GIF
-files: placeholder SVGs are remembered and not fetched again until the URL changes. An image
-shared by several events is stored once. A failed fetch never fails the run and is retried on the
-next one. `events.media_id` points at the copy and `media_source_url` records which URL it came
-from. Discovery shows `/api/photos/<id>`; the photo route allows anyone who can see a current
-event to see its photo, and media cleanup never deletes a photo an event uses.
+files: placeholder SVGs are remembered and not fetched again until the URL changes. With
+`images.browserPath`, the event's canonical `og:image` takes precedence over other page images;
+when a matching direct download returns 403, FlareSolverr returns a standalone-image screenshot
+that is validated and cropped to its displayed image bounds. An image shared by several events is
+stored once. A failed fetch never fails the run and is retried on the next one. `events.media_id`
+points at the copy and `media_source_url` records which URL it came from. Discovery shows
+`/api/photos/<id>`; the photo route allows anyone who can see a current event to see its photo,
+and media cleanup never deletes a photo an event uses.
 
 ## Discovery
 
@@ -272,5 +276,3 @@ with `WINNIGO_SEED_PROFILE=qa`; events come only from collection.
 ## Known gaps
 
 - Royal MTC is not a configured source; its schedules need corrections through the review list.
-- WAG event pages use FlareSolverr, but photo downloads still use ordinary HTTP and may fail
-  without failing event publication; the private copy is retried on the next run.
