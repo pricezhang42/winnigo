@@ -1,5 +1,22 @@
 # Event collection
 
+## Event facts and class registration
+
+The model proposes source-backed facts. Winnigo validates the excerpts, applies them through
+event publishing, and records changes for owner review. Missing optional facts retain their
+saved values, and unresolved schedule conflicts retain the saved schedule for review. Owner
+corrections and locked schedules take precedence.
+
+Event descriptions use quoted narrative paragraphs. Dates, admission, booking links, and
+sharing controls belong outside the description. Sessions store a published start and end
+independently, and unknown ends remain blank. A matching saved end survives an incomplete refresh.
+
+One registration for a bounded multi-session program makes it a class. Discovery shows one
+card for the offering through the beginning of its first session. Its detail page lists the full
+schedule, including confirmed sessions beyond the normal collection window. A date-only class
+stops appearing in discovery on its first day. Owners can correct a classification in event review.
+Existing records gain source-backed descriptions, end times and classifications on refresh.
+
 How Winnigo collects events: a checked-in source list, code that fetches pages, an AI model that
 reads them, and publication followed by owner review. This replaces the hand-written parsers and
 docs 18–28 (event schedules, typed listings, the extraction contract, page preparation, the
@@ -94,7 +111,8 @@ on a listing page each event may give the `url` of its own detail page, kept onl
 is on the page. Each event has `title` and `titleQuote`; `venue {name, address, online, quote}`;
 `price {amount, text, quote}`; `availability {status, text, quote}` (available, sold-out,
 unavailable or unknown; separate from cancellation); `ticketUrl`, `organizerUrl`, up to three
-`imageUrls`; `schedule`; and `reviewReasons`, each `{field, reason}`. Unknown facts are `null`;
+`imageUrls`; `descriptionQuotes`; `registration {mode, quote}`; `schedule`; and
+`reviewReasons`, each `{field, reason}`. Unknown facts are `null`;
 a missing price is never free.
 
 Schedule facts: explicit `dates` (several times a day, cancellations), `recurrence` rules (daily,

@@ -82,6 +82,8 @@ export type Listing = {
   id: string;
   title: string;
   type: string;
+  eventKind?: 'event' | 'class';
+  classStarted?: boolean;
   category: string;
   venue: string;
   address: string;

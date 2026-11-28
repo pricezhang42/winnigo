@@ -159,7 +159,7 @@ export const EVENT_SOURCES = [
         '^/events/event-calendar/\\?(?:category=&audience=&timeframe=all&)?paged=\\d+$',
       maxListPages: 5,
       maxEventPages: 60,
-      selector: '#maincontent',
+      selector: '.event-featured-content h1, #maincontent',
     },
   },
   {

@@ -76,10 +76,10 @@ function ListingDetail({
       )}
       <span className="eyebrow">
         {collection && collection + ' · '}
-        {listing.category} · {listing.type}
+        {listing.category} · {listing.eventKind === 'class' ? 'Class' : listing.type}
       </span>
       <DialogTitle className="detail-title">{listing.title}</DialogTitle>
-      <DialogDescription>{listing.description}</DialogDescription>
+      <DialogDescription className="whitespace-pre-line">{listing.description}</DialogDescription>
       <div className="detail-facts">
         <p>
           <CalendarDays />
@@ -136,6 +136,13 @@ function ListingDetail({
           </ul>
         </details>
       )}
+      {listing.eventKind === 'class' && (
+        <p className="notice">
+          {listing.classStarted
+            ? 'This class series has already started.'
+            : 'One registration covers the full class series.'}
+        </p>
+      )}
       {(listing.schedule === 'series' || listing.recurring) && (
         <p className="notice">
           {listing.recurring
@@ -175,7 +182,7 @@ function ListingDetail({
             </a>
           </Button>
         )}
-        {listing.ticketUrl && (
+        {listing.ticketUrl && !listing.classStarted && (
           <Button asChild>
             <a href={listing.ticketUrl} target="_blank" rel="noreferrer">
               Tickets & registration <ExternalLink size={16} />

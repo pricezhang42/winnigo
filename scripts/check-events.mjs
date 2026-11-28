@@ -342,6 +342,83 @@ try {
     failed: 0,
   });
   assert.equal(stored.at(-1), contentHash(PNG.sync.write(picture)));
+  // A course is bookable as one offering. Starting its first session removes it
+  // from discovery while retaining the full schedule and the owner's changes.
+  const classRow = (title, days) => ({
+    ...event(title, days),
+    eventKind: 'class',
+    description: 'Learn a new skill.',
+    availability: 'available',
+    sessions: days.map((day) => ({
+      start: day,
+      end: day,
+      startAt: day + 'T23:00:00.000Z',
+      endAt: day + 'T23:30:00.000Z',
+      status: 'active',
+    })),
+    evidence: [{ fields: ['/schedule/dates/0'], sourceUrl: page1, quote: '6:00 to 6:30 p.m.' }],
+  });
+  const upcomingClass = classRow('QA Upcoming Course', ['2026-11-20', '2026-12-18', '2027-01-08']);
+  const startedClass = classRow('QA Started Course', ['2026-11-05', '2026-11-20']);
+  await publish([{ url: page1, events: [upcomingClass, startedClass] }]);
+  const upcoming = (
+    await repo.search({ tab: 'Events', query: upcomingClass.title, principal: reader })
+  ).items[0];
+  assert.equal(upcoming.eventKind, 'class');
+  assert.equal(upcoming.recurring, false);
+  assert.equal(upcoming.end, '2027-01-08');
+  assert.equal(upcoming.time, '6:00 p.m. – 6:30 p.m.');
+  assert.equal(upcoming.occurrences.length, 3);
+  assert.equal(
+    (await repo.search({ date: '2026-12-18', query: upcomingClass.title, principal: reader }))
+      .total,
+    0,
+  );
+  assert.equal((await repo.search({ query: startedClass.title, principal: reader })).total, 0);
+  const [startedChange] = await changesFor(startedClass.title);
+  const started = await repo.detail(startedChange.eventId, { principal: reader });
+  assert.equal(started.classStarted, true);
+  assert.equal(started.occurrences.length, 2);
+  await editEvent(pool, upcoming.id, { fields: { description: 'Owner wording' } });
+  const incomplete = {
+    ...upcomingClass,
+    description: '',
+    availability: null,
+    evidence: [],
+    sessions: upcomingClass.sessions.map((s) => ({ ...s, endAt: null })),
+  };
+  await publish([{ url: page1, events: [incomplete, startedClass] }]);
+  const kept = await repo.detail(upcoming.id, { principal: reader });
+  assert.equal(kept.description, 'Owner wording');
+  assert.equal(kept.availability, 'available');
+  assert.equal(kept.endAt, upcoming.endAt);
+  const changedEnd = {
+    ...incomplete,
+    sessions: incomplete.sessions.map((s, i) =>
+      i === 0 ? { ...s, endAt: '2026-11-21T00:00:00.000Z', end: '2026-11-20' } : s,
+    ),
+  };
+  await publish([{ url: page1, events: [changedEnd, startedClass] }]);
+  assert.equal(
+    (await repo.detail(upcoming.id, { principal: reader })).endAt,
+    '2026-11-21T00:00:00.000Z',
+  );
+  const conflict = {
+    ...changedEnd,
+    reviewReasons: [{ field: '/schedule', reason: 'Conflicting end times' }],
+    sessions: [],
+  };
+  await publish([{ url: page1, events: [conflict, startedClass] }]);
+  assert.equal(
+    (await repo.detail(upcoming.id, { principal: reader })).endAt,
+    '2026-11-21T00:00:00.000Z',
+  );
+  assert.ok(
+    (await changesFor(upcomingClass.title)).some((c) =>
+      c.diff.some((d) => d.field === 'review_notes'),
+    ),
+  );
+
   console.log(
     'Event store: publishes and merges events, reuses unchanged pages, records and undoes changes, keeps owner edits, protects events on failed pages and copies event photos privately.',
   );

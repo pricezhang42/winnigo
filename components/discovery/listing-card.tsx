@@ -45,7 +45,7 @@ export function ListingCard({ item, saved, onSelect, onToggleSave }: Props) {
               onError={() => setFailedImage(item.image || '')}
             />
           )}
-          <span className="type-badge">{item.type}</span>
+          <span className="type-badge">{item.eventKind === 'class' ? 'Class' : item.type}</span>
         </button>
         <Button
           size="icon"
